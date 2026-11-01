@@ -1,4 +1,4 @@
-// All interface screens. Unified look: black, white, yellow and orange, content fits the round panel.
+// All interface screens. Unified look: black, white, greys and muted pastels, content fits the round panel.
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
