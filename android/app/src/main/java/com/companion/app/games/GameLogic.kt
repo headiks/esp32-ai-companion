@@ -1,8 +1,13 @@
 package com.companion.app.games
 
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.random.Random
 
 /** Rules and physics only, no Android: covered by plain unit tests. */
@@ -233,7 +238,7 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     private fun award(left: List<Int>) {
         stacks[left[0]] += pot
         street = Street.Showdown
-        message = if (left[0] == 0) "Все спасовали, банк ваш" else "Игрок ${left[0] + 1} забирает банк"
+        message = if (left[0] == 0) "Все сбросили карты, банк ваш" else "Игрок ${left[0] + 1} забирает банк"
     }
 
     /** One decision for the current player by simple rules, with chance so it cannot be read. */
@@ -282,41 +287,169 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     }
 }
 
-data class Obstacle(val x: Float, val z: Float)
+/** A closed road through the control points, resampled to even steps so an index is a distance. Coordinates: x 0..1, y 0..[RaceGame.ARENA_H]. */
+class RaceTrack(val name: String, points: List<Pair<Float, Float>>) {
+    val xs = FloatArray(SAMPLES)
+    val ys = FloatArray(SAMPLES)
+    val length: Float
 
-/** Road seen from the car: x from -1 to 1 across the road, z from 1 at the horizon to 0 at the car. */
-class RaceGame(private val rng: Random = Random.Default) {
-    var x = 0f; private set
-    var speed = 0.3f; private set
-    var distance = 0f; private set
-    var lives = 3; private set
-    var obstacles = emptyList<Obstacle>(); private set
-    var crashFlash = 0f; private set
-    val over get() = lives <= 0
-    val score get() = (distance * 10).toInt()
-    private var spawnIn = 1.5f
+    init {
+        val dense = ArrayList<Pair<Float, Float>>()
+        val n = points.size
+        for (i in 0 until n) for (k in 0 until 40) {
+            val t = k / 40f
+            val (p0, p1, p2, p3) = List(4) { points[(i - 1 + it + n) % n] }
+            fun cr(a: Float, b: Float, c: Float, d: Float) =
+                0.5f * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t)
+            dense += cr(p0.first, p1.first, p2.first, p3.first) to cr(p0.second, p1.second, p2.second, p3.second)
+        }
+        val d = FloatArray(dense.size + 1)
+        for (i in dense.indices) {
+            val a = dense[i]; val b = dense[(i + 1) % dense.size]
+            d[i + 1] = d[i] + hypot(b.first - a.first, b.second - a.second)
+        }
+        length = d.last()
+        var j = 0
+        for (i in 0 until SAMPLES) {
+            val want = length * i / SAMPLES
+            while (d[j + 1] < want) j++
+            val f = (want - d[j]) / (d[j + 1] - d[j])
+            val a = dense[j]; val b = dense[(j + 1) % dense.size]
+            xs[i] = a.first + (b.first - a.first) * f
+            ys[i] = a.second + (b.second - a.second) * f
+        }
+    }
 
-    fun step(dt: Float, steer: Float, gas: Boolean) {
-        if (over) return
-        val top = if (gas) 1.1f else 0.55f
-        speed += (top - speed) * min(1f, dt * 1.2f)
-        x = (x + steer.coerceIn(-1f, 1f) * dt * 1.9f).coerceIn(-1.2f, 1.2f)
-        if (abs(x) > 1f) speed *= 1f - min(1f, dt * 1.5f) // the shoulder is slow
-        distance += speed * dt
-        crashFlash = max(0f, crashFlash - dt)
-        val moved = obstacles.map { it.copy(z = it.z - speed * dt * 0.75f) }
-        val hit = moved.firstOrNull { it.z in 0f..0.07f && abs(it.x - x) < 0.3f }
-        if (hit != null) {
-            lives--
-            speed = 0.15f
-            crashFlash = 0.5f
+    fun direction(i: Int): Float {
+        val a = i.mod(SAMPLES); val b = (i + 2).mod(SAMPLES)
+        return atan2(ys[b] - ys[a], xs[b] - xs[a])
+    }
+
+    companion object { const val SAMPLES = 600 }
+}
+
+val RACE_TRACKS = listOf(
+    RaceTrack("Овал", listOf(0.3f to 0.12f, 0.7f to 0.12f, 0.88f to 0.3f, 0.88f to 0.95f, 0.7f to 1.13f, 0.3f to 1.13f, 0.12f to 0.95f, 0.12f to 0.3f)),
+    RaceTrack("Восьмёрка", listOf(0.25f to 0.2f, 0.5f to 0.1f, 0.75f to 0.2f, 0.8f to 0.38f, 0.5f to 0.62f, 0.2f to 0.86f, 0.25f to 1.05f, 0.5f to 1.15f, 0.75f to 1.05f, 0.8f to 0.86f, 0.5f to 0.62f, 0.2f to 0.38f)),
+    RaceTrack("Серпантин", listOf(0.3f to 0.12f, 0.72f to 0.12f, 0.88f to 0.27f, 0.72f to 0.41f, 0.44f to 0.41f, 0.29f to 0.56f, 0.44f to 0.71f, 0.72f to 0.71f, 0.88f to 0.86f, 0.74f to 1.13f, 0.3f to 1.14f, 0.1f to 1.0f, 0.08f to 0.3f)),
+)
+
+class RaceCar(val human: Boolean, x: Float, y: Float, heading: Float, progress: Int, val skill: Float, val line: Float) {
+    var x = x; internal set
+    var y = y; internal set
+    var heading = heading; internal set
+    var speed = 0f; internal set
+    /** Samples driven since the start line: it only counts along the road, so a shortcut across the field gives nothing. */
+    var progress = progress; internal set
+    var finishTime: Float? = null; internal set
+    var offRoad = false; internal set
+    internal var lostFor = 0f
+    val finished get() = finishTime != null
+}
+
+/** Ring race seen from above, four cars: [humans] players, computers in the other seats. */
+class RaceGame(val track: RaceTrack, val humans: Int, val laps: Int = 3, rng: Random = Random.Default) {
+    val cars: List<RaceCar> = List(4) { i ->
+        val back = 6 + i * 11 // staggered grid behind the line
+        val at = -back
+        val a = track.direction(at)
+        val side = if (i % 2 == 0) -0.028f else 0.028f
+        RaceCar(i < humans,
+            track.xs[at.mod(RaceTrack.SAMPLES)] - sin(a) * side,
+            track.ys[at.mod(RaceTrack.SAMPLES)] + cos(a) * side,
+            a, at,
+            if (i < humans) 1f else 0.86f + rng.nextFloat() * 0.1f,
+            if (i < humans) 0f else (rng.nextFloat() - 0.5f) * ROAD_HALF)
+    }
+    var countdown = 3f; private set
+    var elapsed = 0f; private set
+    private var over_ = false
+    val over get() = over_
+
+    /** Finishers by time, then the rest by how far they got. */
+    val standings get() = cars.sortedWith(compareBy<RaceCar> { it.finishTime ?: Float.MAX_VALUE }.thenByDescending { it.progress })
+
+    fun lap(car: RaceCar) = (car.progress.floorDiv(RaceTrack.SAMPLES) + 1).coerceIn(1, laps)
+
+    /** The steering that follows the road. Computers use it, and so does a car that has already finished. */
+    fun autoSteer(car: RaceCar): Float {
+        val i = car.progress + 16
+        val tx = track.xs[i.mod(RaceTrack.SAMPLES)] - sin(track.direction(i)) * car.line
+        val ty = track.ys[i.mod(RaceTrack.SAMPLES)] + cos(track.direction(i)) * car.line
+        return (angleTo(car.heading, atan2(ty - car.y, tx - car.x)) * 3f).coerceIn(-1f, 1f)
+    }
+
+    /** [steer] and [brake] are per human player; steer -1 is full left of the car, 1 is full right. */
+    fun step(dt: Float, steer: FloatArray, brake: BooleanArray) {
+        if (over_) return
+        if (countdown > 0f) { countdown -= dt; return }
+        elapsed += dt
+        cars.forEachIndexed { i, car ->
+            val pilot = car.finished || !car.human
+            val s = if (pilot) autoSteer(car) else steer[i].coerceIn(-1f, 1f)
+            val braking = !pilot && brake[i]
+            var top = TOP_SPEED * car.skill
+            if (pilot) top *= 1f - 0.45f * abs(angleTo(car.heading, track.direction(car.progress + 30))).coerceAtMost(1f) // computers slow down for bends
+            if (car.finished) top *= 0.5f
+            if (braking) top = 0.08f
+            if (car.offRoad) top *= 0.45f
+            car.speed += (top - car.speed) * min(1f, dt * (if (car.speed > top) 4f else 1.5f))
+            car.heading += s * TURN_RATE * min(1f, car.speed / 0.1f) * dt
+            car.x = (car.x + cos(car.heading) * car.speed * dt).coerceIn(0.01f, 0.99f)
+            car.y = (car.y + sin(car.heading) * car.speed * dt).coerceIn(0.01f, ARENA_H - 0.01f)
         }
-        obstacles = moved.filter { it.z > 0f && it !== hit }
-        spawnIn -= dt * speed
-        if (spawnIn <= 0f) {
-            spawnIn = rng.nextFloat() * 0.6f + 0.25f
-            obstacles = obstacles + Obstacle(rng.nextFloat() * 1.7f - 0.85f, 1f)
+        // Cars shoulder each other instead of passing through.
+        for (a in cars.indices) for (b in a + 1 until cars.size) {
+            val p = cars[a]; val q = cars[b]
+            val dx = q.x - p.x; val dy = q.y - p.y
+            val d = hypot(dx, dy)
+            if (d in 0.0001f..CAR_SPACE) {
+                val push = (CAR_SPACE - d) / 2 / d
+                p.x -= dx * push; p.y -= dy * push
+                q.x += dx * push; q.y += dy * push
+            }
         }
+        for (car in cars) follow(car, dt)
+        val first = cars.mapNotNull { it.finishTime }.minOrNull()
+        if (cars.filter { it.human }.all { it.finished } || (first != null && elapsed > first + LAST_CALL)) over_ = true
+    }
+
+    private fun follow(car: RaceCar, dt: Float) {
+        // The search window keeps a car on its own stretch where the road crosses or runs alongside itself.
+        var best = 0
+        var bestD = Float.MAX_VALUE
+        for (o in -25..70) {
+            val i = (car.progress + o).mod(RaceTrack.SAMPLES)
+            val d = hypot(track.xs[i] - car.x, track.ys[i] - car.y)
+            if (d < bestD) { bestD = d; best = o }
+        }
+        car.progress += best
+        car.offRoad = bestD > ROAD_HALF
+        car.lostFor = if (bestD > ROAD_HALF * 2.5f) car.lostFor + dt else 0f
+        if (car.lostFor > 2f) { // far from its stretch of road for a while: back on it, not stuck until the end
+            val i = car.progress.mod(RaceTrack.SAMPLES)
+            car.x = track.xs[i]; car.y = track.ys[i]
+            car.heading = track.direction(i)
+            car.speed = 0.05f
+            car.lostFor = 0f
+        }
+        if (!car.finished && car.progress >= laps * RaceTrack.SAMPLES) car.finishTime = elapsed
+    }
+
+    private fun angleTo(from: Float, to: Float): Float {
+        var d = (to - from) % (2 * PI.toFloat())
+        if (d > PI) d -= 2 * PI.toFloat()
+        if (d < -PI) d += 2 * PI.toFloat()
+        return d
+    }
+
+    companion object {
+        const val ARENA_H = 1.25f
+        const val ROAD_HALF = 0.06f
+        const val TOP_SPEED = 0.34f
+        const val TURN_RATE = 2.8f
+        const val CAR_SPACE = 0.026f
+        const val LAST_CALL = 30f // seconds the others get after the winner, so one player gone for tea does not hold the table
     }
 }
 
@@ -341,12 +474,13 @@ class BreakoutGame(private val rng: Random = Random.Default) {
         if (launched || over || won) return
         launched = true
         vx = (rng.nextFloat() - 0.5f) * 0.6f
-        vy = -0.72f
+        vy = -0.62f
     }
 
-    fun step(dt: Float, tilt: Float) {
+    /** [target] is where the paddle should be, 0 to 1: the lean of the hand maps to a place, level is the middle. */
+    fun step(dt: Float, target: Float) {
         if (over || won) return
-        paddle = (paddle + tilt.coerceIn(-1f, 1f) * dt * 1.8f).coerceIn(paddleWidth / 2, 1 - paddleWidth / 2)
+        paddle = (paddle + (target - paddle) * min(1f, dt * 14f)).coerceIn(paddleWidth / 2, 1 - paddleWidth / 2)
         if (!launched) { ballX = paddle; ballY = 0.88f; return }
         var left = dt
         while (left > 0f) { // short steps: a fast ball cannot pass through a brick
@@ -358,8 +492,10 @@ class BreakoutGame(private val rng: Random = Random.Default) {
             if (ballX > 1f) { ballX = 1f; vx = -abs(vx) }
             if (ballY < 0f) { ballY = 0f; vy = abs(vy) }
             if (vy > 0 && ballY >= 0.92f && ballY <= 0.95f && abs(ballX - paddle) < paddleWidth / 2) {
-                vy = -abs(vy) * 1.02f
-                vx = (ballX - paddle) / (paddleWidth / 2) * 0.75f // where it lands steers it
+                vy = -min(abs(vy) * 1.02f, 1.1f) // capped: past this no hand can follow the ball
+                val aim = (ballX - paddle) / (paddleWidth / 2) * 0.75f // where it lands steers it
+                // Never straight up: a ball bouncing on one column could not reach the remaining bricks.
+                vx = if (abs(aim) >= 0.12f) aim else if (vx < 0f) -0.12f else 0.12f
             }
             if (ballY > 1f) {
                 lives--

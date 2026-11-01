@@ -4,8 +4,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +23,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,7 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.companion.app.games.*
 import kotlinx.coroutines.delay
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.sin
 
+/** A lean of this many g reaches the side, about 25 degrees: comfortable for the wrist. */
+private const val FULL_LEAN = 2.4f
 private val Rose = Color(0xFFDAB0B8)
 private val Mint = Color(0xFFAED0C0)
 private val Sky = Color(0xFFAAC6DC)
@@ -36,9 +49,9 @@ private val Grey = Color(0xFF6E6E74)
 private val Dark = Color(0xFF26262B)
 
 private enum class BigGame(val title: String, val hint: String) {
-    Race("Гонки", "Наклон — руль, удержание экрана — газ"),
+    Race("Гонки", "Кольцевые, 3 трассы, 1–4 игрока. Наклон — руль, удержание экрана — тормоз"),
     Durak("Дурак", "Наклон — выбор, нажатие — отметить, вверх — на стол, вниз — беру или бито"),
-    Poker("Покер", "Техасский холдем. Нажатие — чек или колл, вверх — рейз, вниз — пас"),
+    Poker("Покер", "Классический: 2 карты у каждого, 5 на столе. Нажатие — чек или поддержать, вверх — поднять, вниз — сбросить"),
     Breakout("Арканоид", "Наклон — ракетка, нажатие — запуск"),
 }
 
@@ -119,72 +132,163 @@ private fun FrameLoop(body: (Float) -> Unit) {
     }
 }
 
+private val CarColors = listOf(Color.White, Rose, Mint, Sky)
+
+private fun carColor(game: RaceGame, car: RaceCar) = if (car.human) CarColors[game.cars.indexOf(car)] else Grey
+
+private fun carName(game: RaceGame, car: RaceCar) = if (car.human) "Игрок ${game.cars.indexOf(car) + 1}" else "Комп."
+
+private fun DrawScope.drawTrack(track: RaceTrack, scale: Float, ox: Float, oy: Float) {
+    val path = Path()
+    for (i in 0 until RaceTrack.SAMPLES step 3) {
+        val x = ox + track.xs[i] * scale
+        val y = oy + track.ys[i] * scale
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    path.close()
+    val road = RaceGame.ROAD_HALF * 2 * scale
+    drawPath(path, Grey, style = Stroke(road + scale * 0.008f, join = StrokeJoin.Round))
+    drawPath(path, Dark, style = Stroke(road, join = StrokeJoin.Round))
+    drawPath(path, Sand.copy(alpha = 0.3f), style = Stroke(scale * 0.003f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(scale * 0.02f, scale * 0.025f))))
+    // Chequered line: sand and black, so that pure white on the track is only ever the first player's car.
+    val a = track.direction(0)
+    val nx = -sin(a); val ny = cos(a)
+    val sq = road / 6
+    for (row in 0..1) for (k in 0 until 6) {
+        val along = (row - 0.5f) * sq
+        val across = (k + 0.5f) * sq - road / 2
+        val cx = ox + track.xs[0] * scale + cos(a) * along + nx * across
+        val cy = oy + track.ys[0] * scale + sin(a) * along + ny * across
+        drawLine(if ((k + row) % 2 == 0) Sand else Color.Black, Offset(cx - nx * sq / 2, cy - ny * sq / 2), Offset(cx + nx * sq / 2, cy + ny * sq / 2), strokeWidth = sq)
+    }
+}
+
+/** A button that reports both press and release, several at once: every player has their own. */
+@Composable
+private fun HoldPad(label: String, color: Color, modifier: Modifier, onChange: (Boolean) -> Unit) {
+    Box(modifier.height(60.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.16f))
+        .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(); onChange(true); waitForUpOrCancellation(); onChange(false) } },
+        contentAlignment = Alignment.Center) { Text(label, color = color, fontSize = 26.sp) }
+}
+
 @Composable
 private fun RaceHost(client: BleClient) {
+    var setup by remember { mutableStateOf(true) }
+    var players by remember { mutableIntStateOf(1) }
+    var trackIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран тормоз") }
+    if (setup) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Сколько игроков? Свободные места займёт компьютер.", color = Grey)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (n in 1..4) {
+                    if (n == players) Button(onClick = {}) { Text("$n") } else OutlinedButton(onClick = { players = n }) { Text("$n") }
+                }
+            }
+            Text("Трасса", color = Grey)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RACE_TRACKS.forEachIndexed { i, t ->
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                        .background(if (i == trackIndex) Dark else Color.Transparent)
+                        .clickable { trackIndex = i }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+                            val scale = minOf(size.width, size.height / RaceGame.ARENA_H)
+                            drawTrack(t, scale, (size.width - scale) / 2, (size.height - scale * RaceGame.ARENA_H) / 2)
+                        }
+                        Text(t.name, fontSize = 13.sp)
+                    }
+                }
+            }
+            Button(onClick = { setup = false }, Modifier.fillMaxWidth()) { Text("Старт") }
+            Text("Игрок 1 управляет устройством, остальные кнопками на телефоне. Машина едет сама: наклон и кнопки — руль, удержание экрана устройства или обе кнопки — тормоз.", color = Grey, fontSize = 13.sp)
+        }
+        return
+    }
+    RaceTable(client, RACE_TRACKS[trackIndex], players) { setup = true }
+}
+
+@Composable
+private fun RaceTable(client: BleClient, track: RaceTrack, players: Int, onSetup: () -> Unit) {
     var round by remember { mutableIntStateOf(0) }
-    val game = remember(round) { RaceGame() }
+    val game = remember(round) { RaceGame(track, players) }
     var frame by remember { mutableIntStateOf(0) }
-    var gas by remember { mutableStateOf(false) }
-    var touchSteer by remember { mutableFloatStateOf(0f) }
-    var touching by remember { mutableStateOf(false) }
     val tilt by client.tilt.collectAsState()
-    LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран газ") }
+    val link by client.link.collectAsState()
+    val hasDevice = link == LinkState.Authenticated
+    var deviceBrake by remember { mutableStateOf(false) }
+    // Plain arrays, read once per frame: a press must not recompose the table.
+    val left = remember { BooleanArray(4) }
+    val right = remember { BooleanArray(4) }
+    val steer = remember { FloatArray(4) }
+    val brake = remember { BooleanArray(4) }
     LaunchedEffect(round) {
         client.actions.collect { a ->
             when (a.action) {
-                "down" -> gas = true
-                "up" -> gas = false
+                "down" -> deviceBrake = true
+                "up" -> deviceBrake = false
                 "tap" -> if (game.over) round++
             }
         }
     }
     FrameLoop { dt ->
-        val steer = if (touching) touchSteer else tilt.first * 2.2f
-        game.step(dt, steer, gas)
+        for (i in 0 until players) {
+            steer[i] = (if (right[i]) 1f else 0f) - (if (left[i]) 1f else 0f)
+            brake[i] = left[i] && right[i]
+        }
+        if (hasDevice) { steer[0] = tilt.first * FULL_LEAN; brake[0] = deviceBrake }
+        game.step(dt, steer, brake)
         frame++
     }
-    frame.hashCode() // read during composition, not only in the canvas: the score and messages must update too
-    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
-        .pointerInput(Unit) { detectDragGestures(onDragEnd = { touching = false; gas = false }) { c, _ -> touching = true; gas = true; touchSteer = ((c.position.x / size.width) * 2 - 1) * 2f } }
-        .pointerInput(round) { detectTapGestures(onTap = { if (game.over) round++ }) }) {
-        Canvas(Modifier.fillMaxSize()) {
-            frame.hashCode() // also read here: Compose skips a draw lambda whose captures did not change, freezing the picture
-            val w = size.width
-            val h = size.height
-            val horizon = h * 0.28f
-            drawRect(Color(0xFF17171C), size = Size(w, horizon))
-            drawRect(Color(0xFF101013), Offset(0f, horizon), Size(w, h - horizon))
-            fun rowY(z: Float) = horizon + (h - horizon) * (1 - z) * (1 - z)
-            fun halfW(z: Float) = (w * 0.05f) + (w * 0.55f) * (1 - z) * (1 - z)
-            val road = Path().apply {
-                moveTo(w / 2 - halfW(1f), rowY(1f)); lineTo(w / 2 + halfW(1f), rowY(1f))
-                lineTo(w / 2 + halfW(0f), h); lineTo(w / 2 - halfW(0f), h); close()
+    frame.hashCode() // read during composition, not only in the canvas: the standings must update too
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            game.standings.forEachIndexed { place, car ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${place + 1}. ${carName(game, car)}", color = carColor(game, car), fontSize = 12.sp)
+                    Text(if (car.finished) "финиш" else "круг ${game.lap(car)}/${game.laps}", color = Grey, fontSize = 11.sp)
+                }
             }
-            drawPath(road, Dark)
-            val scroll = (game.distance * 3f) % 1f
-            for (i in 0 until 8) {
-                val z0 = ((i + scroll) / 8f)
-                val zz0 = 1 - z0
-                val zz1 = (zz0 - 0.05f).coerceAtLeast(0f)
-                drawLine(Sand.copy(alpha = 0.6f), Offset(w / 2, rowY(zz0)), Offset(w / 2, rowY(zz1)), strokeWidth = 2f + 8f * (1 - zz0))
-            }
-            for (o in game.obstacles) {
-                val y = rowY(o.z)
-                val half = halfW(o.z)
-                val s = half * 0.26f
-                drawRoundRect(Rose, Offset(w / 2 + (o.x - game.x * 0.35f) * half - s / 2, y - s * 0.75f), Size(s, s * 0.75f), CornerRadius(s * 0.15f))
-            }
-            val carX = w / 2 + game.x * halfW(0f) * 0.55f
-            val carY = h * 0.86f
-            val cw = w * 0.2f
-            drawRoundRect(if (game.crashFlash > 0) Rose else Color.White, Offset(carX - cw / 2, carY), Size(cw, h * 0.1f), CornerRadius(cw * 0.15f))
-            drawRoundRect(Dark, Offset(carX - cw * 0.34f, carY + h * 0.012f), Size(cw * 0.68f, h * 0.03f), CornerRadius(4f))
         }
-        Column(Modifier.align(Alignment.TopCenter).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${game.score}", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Text("Жизни: ${game.lives}", color = Grey, fontSize = 13.sp)
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF101013))) {
+            Canvas(Modifier.fillMaxSize()) {
+                frame.hashCode() // also read here: Compose skips a draw lambda whose captures did not change, freezing the picture
+                val scale = minOf(size.width, size.height / RaceGame.ARENA_H)
+                val ox = (size.width - scale) / 2
+                val oy = (size.height - scale * RaceGame.ARENA_H) / 2
+                drawTrack(game.track, scale, ox, oy)
+                val l = scale * 0.042f
+                val wd = scale * 0.025f
+                for (car in game.cars) {
+                    val p = Offset(ox + car.x * scale, oy + car.y * scale)
+                    rotate(Math.toDegrees(car.heading.toDouble()).toFloat(), p) {
+                        drawRoundRect(carColor(game, car), Offset(p.x - l / 2, p.y - wd / 2), Size(l, wd), CornerRadius(wd * 0.3f))
+                        drawRect(Dark, Offset(p.x + l * 0.08f, p.y - wd * 0.34f), Size(l * 0.2f, wd * 0.68f))
+                    }
+                }
+            }
+            if (game.countdown > 0f) Text("${ceil(game.countdown).toInt()}", Modifier.align(Alignment.Center), fontSize = 64.sp, fontWeight = FontWeight.Bold)
+            if (game.over) Card(Modifier.align(Alignment.Center).padding(16.dp)) {
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Финиш", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    game.standings.forEachIndexed { place, car ->
+                        val time = car.finishTime?.let { "%d:%04.1f".format(it.toInt() / 60, it % 60) } ?: "не доехал"
+                        Text("${place + 1}. ${carName(game, car)} — $time", color = carColor(game, car))
+                    }
+                    Button(onClick = { round++ }) { Text("Ещё раз") }
+                    OutlinedButton(onClick = onSetup) { Text("Другая трасса") }
+                }
+            }
         }
-        if (game.over) Text("Финиш: ${game.score}\nНажмите, чтобы начать заново", Modifier.align(Alignment.Center), fontSize = 20.sp, textAlign = TextAlign.Center)
+        // Two players side by side per row: four people around one phone need the room for the track.
+        (if (hasDevice) 1 until players else 0 until players).chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (i in row) {
+                    HoldPad("◀", CarColors[i], Modifier.weight(1f)) { left[i] = it }
+                    HoldPad("▶", CarColors[i], Modifier.weight(1f)) { right[i] = it }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(2f))
+            }
+        }
     }
 }
 
@@ -235,20 +339,20 @@ private fun PokerTable(client: BleClient, game: HoldemGame, onExit: () -> Unit) 
     val link by client.link.collectAsState()
     val deviceHoldsCards = link == LinkState.Authenticated
 
-    fun callLabel() = if (game.whoActs() == 0 && game.toCall(0) > 0) "Колл ${game.toCall(0)}" else "Чек"
+    fun callLabel() = if (game.whoActs() == 0 && game.toCall(0) > 0) "Поддержать ${game.toCall(0)}" else "Чек"
     fun sync() {
         version++
         val mine = game.whoActs() == 0
         val hint = when {
             game.street == Street.GameOver -> "тап новая игра"
             game.street == Street.Showdown -> "тап новая раздача"
-            mine && game.canRaise -> "тап ${callLabel().lowercase()}\n↑ рейз · ↓ пас"
-            mine -> "тап ${callLabel().lowercase()} · ↓ пас"
+            mine && game.canRaise -> "тап ${callLabel().lowercase()}\n↑ поднять · ↓ сбросить"
+            mine -> "тап ${callLabel().lowercase()} · ↓ сбросить"
             else -> "ждём соперников"
         }
         val state = when {
             game.street.ordinal >= Street.Showdown.ordinal -> game.message
-            game.folded[0] -> "Вы спасовали"
+            game.folded[0] -> "Вы сбросили карты"
             else -> "${game.street.title} · банк ${game.pot}"
         }
         client.showCards("Фишки ${game.stacks[0]}", game.hole[0], "", hint, state)
@@ -294,15 +398,16 @@ private fun PokerTable(client: BleClient, game: HoldemGame, onExit: () -> Unit) 
                 game.hole[0].forEach { c -> PlayingCard(if (open || !deviceHoldsCards) c else null, false, false, Modifier.weight(1f)) }
             }
             Text("Фишки: ${game.stacks[0]}", color = Grey, fontSize = 13.sp)
-            if (!deviceHoldsCards) {
+            // On the table too: the same moves as on the device, and no others exist.
+            run {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (open) Button(onClick = { act("tap") }) { Text(if (game.street == Street.GameOver) "Выйти" else "Новая раздача") }
                     else {
                         val mine = game.whoActs() == 0
                         Button(onClick = { act("tap") }, enabled = mine) { Text(callLabel()) }
-                        OutlinedButton(onClick = { act("swipe_up") }, enabled = mine && game.canRaise) { Text("Рейз") }
-                        OutlinedButton(onClick = { act("swipe_down") }, enabled = mine) { Text("Пас") }
+                        OutlinedButton(onClick = { act("swipe_up") }, enabled = mine && game.canRaise) { Text("Поднять") }
+                        OutlinedButton(onClick = { act("swipe_down") }, enabled = mine) { Text("Сбросить") }
                     }
                 }
             }
@@ -318,7 +423,7 @@ private fun Seat(game: HoldemGame, p: Int, open: Boolean, active: Boolean) {
             Row(Modifier.width(76.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 game.hole[p].forEach { c -> PlayingCard(if (open) c else null, false, false, Modifier.weight(1f)) }
             }
-        } else Text(if (game.hole[p].isEmpty()) "выбыл" else "пас", color = Grey, fontSize = 13.sp)
+        } else Text(if (game.hole[p].isEmpty()) "выбыл" else "сбросил", color = Grey, fontSize = 13.sp)
         Text("${game.stacks[p]}", color = Sand, fontSize = 13.sp)
     }
 }
@@ -337,14 +442,13 @@ private fun BreakoutHost(client: BleClient) {
         }
     }
     FrameLoop { dt ->
-        val steer = touchX?.let { ((it - game.paddle) * 8).coerceIn(-1f, 1f) } ?: (tilt.first * 2.2f)
-        game.step(dt, steer)
+        game.step(dt, touchX ?: (0.5f + tilt.first * FULL_LEAN * 0.5f))
         frame++
     }
     val colors = listOf(Rose, Sand, Mint, Sky, Color.White)
     frame.hashCode() // read during composition, not only in the canvas: the score and messages must update too
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(Color(0xFF101013))
-        .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchX = null }) { c, _ -> touchX = c.position.x / size.width } }
+        .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchX = null }, onDragCancel = { touchX = null }) { c, _ -> touchX = c.position.x / size.width } }
         .pointerInput(round) { detectTapGestures(onTap = { if (game.over || game.won) round++ else game.launch() }) }) {
         Canvas(Modifier.fillMaxSize()) {
             frame.hashCode() // see the race: without this read the picture freezes
@@ -361,6 +465,7 @@ private fun BreakoutHost(client: BleClient) {
             drawCircle(Color.White, w * 0.018f, Offset(game.ballX * w, game.ballY * h))
         }
         Text("${game.score}   жизни: ${game.lives}", Modifier.align(Alignment.TopCenter).padding(6.dp), color = Grey)
+        if (!game.launched && !game.over && !game.won) Text("Нажмите на устройстве, чтобы запустить шарик", Modifier.align(Alignment.Center).padding(24.dp), color = Sand, textAlign = TextAlign.Center)
         if (game.over || game.won) {
             Text(if (game.won) "Победа: ${game.score}\nНажмите для новой игры" else "Счёт: ${game.score}\nНажмите для новой игры",
                 Modifier.align(Alignment.Center), fontSize = 20.sp, textAlign = TextAlign.Center)

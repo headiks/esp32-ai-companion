@@ -78,6 +78,10 @@ def tap_node(n):
 
 def tap(pattern, wait=0.8, required=True):
     n = find(pattern)
+    deadline = time.time() + 8  # a slow virtual phone can take seconds to draw the next screen
+    while n is None and required and time.time() < deadline:
+        pump(0.5)
+        n = find(pattern)
     if n is None:
         if required:
             raise AssertionError(f"not on screen: {pattern}; visible: {texts()[:30]}")
@@ -102,6 +106,33 @@ def frames_differ(seconds=1.5):
     w, h = a.size
     box = (0, h // 3, w, h - 150)  # the game area, without the clock in the status bar
     return ImageChops.difference(a.crop(box), b.crop(box)).getbbox() is not None
+
+
+def white_center(top, bottom):
+    """Horizontal centre of the near-white pixels in a band of the screen, as a fraction of its width."""
+    from io import BytesIO
+    from PIL import Image
+    img = Image.open(BytesIO(adb("exec-out", "screencap", "-p", binary=True))).convert("L")
+    w, h = img.size
+    band = img.crop((0, int(h * top), w, int(h * bottom))).point(lambda v: 255 if v > 225 else 0)
+    box = band.getbbox()
+    return ((box[0] + box[2]) / 2 / w) if box else None
+
+
+def color_center(rgb, tolerance=8):
+    """Centre of the pixels of exactly this colour on the game table, as fractions of the screen; (None, None) if absent."""
+    from io import BytesIO
+    from PIL import Image
+    img = Image.open(BytesIO(adb("exec-out", "screencap", "-p", binary=True))).convert("RGB")
+    w, h = img.size
+    # The table only: the app's header and the standings have white and rose text of their own.
+    top = int(h * 0.27)
+    px = img.crop((0, top, w, h - 100)).load()
+    found = [(x, y) for y in range(0, h - 100 - top, 3) for x in range(0, w, 3)
+             if all(abs(px[x, y][i] - rgb[i]) <= tolerance for i in range(3))]
+    if not found:
+        return None, None
+    return sum(p[0] for p in found) / len(found) / w, (sum(p[1] for p in found) / len(found) + top) / h
 
 
 def rank_cards_on_screen():
@@ -135,9 +166,9 @@ def main():
     adb("shell", "pm", "clear", "com.companion.app")  # a saved PIN from an earlier run would get the new one appended
     adb("shell", "am", "start", "-W", "-n", "com.companion.app/.MainActivity")
     fields = []
-    deadline = time.time() + 40  # a cold start on a software-rendered emulator is slow
+    deadline = time.time() + 120  # a cold start on a software-rendered emulator is slow
     while time.time() < deadline and len(fields) < 2:
-        tap(r"^(Allow|Разрешить)$", required=False)
+        tap(r"^(Allow|Разрешить|Wait|Подождать)$", required=False)  # Wait: "not responding" on a phone still booting
         fields = [n for n in nodes() if n.get("class") == "android.widget.EditText"]
         pump(0.5)
 
@@ -152,7 +183,8 @@ def main():
             adb("shell", "input", "keyevent", "KEYCODE_DEL")
         adb("shell", "input", "text", pin)
         pump(1.2)
-        fields = [n for n in nodes() if n.get("class") == "android.widget.EditText"]
+        now = [n for n in nodes() if n.get("class") == "android.widget.EditText"]
+        fields = now or fields  # a dump taken mid-redraw can come back empty
         typed = fields[0].get("text")
         if typed == pin:
             break
@@ -198,29 +230,73 @@ def main():
     device_tap()
     pump(0.8)
     shot("5_durak_marked")
+    table_before = texts()[10:]
     device_swipe_up()
     pump(1.5)
     shot("6_durak_played")
-    check("a swipe on the device reaches the game", visible("Ходит игрок", "Подкидывайте", "Этими картами", "сюда не подходят"), str(texts()[:14]))
+    # Any change will do: a beaten attack can end the round, and the computer attacks again with the same words on screen.
+    check("a swipe on the device reaches the game", texts()[10:] != table_before or visible("Этими картами", "сюда не подходят"), str(texts()[:14]))
 
     tap(r"^Назад$", 1.5)
     check("leaving the game releases the controller", state()["screen"] == "face", state()["screen"])
     tap(r"^Гонки$", 1.5)
     check("racing starts the pad", state()["screen"] == "controller")
-    emu.set_tilt(0.4, 0)
-    pump(1.5)
-    emu.set_tilt(0, 0)
-    shot("7_race")
-    check("the race score counts on screen", any(re.fullmatch(r"[1-9]\d*", t) for t in texts()), str(texts()[:14]))
+    check("three tracks to choose from", all(find(n) is not None for n in ("Овал", "Восьмёрка", "Серпантин")), str(texts()[:16]))
+    shot("7_race_setup")
+    WHITE = (255, 255, 255)
+
+    def race_with_lean(lean):
+        """Average height of the first player's car while it drives holding this lean: a held lean makes it circle."""
+        emu.set_tilt(lean, 0)
+        tap(r"^Старт$", 0.1)
+        pump(3.3)
+        at = [color_center(WHITE) for _ in range(5)]
+        emu.set_tilt(0, 0)
+        return at, sum(p[1] for p in at) / len(at)
+
+    at, right = race_with_lean(0.4)
+    spread = max(p[0] for p in at) - min(p[0] for p in at) + max(p[1] for p in at) - min(p[1] for p in at)
+    check("the car drives on its own after the countdown", spread > 0.03, str(at))
+    tap(r"^Назад$", 1)
+    tap(r"^Гонки$", 1.5)
+    _, left = race_with_lean(-0.4)
+    # The road starts going right, and right of that is down the screen.
+    check("leaning the device steers the car to that side", right > left + 0.03, f"lean right y={right} lean left y={left}")
+    check("standings show the lap", find(r"круг 1/3") is not None, str(texts()[:14]))
+    shot("8_race")
     check("the race picture moves", frames_differ())
-    emu.set_tilt(-0.4, 0)
-    pump(0.6)
-    check("the race picture follows the tilt", frames_differ(0.6))
-    emu.set_tilt(0, 0)
+    tap(r"^Назад$", 1)
+
+    tap(r"^Гонки$", 1.5)
+    tap(r"^2$", 0.5)
+    tap(r"^Восьмёрка$", 0.5)
+    shot("9_race_two_setup")
+    tap(r"^Старт$", 4.5)
+    pads = [n for n in nodes() if n.get("text") == "▶"]
+    check("the second player has buttons, the first has the device", len(pads) == 1, str(texts()[:16]))
+    ROSE = (218, 176, 184)
+    before = color_center(ROSE)
+    a, b, c, d = map(int, re.findall(r"\d+", pads[0].get("bounds")))
+    adb("shell", "input", "swipe", str((a + c) // 2), str((b + d) // 2), str((a + c) // 2), str((b + d) // 2), "1200")  # held, not tapped
+    after = color_center(ROSE)
+    check("the second player's car is on the track and moves", before[0] is not None and after[0] is not None and before != after, f"{before} -> {after}")
+    shot("10_race_two")
     tap(r"^Назад$", 1)
 
     tap(r"^Арканоид$", 1.5)
     check("breakout starts the pad", state()["screen"] == "controller")
+    check("breakout says how to launch", find("запустить шарик") is not None)
+    PADDLE = (0.86, 0.95)  # the paddle's row of the screen
+    emu.set_tilt(0.25, 0)
+    pump(0.8)
+    right = white_center(*PADDLE)
+    emu.set_tilt(-0.25, 0)
+    pump(0.8)
+    left = white_center(*PADDLE)
+    emu.set_tilt(0, 0)
+    pump(0.8)
+    middle = white_center(*PADDLE)
+    check("the paddle goes where the device leans", right and left and middle and left < 0.4 < middle < 0.6 < right, f"left={left} middle={middle} right={right}")
     device_tap()
     pump(0.4)
     check("the breakout ball flies after a tap on the device", frames_differ(0.6))
@@ -233,6 +309,11 @@ def main():
     check("poker turns the emulator into a card controller", state()["screen"] == "controller")
     check("the phone hides the two hole cards", visible("Ваши карты на устройстве") and len(rank_cards_on_screen()) == 0, str(texts()[:16]))
     shot("9b_poker_device")
+    # Whose move it is decides what the first button says, so wait for the human's turn.
+    deadline = time.time() + 15
+    while time.time() < deadline and not visible(r"^Чек$", r"^Поддержать \d+$"):
+        pump(0.5)
+    check("the moves are check or call, raise and fold, and nothing else", visible(r"^Чек$", r"^Поддержать \d+$") and visible(r"^Поднять$") and visible(r"^Сбросить$"), str(texts()[:24]))
     # Check or call from the device until the hand is over; every street must add shared cards to the table.
     board_seen = set()
     for _ in range(40):

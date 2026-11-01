@@ -1351,3 +1351,39 @@ def test_two_cards_are_both_big_and_tilt_selects_nothing(c):
     assert not [m for m in drain(c) if m.get("action") == "select"]
     tap(c)
     assert "tap" in [m.get("action") for m in drain(c)]
+
+
+def test_blackjack_rank_and_suit_do_not_touch():
+    """A clear row of card background must separate the letter from the suit, for every card dealt."""
+    for seed in range(1, 25):
+        c = Companion(seed=seed)
+        c.run(500)
+        c.handle_command({"type": "screen", "value": "blackjack"})
+        c.run(400)
+        fb = c.render()
+        # The dealer's open card: 50x70 at the left of the two card row.
+        x0, y0 = 233 - 28, 92
+        card = fb[y0 - 33:y0 + 33, x0 - 20:x0 + 20]
+        ink = (card != 0xFFFF).any(axis=1)
+        blocks = (ink[1:] & ~ink[:-1]).sum() + int(ink[0])
+        assert blocks >= 2, f"seed {seed}: rank and suit merged into one block"
+        c.close()
+
+
+def test_coin_is_detailed_and_sides_differ():
+    """The coin must show relief: many shades on the face, and heads must not look like tails."""
+    seen = {}
+    for seed in range(1, 10):
+        c = Companion(seed=seed)
+        c.handle_command({"type": "screen", "value": "coin"})
+        c.run(300)
+        tap(c)
+        c.run(2000)
+        face = c.render()[233 - 16 - 80:233 - 16 + 80, 233 - 80:233 + 80].copy()
+        seen[face.tobytes()] = face
+        c.close()
+    assert len(seen) == 2, "exactly two faces, and the coin at rest does not flicker"
+    a, b = seen.values()
+    assert (a != b).mean() > 0.1
+    for face in (a, b):
+        assert len(set(face.ravel().tolist())) >= 6

@@ -136,38 +136,125 @@ class GameLogicTest {
         }
     }
 
-    @Test fun raceSteersAndStaysInBounds() {
-        val g = RaceGame(Random(1))
-        repeat(200) { g.step(0.016f, 1f, true) }
-        assertTrue(g.x > 1f && g.x <= 1.2f)
-        assertTrue(g.distance > 0f)
-    }
-
-    @Test fun raceObstaclesEventuallyEndTheGame() {
-        val g = RaceGame(Random(2))
+    /** Plays every human seat with the road-following steering, as an attentive player would. */
+    private fun drive(g: RaceGame, maxSteps: Int = 40000): Int {
         var steps = 0
-        while (!g.over && steps++ < 200000) g.step(0.016f, 0f, true)
-        assertTrue(g.over)
-        val score = g.score
-        g.step(0.016f, 0f, true)
-        assertEquals(score, g.score)
+        val steer = FloatArray(4)
+        val brake = BooleanArray(4)
+        while (!g.over && steps++ < maxSteps) {
+            for (i in 0 until g.humans) steer[i] = g.autoSteer(g.cars[i])
+            g.step(0.016f, steer, brake)
+        }
+        return steps
     }
 
-    @Test fun gasIsFasterThanCoasting() {
-        val a = RaceGame(Random(9)); val b = RaceGame(Random(9))
-        repeat(60) { a.step(0.016f, 0f, true); b.step(0.016f, 0f, false) }
-        assertTrue(a.distance > b.distance)
+    @Test fun tracksStayInTheArenaAndAreClosed() {
+        assertEquals(3, RACE_TRACKS.size)
+        for (t in RACE_TRACKS) {
+            for (i in 0 until RaceTrack.SAMPLES) {
+                assertTrue(t.name, t.xs[i] - RaceGame.ROAD_HALF >= 0f && t.xs[i] + RaceGame.ROAD_HALF <= 1f)
+                assertTrue(t.name, t.ys[i] - RaceGame.ROAD_HALF >= 0f && t.ys[i] + RaceGame.ROAD_HALF <= RaceGame.ARENA_H)
+                // Even steps and no jump anywhere, including from the last sample back to the first.
+                val j = (i + 1) % RaceTrack.SAMPLES
+                assertEquals(t.name, t.length / RaceTrack.SAMPLES, kotlin.math.hypot(t.xs[j] - t.xs[i], t.ys[j] - t.ys[i]), 0.002f)
+            }
+        }
     }
 
-    @Test fun breakoutWaitsForLaunchAndLosesLives() {
+    @Test fun nothingMovesBeforeTheCountdownEnds() {
+        val g = RaceGame(RACE_TRACKS[0], 1, rng = Random(1))
+        val x = g.cars[0].x
+        repeat(100) { g.step(0.016f, FloatArray(4) { 1f }, BooleanArray(4)) }
+        assertEquals(x, g.cars[0].x, 0f)
+        assertEquals(0f, g.elapsed, 0f)
+    }
+
+    @Test fun everyTrackCanBeDrivenToTheEndWithAnyNumberOfPlayers() {
+        for (t in RACE_TRACKS) for (players in 1..4) {
+            val g = RaceGame(t, players, rng = Random(players))
+            drive(g)
+            assertTrue("${t.name} $players", g.over)
+            for (i in 0 until players) assertTrue("${t.name} player $i", g.cars[i].finished)
+            assertTrue("${t.name}: a race lasts ${g.elapsed}", g.elapsed in 20f..120f)
+        }
+    }
+
+    @Test fun carsNeverEndUpOnTopOfEachOther() {
+        val g = RaceGame(RACE_TRACKS[1], 4, rng = Random(3))
+        val steer = FloatArray(4); val brake = BooleanArray(4)
+        repeat(3000) {
+            for (i in 0..3) steer[i] = g.autoSteer(g.cars[i])
+            g.step(0.016f, steer, brake)
+            for (a in 0..3) for (b in a + 1..3) {
+                val d = kotlin.math.hypot(g.cars[a].x - g.cars[b].x, g.cars[a].y - g.cars[b].y)
+                assertTrue("cars $a and $b at $d", d > RaceGame.CAR_SPACE * 0.5f)
+            }
+        }
+    }
+
+    @Test fun steeringTurnsTheCarToItsOwnSide() {
+        fun headingAfter(s: Float): Float {
+            val g = RaceGame(RACE_TRACKS[0], 1, rng = Random(1))
+            val start = g.cars[0].heading
+            repeat(190 + 40) { g.step(0.016f, floatArrayOf(s, 0f, 0f, 0f), BooleanArray(4)) }
+            return g.cars[0].heading - start
+        }
+        assertTrue(headingAfter(1f) > 0.3f)
+        assertTrue(headingAfter(-1f) < -0.3f)
+        assertEquals(0f, headingAfter(0f), 0.001f)
+    }
+
+    @Test fun brakeAndGrassSlowTheCar() {
+        fun speedAfter(brake: Boolean): Float {
+            val g = RaceGame(RACE_TRACKS[0], 1, rng = Random(1))
+            repeat(190 + 100) { g.step(0.016f, FloatArray(4) { g.autoSteer(g.cars[0]) }, BooleanArray(4) { brake }) }
+            return g.cars[0].speed
+        }
+        assertTrue(speedAfter(true) < speedAfter(false) / 2)
+    }
+
+    @Test fun cuttingAcrossTheFieldGivesNoLaps() {
+        val g = RaceGame(RACE_TRACKS[0], 1, rng = Random(1))
+        val steer = FloatArray(4); val brake = BooleanArray(4)
+        // Spinning on the spot of the infield forever: the race must still end, without this car finishing.
+        var steps = 0
+        while (!g.over && steps++ < 40000) { steer[0] = 1f; g.step(0.016f, steer, brake) }
+        assertTrue("the others finish and the race closes", g.over)
+        assertFalse(g.cars[0].finished)
+        assertEquals("a car that did not finish is placed last", g.cars[0], g.standings.last())
+    }
+
+    @Test fun carOffTheRoadReturnsToItInsteadOfStayingStuck() {
+        val g = RaceGame(RACE_TRACKS[0], 1, rng = Random(1))
+        val steer = FloatArray(4); val brake = BooleanArray(4)
+        repeat(190) { g.step(0.016f, steer, brake) }
+        // Straight on forever leaves the oval at the first bend and reaches the edge of the arena.
+        var returned = false
+        repeat(3000) {
+            g.step(0.016f, steer, brake)
+            if (g.cars[0].progress > RaceTrack.SAMPLES / 8 && !g.cars[0].offRoad) returned = true
+        }
+        assertTrue(returned)
+    }
+
+    @Test fun breakoutPaddleGoesWhereTheHandLeans() {
         val g = BreakoutGame(Random(1))
-        repeat(50) { g.step(0.016f, 1f) }
-        assertEquals(g.paddle, g.ballX, 0.0001f)
+        repeat(60) { g.step(0.016f, 0.3f) }
+        assertEquals(0.3f, g.paddle, 0.02f)
+        repeat(60) { g.step(0.016f, 5f) }
+        assertEquals(1 - g.paddleWidth / 2, g.paddle, 0.02f)
+        assertEquals(g.paddle, g.ballX, 0.05f) // the ball waits on the paddle
         assertFalse(g.launched)
+    }
+
+    @Test fun breakoutMissLosesALifeAndWaitsForLaunch() {
+        val g = BreakoutGame(Random(1))
+        g.step(0.016f, 0.1f)
         g.launch()
         var steps = 0
-        while (g.launched && steps++ < 20000) g.step(0.016f, 1f)
-        assertTrue(g.lives == 2 || g.score > 0)
+        while (g.launched && steps++ < 20000) g.step(0.016f, if (g.ballX > 0.5f) 0.1f else 0.9f)
+        assertEquals(2, g.lives)
+        assertFalse(g.launched)
     }
 
     @Test fun breakoutAutopilotBreaksBricksAndStaysInArena() {
@@ -176,9 +263,9 @@ class GameLogicTest {
         repeat(200000) {
             if (g.won || g.over) return@repeat
             if (!g.launched) g.launch()
-            g.step(0.016f, ((g.ballX - g.paddle) * 12).coerceIn(-1f, 1f))
+            g.step(0.016f, g.ballX)
             assertTrue(g.ballX in 0f..1f && g.ballY >= 0f)
         }
-        assertTrue(g.score >= 200)
+        assertTrue("a player who follows the ball clears the board", g.won)
     }
 }

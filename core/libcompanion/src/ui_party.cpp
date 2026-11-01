@@ -32,12 +32,12 @@ class CoinScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     float p = clampf(t_, 0, 1), ease = 1 - (1 - p) * (1 - p) * (1 - p);
     // The whole number of half-turns decides which side lands up.
-    float ang = ease * turns_ * 3.14159f;
-    float y = kCy - 16 - sinf(p * 3.14159f) * 90;
-    float w = fabsf(cosf(ang));
-    bool front = cosf(ang) > 0;
-    ellipse(c, kCx, y, 92 * w, 92, front ? kWhite : kGray);
-    if (w > 0.45f) c.text(kCx, (int)y - 20, front ? "ОРЁЛ" : "РЕШКА", FontSize::M, kBlack, Align::Center);
+    float ang = p >= 1 ? fmodf(turns_, 2) * 3.14159f : ease * turns_ * 3.14159f;  // at rest exactly flat
+    float lift = sinf(p * 3.14159f);
+    float y = kCy - 16 - lift * 90;
+    // The shadow on the "table" shrinks as the coin rises.
+    ellipse(c, kCx, kCy + 88, 78 - 40 * lift, 7 - 3 * lift, kDark);
+    drawCoin(c, kCx, y, 92, ang);
     char b[32];
     snprintf(b, sizeof(b), "%d : %d", heads_, tails_);
     c.text(kCx, kCy + 112, b, FontSize::M, kGray, Align::Center);
@@ -47,6 +47,78 @@ class CoinScreen : public Screen {
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) flip(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; flip(a); return true; }
  private:
+  // Everything on the face is squeezed by w around the axis, so the relief turns with the coin.
+  static void drawEagle(Canvas& c, float x, float y, float r, float w, uint16_t ink) {
+    auto X = [&](float d) { return x + d * r * w; };
+    auto Y = [&](float d) { return y + d * r; };
+    float th = r * 0.028f;
+    // Wings: feathers fanning out from the shoulders, the outer ones longer.
+    for (int side = -1; side <= 1; side += 2) {
+      for (int i = 0; i < 6; i++) {
+        float t = i / 5.f, ang = -1.25f + t * 1.5f, len = 0.33f + 0.22f * (1 - t);
+        c.line(X(side * 0.09f), Y(-0.02f + t * 0.1f), X(side * (0.09f + sinf(ang + 1.57f) * len)), Y(-0.02f + t * 0.1f + cosf(ang + 1.57f) * -len * 0.9f), th, ink);
+      }
+    }
+    ellipse(c, x, Y(0.06f), r * 0.11f * w, r * 0.21f, ink);          // body
+    c.fillCircle(x, Y(-0.27f), r * 0.075f * (0.4f + 0.6f * w), ink);  // head
+    c.line(x, Y(-0.27f), X(0.13f), Y(-0.23f), th * 1.5f, ink);        // beak
+    c.line(x, Y(-0.2f), x, Y(-0.1f), th * 2.4f, ink);                 // neck
+    for (int i = -2; i <= 2; i++) c.line(x, Y(0.24f), X(i * 0.055f), Y(0.42f - abs(i) * 0.015f), th, ink);  // tail
+    for (int side = -1; side <= 1; side += 2) c.line(X(side * 0.05f), Y(0.2f), X(side * 0.15f), Y(0.3f), th, ink);  // claws
+  }
+  static void drawDenomination(Canvas& c, float x, float y, float r, float w, uint16_t ink) {
+    auto X = [&](float d) { return x + d * r * w; };
+    auto Y = [&](float d) { return y + d * r; };
+    float th = r * 0.075f;
+    c.line(X(-0.1f), Y(-0.22f), X(0.03f), Y(-0.34f), th * 0.8f, ink);
+    c.line(X(0.03f), Y(-0.34f), X(0.03f), Y(0.26f), th, ink);
+    c.line(X(-0.13f), Y(0.28f), X(0.19f), Y(0.28f), th * 0.8f, ink);
+    // Wreath: leaves in pairs along an arc on both sides, tied at the bottom.
+    for (int side = -1; side <= 1; side += 2) {
+      for (int i = 0; i < 9; i++) {
+        float ang = 0.35f + i * 0.27f, ox = sinf(ang) * 0.53f, oy = cosf(ang) * 0.53f;
+        float tan = 0.1f, lean = (i % 2 ? 1 : -1) * 0.06f;
+        c.line(X(side * (ox + lean * sinf(ang))), Y(oy + lean * cosf(ang)), X(side * (ox + cosf(ang) * tan)), Y(oy - sinf(ang) * tan), r * 0.035f, ink);
+      }
+    }
+  }
+  static void drawCoin(Canvas& c, float x, float y, float r, float ang) {
+    float cs = cosf(ang), w = fabsf(cs), side = sinf(ang);
+    bool front = cs > 0;
+    const uint16_t rim = front ? kWhite : kSoft;
+    const uint16_t field = front ? rgb565(176, 178, 186) : rgb565(170, 164, 148);
+    const uint16_t relief = front ? rgb565(232, 234, 240) : rgb565(236, 230, 212);
+    const uint16_t shade = rgb565(84, 84, 90);
+    // The edge shows only when the coin is turned, on the side away from the viewer, with reeding across it.
+    float depth = 9 * fabsf(side), dir = side * cs > 0 ? -1.f : 1.f;
+    if (depth > 0.5f) {
+      float ex = x + dir * depth;
+      ellipse(c, ex, y, r * w, r, shade);
+      c.fillRect((int)(dir > 0 ? x : ex), (int)(y - r), (int)depth, (int)(2 * r), shade);
+      for (int i = -8; i <= 8; i++) {
+        float ly = y + i * r / 9.f, half = sqrtf(fabsf(1 - (float)(i * i) / 81.f));
+        c.line(x + dir * r * w * half, ly, ex + dir * r * w * half, ly, 1.2f, kGray);
+      }
+    }
+    ellipse(c, x, y, r * w, r, rim);
+    ellipse(c, x, y, r * 0.9f * w, r * 0.9f, shade);
+    ellipse(c, x, y, r * 0.88f * w, r * 0.88f, field);
+    if (w < 0.12f) return;  // edge-on: there is nothing to see of the face
+    // Beaded border.
+    for (int i = 0; i < 40; i++) {
+      float b = i * 6.28318f / 40;
+      c.fillCircle(x + sinf(b) * r * 0.8f * w, y + cosf(b) * r * 0.8f, r * 0.019f + 0.3f, relief);
+    }
+    if (front) drawEagle(c, x, y - r * 0.04f, r, w, relief);
+    else drawDenomination(c, x, y - r * 0.03f, r, w, relief);
+    // The glint runs across the coin as it turns.
+    float g = sinf(ang * 2) * 0.55f;
+    if (w > 0.25f && fabsf(g) < 0.5f && fabsf(g) > 0.01f) {  // at rest there is no glint, it would read as a scratch
+      float half = sqrtf(1 - g * g) * 0.82f;
+      c.line(x + (g - half * 0.5f) * r * w, y + half * r * 0.86f, x + (g + half * 0.5f) * r * w, y - half * r * 0.86f, 2.2f, kWhite);
+    }
+    if (w > 0.8f) c.text((int)x, (int)(y + r * 0.53f), front ? "ОРЁЛ" : "РЕШКА", FontSize::S, front ? kBlack : rgb565(60, 56, 46), Align::Center);
+  }
   void flip(App& a) {
     if (t_ < 1) return;
     result_ = a.rng.range(0, 1) == 1;
@@ -569,9 +641,11 @@ static void drawCard(Canvas& c, float x, float y, float w, float h, const char* 
   char suit = label[n - 1];
   bool red = suit == 'h' || suit == 'd';
   uint16_t col = focus ? (red ? rgb565(170, 96, 110) : kBlack) : (red ? kRose : kGray);
-  FontSize f = focus ? FontSize::M : FontSize::S;
-  c.text((int)x, (int)(y - h * 0.40f), rank, f, col, Align::Center);
-  suitShape(c, suit, x, y + h * 0.16f, focus ? 15 : 9, col);
+  // Sizes follow the card: the rank takes the top part, the suit fits in what is left, so they never touch.
+  FontSize f = h >= 80 ? FontSize::M : FontSize::S;
+  c.text((int)x, (int)(y - h / 2 + h * 0.05f), rank, f, col, Align::Center);
+  float r = h * 0.17f < w * 0.26f ? h * 0.17f : w * 0.26f;
+  suitShape(c, suit, x, y + h * 0.22f, r, col);
   if (marked) c.fillCircle(x, y - h / 2 - 11, 5, kMint);
 }
 
