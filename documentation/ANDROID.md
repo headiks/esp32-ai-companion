@@ -4,15 +4,15 @@ Kotlin и Jetpack Compose, Android 8.0 и новее. Исходники в `and
 
 ## Сборка
 
-Сборка с этого кода пока не проверена: логика игр протестирована отдельно, интерфейс не компилировался.
+Приложение собирается и проходит юнит-тесты. На настоящем телефоне оно не запускалось.
 
 Нужны JDK 17 и Android SDK 35 с принятой лицензией.
 
 ```bash
-cd android && ./gradlew assembleDebug
+python tools/build_android.py
 ```
 
-На Windows: `gradlew.bat assembleDebug`. Готовый файл: `android/app/build/outputs/apk/debug/app-debug.apk`.
+Скрипт собирает и запускает тесты. Если в пути проекта есть русские буквы, сборка идёт из копии, а готовый файл лежит в `C:\companion_build\mirror\android\app\build\outputs\apk\debug\app-debug.apk`; скрипт печатает путь. Переменные `JAVA_HOME` и `ANDROID_HOME` нужны, если JDK и SDK лежат не в `%LOCALAPPDATA%\Programs\jdk-17` и `%LOCALAPPDATA%\Android\Sdk`.
 
 ## Первое подключение
 
