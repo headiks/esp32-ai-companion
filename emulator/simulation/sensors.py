@@ -9,6 +9,8 @@ class ImuSimulator:
     def __init__(self):
         self.script = []      # queued (ax, ay, az, gyro) samples, one per tick
         self.face_down = False
+        self.tilt_x = 0.0      # in g, +x rolls a ball to the right of the screen
+        self.tilt_y = 0.0
         self.rng = np.random.default_rng(5)
 
     def shake(self):
@@ -26,8 +28,9 @@ class ImuSimulator:
             ax, ay, az, g = self.script.pop(0)
             return ax, ay, (-az if self.face_down else az), g, 0.0, 0.0
         n = self.rng.normal(0, 0.004, 3)
-        z = -1.0 if self.face_down else 1.0
-        return float(n[0]), float(n[1]), z + float(n[2]), 0.1, 0.1, 0.1
+        z = np.sqrt(max(0.0, 1.0 - self.tilt_x ** 2 - self.tilt_y ** 2))
+        z = -z if self.face_down else z
+        return self.tilt_x + float(n[0]), self.tilt_y + float(n[1]), z + float(n[2]), 0.1, 0.1, 0.1
 
 
 class MicSimulator:

@@ -21,6 +21,7 @@ class EmotionEngine {
   Emotion mood() const { return mood_; }
   bool consumeChanged() { bool c = changed_; changed_ = false; return c; }
   int transitionCount() const { return transitions_; }
+  EmotionPriority enteredPriority() const { return enteredPrio_; }
 
   static bool allowed(Emotion from, Emotion to);
   static float minDwellMs(Emotion e);
@@ -32,6 +33,7 @@ class EmotionEngine {
   Emotion cur_ = Emotion::Neutral, route_ = Emotion::Neutral, final_ = Emotion::Neutral, mood_ = Emotion::Neutral;
   float age_ = 0, hold_ = 0, pendingHold_ = 0;
   EmotionPriority prio_ = EmotionPriority::Mood, pendingPrio_ = EmotionPriority::Mood;
+  EmotionPriority enteredPrio_ = EmotionPriority::Forced;
   bool changed_ = true;
   int transitions_ = 0;
 };

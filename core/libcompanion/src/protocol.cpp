@@ -170,6 +170,8 @@ static void addFullState(App& a, JsonWriter& w) {
   w.add("mic", a.settings.micOn);
   w.add("unread", a.notifications.unread());
   w.addU("time", a.clock.epoch());
+  w.add("weather", a.weather.known ? weatherName(a.weather.cond) : "unknown");
+  w.addf("temp", a.weather.tempC);
 }
 
 int App::stateEvent(char* out, int cap) {
@@ -222,6 +224,8 @@ static bool setSetting(App& a, const char* name, const JsonObject& j) {
       if (!strcmp(sv, personalityName((Personality)i))) { s.personality = (uint8_t)i; return true; }
     return false;
   }
+  if (!strcmp(name, "latitude")) { if (v < -90 || v > 90) return false; s.latitude = (float)v; a.netDirty = true; return true; }
+  if (!strcmp(name, "longitude")) { if (v < -180 || v > 180) return false; s.longitude = (float)v; a.netDirty = true; return true; }
   if (!strcmp(name, "ai_url") && sv) { if (strlen(sv) >= sizeof(s.aiUrl)) return false; strcpy(s.aiUrl, sv); a.netDirty = true; return true; }
   return false;
 }
@@ -283,6 +287,7 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
     if (e == Emotion::Sleeping) sleepNow();
     else {
       if (pet.asleep()) wakeNow();
+      if (emotion.current() == e) anim.retriggerCue();
       emotion.request(e, EmotionPriority::Forced, (float)j.num("hold_ms", 3000));
     }
     ok();
@@ -380,6 +385,14 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
     chat(text);
     ok();
     w.add("ai", ai_->name());
+    return done();
+  }
+  if (!strcmp(type, "weather")) {
+    Weather wx;
+    double temp = j.num("temp", 20);
+    if (!value || !weatherFromName(value, &wx) || temp < -80 || temp > 70) return errorResp(out, cap, "bad_value", "weather: clear, clouds, rain, snow, storm, fog, wind; temp in C", id);
+    setWeather(wx, (float)temp);
+    ok();
     return done();
   }
   if (!strcmp(type, "ai_listen")) {

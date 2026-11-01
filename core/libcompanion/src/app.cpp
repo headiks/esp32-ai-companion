@@ -9,7 +9,7 @@ static constexpr uint16_t kPetVersion = 2;
 struct PetBlob { PetStats stats; uint8_t asleep; uint32_t savedAt; };
 
 // Left/right swipe on these screens moves between them; other screens swipe right to go back.
-static const ScreenId kCarousel[] = {ScreenId::Face, ScreenId::Pet, ScreenId::AnalogClock, ScreenId::DigitalClock, ScreenId::Games};
+static const ScreenId kCarousel[] = {ScreenId::Face, ScreenId::Pet, ScreenId::Weather, ScreenId::DigitalClock, ScreenId::AnalogClock, ScreenId::Games};
 static constexpr int kCarouselN = sizeof(kCarousel) / sizeof(kCarousel[0]);
 
 App::App() {
@@ -101,7 +101,7 @@ void App::showScreen(ScreenId s) {
 
 void App::goBack() {
   ScreenId s = screenId_;
-  if (s == ScreenId::TicTacToe || s == ScreenId::Reaction || s == ScreenId::Guess || s == ScreenId::PetGame) showScreen(ScreenId::Games);
+  if (s >= ScreenId::TicTacToe && s <= ScreenId::Simon) showScreen(ScreenId::Games);
   else if (s == ScreenId::Face) return;
   else if (s == ScreenId::Menu || s == ScreenId::Settings || s == ScreenId::Notifications) showScreen(ScreenId::Face);
   else showScreen(ScreenId::Menu);
@@ -127,10 +127,14 @@ void App::petAction(PetEvent e) {
   switch (e) {
     case PetEvent::Feed:
       if (pet.asleep()) wakeNow();
-      pet.event(e);
-      sfx.play("interactions/feed");
-      anim.kick(-0.2f);
-      react(pet.stats.hunger <= 2 ? Emotion::Annoyed : Emotion::Happy, 2200);
+      {
+        bool wasHungry = pet.stats.hunger >= 55;
+        pet.event(e);
+        sfx.play("interactions/feed");
+        anim.kick(-0.2f);
+        // Thanks for a meal it needed, delight for a snack, disgust at being stuffed.
+        react(pet.stats.hunger <= 0 ? Emotion::Disgusted : (wasHungry ? Emotion::Grateful : Emotion::Happy), 2200);
+      }
       break;
     case PetEvent::Pet:
       if (pet.asleep()) wakeNow();
@@ -143,7 +147,7 @@ void App::petAction(PetEvent e) {
       pet.event(e);
       sfx.play("interactions/double_tap");
       anim.kick(-0.32f);
-      react(pet.stats.energy > 25 ? Emotion::Excited : Emotion::Sleepy, 2400);
+      react(pet.stats.energy > 25 ? (rng.range(0, 1) ? Emotion::Excited : Emotion::Playful) : Emotion::Exhausted, 2400);
       break;
     case PetEvent::GoSleep: sleepNow(); break;
     case PetEvent::WakeUp: wakeNow(); break;
@@ -174,13 +178,13 @@ void App::motion(MotionEvent e) {
       power.activity();
       sfx.play("interactions/shake");
       if (pet.asleep()) wakeNow();
-      react(pet.stats.stress > 55 ? Emotion::Confused : Emotion::Surprised, 2000, EmotionPriority::Strong);
+      react(pet.stats.stress > 70 ? Emotion::Dizzy : (pet.stats.stress > 55 ? Emotion::Confused : Emotion::Surprised), 2000, EmotionPriority::Strong);
       break;
     case MotionEvent::Jerk:
       pet.event(PetEvent::Jerk);
       power.activity();
       if (pet.asleep()) wakeNow();
-      react(Emotion::Scared, 1600, EmotionPriority::Strong);
+      react(pet.stats.stress > 60 ? Emotion::Terrified : Emotion::Scared, 1600, EmotionPriority::Strong);
       break;
     default: break;
   }
@@ -256,25 +260,141 @@ void App::listen() {
   sfx.play("system/notify");
 }
 
+float App::alertness() const {
+  if (!clock.isSet()) return 0.8f;  // unknown time: behave like daytime
+  DateTime d = clock.now();
+  float h = d.hour + d.minute / 60.f;
+  return 0.5f + 0.5f * cosf((h - 14.f) * 0.2618f);
+}
+
+uint16_t App::eyeColor() const {
+  float night = clampf((0.45f - alertness()) * 2.5f, 0, 1);
+  return rgb565(255, (uint8_t)(255 - night * 42), (uint8_t)(255 - night * 90));
+}
+
+void App::setWeather(Weather w, float tempC) {
+  bool changed = !weather.known || w != weather.cond;
+  weather.cond = w; weather.tempC = tempC; weather.known = true; weather.at = clock.epoch();
+  if (!changed || pet.asleep()) return;
+  // Glance at the sky: a new kind of weather is an event in this creature's small world.
+  switch (w) {
+    case Weather::Rain: react(Emotion::Sad, 2600); break;
+    case Weather::Snow: react(Emotion::Excited, 2600); break;
+    case Weather::Storm: react(Emotion::Scared, 2400); break;
+    case Weather::Clear: react(Emotion::Happy, 2400); break;
+    case Weather::Fog: react(Emotion::Confused, 2200); break;
+    default: react(Emotion::Curious, 2000); break;
+  }
+}
+
+// Weighted choice of the next thought: the state decides what is likely, chance decides which it is.
+Emotion App::chooseThought() {
+  const PetStats& s = pet.stats;
+  float alert = alertness();
+  float valence = (s.happiness - 50) / 50 - s.stress / 200;
+  float w[kEmotionCount] = {};
+  auto add = [&](Emotion e, float v) { if (v > 0) w[(int)e] += v; };
+  add(Emotion::Neutral, 0.8f);
+  add(Emotion::Curious, s.curiosity / 50);
+  add(Emotion::Thinking, 0.5f);
+  add(Emotion::Focused, 0.25f * alert);
+  add(Emotion::Attentive, s.attention / 120);
+  add(Emotion::Bored, (100 - s.fun) / 70);
+  add(Emotion::Dreamy, (1 - alert) * 1.4f + 0.15f);
+  add(Emotion::Yawning, (s.sleepiness - 20) / 60 * (1.2f - alert));
+  add(Emotion::Sleepy, (s.sleepiness - 40) / 80);
+  add(Emotion::Mischievous, s.fun / 110 * (valence > -0.2f ? 1 : 0));
+  add(Emotion::Happy, valence * 1.2f);
+  add(Emotion::Affection, s.affection / 140);
+  add(Emotion::Winking, 0.25f * (valence + 0.6f));
+  add(Emotion::Proud, valence > 0.3f ? 0.25f : 0);
+  add(Emotion::Sad, -valence * 1.2f);
+  add(Emotion::Annoyed, s.stress / 80);
+  add(Emotion::Smug, valence > 0.2f ? 0.3f : 0);
+  add(Emotion::Skeptical, 0.25f);
+  add(Emotion::Sneaky, s.fun / 200);
+  add(Emotion::Playful, s.fun / 90 * alert);
+  add(Emotion::Suspicious, s.stress / 90 + 0.1f);
+  add(Emotion::Hopeful, s.attention < 40 ? 0.5f : 0.1f);
+  add(Emotion::Lonely, pet.idleSeconds() > 120 ? 0.7f : 0);
+  add(Emotion::Jealous, 0.08f);
+  add(Emotion::Nostalgic, (1 - alert) * 0.5f + 0.1f);
+  add(Emotion::Amazed, s.curiosity / 300);
+  add(Emotion::Hungry, (s.hunger - 45) / 40);
+  add(Emotion::Exhausted, (45 - s.energy) / 40);
+  add(Emotion::Relieved, s.stress < 15 ? 0.15f : 0);
+  if (pet.personality() == Personality::Shy) add(Emotion::Shy, 1.2f); else add(Emotion::Shy, 0.15f);
+  if (pet.personality() == Personality::Grumpy) add(Emotion::Annoyed, 0.8f);
+  if (pet.personality() == Personality::Playful) { add(Emotion::Mischievous, 0.6f); add(Emotion::Excited, 0.4f); }
+  if (pet.personality() == Personality::Calm) add(Emotion::Dreamy, 0.6f);
+  if (weather.known) {
+    switch (weather.cond) {
+      case Weather::Rain: add(Emotion::Sad, 0.5f); add(Emotion::Dreamy, 0.7f); break;
+      case Weather::Snow: add(Emotion::Cold, 0.8f); add(Emotion::Excited, 0.4f); break;
+      case Weather::Storm: add(Emotion::Scared, 0.8f); add(Emotion::Terrified, 0.3f); add(Emotion::Attentive, 0.5f); break;
+      case Weather::Clear: add(Emotion::Happy, 0.6f * alert); add(Emotion::Amazed, 0.15f); break;
+      case Weather::Fog: add(Emotion::Confused, 0.5f); break;
+      case Weather::Wind: add(Emotion::Curious, 0.5f); break;
+      default: break;
+    }
+    if (weather.tempC >= 28) add(Emotion::Hot, 1.5f);
+    if (weather.tempC <= 0) add(Emotion::Cold, 1.5f);
+  }
+  float total = 0;
+  for (float v : w) total += v;
+  float pick = rng.rangef(0, total);
+  for (int i = 0; i < kEmotionCount; i++) {
+    pick -= w[i];
+    if (pick <= 0 && w[i] > 0) return (Emotion)i;
+  }
+  return Emotion::Neutral;
+}
+
 void App::tickIdleLife(float dt) {
-  // Occasional small behaviours while idle. Which one depends on the pet's state, not on chance alone.
+  // Slow background mix: the current face always carries a trace of how the creature really feels.
+  blendIn_ -= dt;
+  if (blendIn_ <= 0) {
+    blendIn_ = rng.rangef(3000, 8000);
+    Emotion second = pet.asleep() ? Emotion::Sleeping : (rng.range(0, 2) == 0 ? chooseThought() : pet.moodEmotion());
+    anim.setBlend(second, rng.rangef(0.06f, 0.24f));
+  }
+  // The stream of thoughts: quicker when lively, slower when tired. The creature is never on pause for long.
   idleLifeIn_ -= dt;
   if (idleLifeIn_ > 0) return;
-  idleLifeIn_ = rng.rangef(14000, 42000);
+  float a = (pet.stats.energy * 0.5f + pet.stats.attention * 0.3f + pet.stats.fun * 0.2f) / 100 * (0.5f + 0.5f * alertness());
+  idleLifeIn_ = rng.rangef(0.7f, 1.3f) * lerpf(9000, 3200, a);
   if (pet.asleep() || screenId_ != ScreenId::Face) return;
-  const PetStats& s = pet.stats;
-  switch (rng.range(0, 4)) {
+  switch (rng.range(0, 9)) {
     case 0: anim.blink(170, true); break;
-    case 1: anim.independentLook(-8, -6, 14, -4, 900); break;
-    case 2: if (s.curiosity > 45) react(Emotion::Curious, 1600, EmotionPriority::Idle); else anim.slowBlink(); break;
-    case 3: if (s.fun < 40) react(Emotion::Bored, 2200, EmotionPriority::Idle); else react(Emotion::Thinking, 1800, EmotionPriority::Idle); break;
-    case 4: anim.lookOffset(rng.rangef(-36, 36), rng.rangef(-16, 16), 700); break;
+    case 1: anim.independentLook(-10, -6, 16, -4, 1000); break;
+    case 2: anim.startPursuit(rng.rangef(2500, 6000)); break;
+    case 3: anim.lookOffset(rng.rangef(-40, 40), rng.rangef(-18, 18), 900); break;
+    case 4: anim.kick(-0.08f); break;
+    default: react(chooseThought(), rng.rangef(1800, 4200), EmotionPriority::Idle); break;
   }
 }
 
 void App::tickBehaviour(float dt) {
   float simDt = dt * clock.scale();
+  float alert = alertness();
+  pet.setAlertness(alert);
   pet.tick(simDt);
+  const PetStats& ps = pet.stats;
+  float arousal = (ps.energy * 0.45f + ps.attention * 0.25f + ps.fun * 0.15f + ps.stress * 0.15f) / 100 * (0.45f + 0.55f * alert);
+  anim.setDrive(arousal, (ps.happiness - 50) / 50 - ps.stress / 200, alert, hal.ax, hal.ay);
+  // Weather older than six hours says nothing about now.
+  if (weather.known && clock.epoch() - weather.at > 6 * 3600) weather.known = false;
+  if (thunderFlashMs > 0) thunderFlashMs -= dt;
+  if (weather.known && weather.cond == Weather::Storm) {
+    thunderIn_ -= simDt;
+    if (thunderIn_ <= 0) {
+      thunderIn_ = rng.rangef(12000, 42000);
+      thunderFlashMs = 130;
+      if (screenId_ == ScreenId::Face && !pet.asleep()) { react(Emotion::Scared, 1300); sfx.play("interactions/shake"); }
+    }
+  }
+  // Night: left alone, it goes to bed by itself.
+  if (alert < 0.2f && !pet.asleep() && pet.idleSeconds() > 180) sleepNow();
   emotion.setMood(pet.moodEmotion());
   // Only a sleep caused by tiredness ends by itself: a nap from inactivity or being put down lasts until something wakes it.
   if (pet.wantsSleep() && !pet.asleep()) { sleepNow(); restingUntilRested_ = true; }
@@ -350,7 +470,8 @@ void App::tick(float dt) {
   emotion.update(dt);
   if (emotion.consumeChanged()) anim.setEmotion(emotion.current());
   anim.update(dt);
-  if (anim.soundCueReady()) sfx.onEmotionCue(anim.emotion(), nowMs_);
+  // Idle thoughts are mostly silent: a creature that comments on every glance would be unbearable.
+  if (anim.soundCueReady() && (emotion.enteredPriority() > EmotionPriority::Idle || rng.range(0, 4) == 0)) sfx.onEmotionCue(anim.emotion(), nowMs_);
 
   if (iris_ < 1) iris_ += dt / 220.f;
   if (toastMs_ > 0) toastMs_ -= dt;
@@ -400,7 +521,7 @@ void App::render(Canvas& c) {
 
 Rect App::dirtyRect() const {
   // The face leaves most of the panel untouched, pushing less reduces power and tearing.
-  if (screenId_ == ScreenId::Face && toastMs_ <= 0 && captionMs_ <= 0 && iris_ >= 1) return face.bounds(anim);
+  if (screenId_ == ScreenId::Face && toastMs_ <= 0 && captionMs_ <= 0 && iris_ >= 1 && !weather.known) return face.bounds(anim);
   return Rect{0, 0, kScreenW, kScreenH};
 }
 

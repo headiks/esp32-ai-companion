@@ -12,7 +12,8 @@ STAT_RU = {"happiness": "Счастье", "energy": "Энергия", "curiosity
            "stress": "Стресс", "sleepiness": "Сонливость", "hunger": "Голод", "fun": "Веселье", "health": "Здоровье"}
 SCREENS = [("face", "Лицо"), ("menu", "Меню"), ("pet", "Питомец"), ("analog_clock", "Аналог. часы"), ("digital_clock", "Цифр. часы"), ("timer", "Таймер"),
            ("stopwatch", "Секундомер"), ("notifications", "Уведомления"), ("settings", "Настройки"), ("diagnostics", "Диагностика"), ("games", "Игры"), ("info", "Инфо"),
-           ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок")]
+           ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
+           ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"), ("weather", "Погода")]
 
 
 def grid(buttons, cols=3):
@@ -126,7 +127,18 @@ class Panel(QWidget):
         lay.addWidget(QLabel("Через настоящие детекторы ядра (GestureManager, MicrophoneManager):"))
         lay.addWidget(grid([("Встряхнуть", self.ctl.imu.shake), ("Резкое движение", self.ctl.imu.jerk), ("Перевернуть экран", self.ctl.imu.flip),
                             ("Громкий звук", self.ctl.micsim.loud), ("Хлопок", self.ctl.micsim.clap), ("Голос", self.ctl.micsim.voice)]))
+        lay.addWidget(QLabel("Наклон для лабиринта и орбиты: стрелки клавиатуры или правая кнопка мыши на экране."))
         form = QFormLayout()
+        self.weather = QComboBox()
+        self.weather.addItems(["clear", "clouds", "rain", "snow", "storm", "fog", "wind"])
+        self.temp = QSpinBox()
+        self.temp.setRange(-40, 50)
+        self.temp.setValue(18)
+        wb = QPushButton("Применить погоду")
+        wb.clicked.connect(lambda: self.ctl.send({"type": "weather", "value": self.weather.currentText(), "temp": self.temp.value()}))
+        form.addRow("Погода", self.weather)
+        form.addRow("Температура", self.temp)
+        form.addRow(wb)
         self.batt = QSlider(Qt.Horizontal)
         self.batt.setRange(0, 100)
         self.batt.setValue(80)

@@ -16,7 +16,7 @@ constexpr int kProtocolVersion = 1;
 
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
-  TicTacToe, Reaction, Guess, PetGame, Count
+  TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon, Weather, Count
 };
 const char* screenName(ScreenId s);
 bool screenFromName(const char* n, ScreenId* out);
@@ -75,6 +75,11 @@ class App {
   void caption(const char* text, float ms = 5000);
   void chat(const char* text);
   void listen();   // voice dialog, needs settings.aiVoiceConsent
+  void setWeather(Weather w, float tempC);
+  float alertness() const;     // 0 deep night .. 1 midday, from the clock
+  uint16_t eyeColor() const;   // warmer at night, like a real light source
+  WeatherState weather;
+  float thunderFlashMs = 0;
   void setAIClient(AIClient* ai) { ai_ = ai ? ai : &offlineAi_; }
   AIClient& aiClient() { return *ai_; }
   float nowMs() const { return nowMs_; }
@@ -106,6 +111,7 @@ class App {
  private:
   void tickBehaviour(float dt);
   void tickIdleLife(float dt);
+  Emotion chooseThought();
   void drawOverlays(Canvas& c);
   Screen* cur() const { return screens_[(int)screenId_]; }
 
@@ -114,7 +120,7 @@ class App {
   OfflineAI offlineAi_;
   AIClient* ai_ = &offlineAi_;
   bool rawDown_ = false; int rawX_ = 0, rawY_ = 0;
-  float nowMs_ = 0, saveIn_ = 60000, idleLifeIn_ = 15000, iris_ = 1.f, stateIn_ = 0, strokeAcc_ = 0;
+  float nowMs_ = 0, saveIn_ = 60000, idleLifeIn_ = 3500, blendIn_ = 2000, thunderIn_ = 9000, iris_ = 1.f, stateIn_ = 0, strokeAcc_ = 0;
   float toastMs_ = 0, captionMs_ = 0, aiThinkMs_ = 0;
   Notification toast_;
   char toastText_[160] = "", caption_[200] = "";

@@ -13,8 +13,18 @@ constexpr uint16_t kBlack = 0x0000, kWhite = 0xFFFF;
 constexpr uint16_t kOrange = rgb565(255, 140, 0), kYellow = rgb565(255, 205, 40);
 constexpr uint16_t kGray = rgb565(120, 120, 120), kDark = rgb565(38, 38, 38), kDim = rgb565(70, 70, 70);
 
+// Alpha blend, a: 0..255.
+inline uint16_t blend565(uint16_t bg, uint16_t fg, uint32_t a) {
+  if (a >= 250) return fg;
+  a = (a + 4) >> 3;
+  uint32_t b = (bg | ((uint32_t)bg << 16)) & 0x07E0F81F;
+  uint32_t f = (fg | ((uint32_t)fg << 16)) & 0x07E0F81F;
+  uint32_t r = (b + (((f - b) * a) >> 5)) & 0x07E0F81F;
+  return (uint16_t)(r | (r >> 16));
+}
+
 enum class Align : uint8_t { Left, Center, Right };
-enum class FontSize : uint8_t { S, M, L, XL };   // XL holds digits and ':' only
+enum class FontSize : uint8_t { S, M, L };
 
 struct Rect { int x, y, w, h; };
 

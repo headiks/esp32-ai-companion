@@ -9,4 +9,5 @@ class WiFiManager {
   bool connected() const;
  private:
   bool serverUp_ = false, ntpDone_ = false, enabled_ = false;
+  uint32_t weatherAt_ = 0;
 };

@@ -5,7 +5,9 @@ namespace cc {
 
 static const char* const kNames[kEmotionCount] = {
     "neutral", "happy", "very_happy", "sad", "angry", "annoyed", "surprised", "curious", "thinking",
-    "sleepy", "sleeping", "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited"};
+    "sleepy", "sleeping", "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited",
+    "mischievous", "shy", "proud", "dizzy", "yawning", "cold", "hot", "dreamy", "focused", "winking",
+    "smug", "skeptical", "guilty", "embarrassed", "hopeful", "lonely", "grateful", "jealous", "determined", "terrified", "disgusted", "hungry", "starstruck", "laughing", "crying", "relieved", "sneaky", "nostalgic", "playful", "amazed", "exhausted", "suspicious"};
 
 const char* emotionName(Emotion e) { return (int)e < kEmotionCount ? kNames[(int)e] : "neutral"; }
 
@@ -15,12 +17,12 @@ bool emotionFromName(const char* s, Emotion* out) {
   return false;
 }
 
-#define B(e) (1u << (int)Emotion::e)
-static constexpr uint32_t kAll = (1u << kEmotionCount) - 1;
-// Falling asleep goes through Sleepy; a sleeper may only wake up (or be startled awake via WakingUp).
-static constexpr uint32_t kAwake = kAll & ~B(Sleeping) & ~B(WakingUp);
+#define B(e) (1ull << (int)Emotion::e)
+static constexpr uint64_t kAll = (1ull << kEmotionCount) - 1;
+// Falling asleep goes through Sleepy; a sleeper may only wake up.
+static constexpr uint64_t kAwake = kAll & ~B(Sleeping);
 
-static const uint32_t kAllowed[kEmotionCount] = {
+static const uint64_t kAllowed[kEmotionCount] = {
     /*Neutral*/   kAwake,
     /*Happy*/     kAwake,
     /*VeryHappy*/ kAwake & ~B(Sleepy) & ~B(Bored),
@@ -30,7 +32,7 @@ static const uint32_t kAllowed[kEmotionCount] = {
     /*Surprised*/ kAwake & ~B(Sleepy),
     /*Curious*/   kAwake,
     /*Thinking*/  kAwake,
-    /*Sleepy*/    B(Sleeping) | B(Neutral) | B(Bored) | B(Attentive) | B(Surprised) | B(Scared) | B(Happy) | B(Sad) | B(Annoyed) | B(Curious),
+    /*Sleepy*/    B(Sleeping) | B(Neutral) | B(Bored) | B(Attentive) | B(Surprised) | B(Scared) | B(Happy) | B(Sad) | B(Annoyed) | B(Curious) | B(Yawning) | B(Dreamy) | B(Cold) | B(Hot) | B(Exhausted) | B(Relieved) | B(Lonely),
     /*Sleeping*/  B(WakingUp),
     /*WakingUp*/  kAwake & ~B(Angry),
     /*Scared*/    kAwake & ~B(VeryHappy) & ~B(Affection) & ~B(Sleepy),
@@ -39,6 +41,38 @@ static const uint32_t kAllowed[kEmotionCount] = {
     /*Attentive*/ kAwake,
     /*Confused*/  kAwake & ~B(Sleepy),
     /*Excited*/   kAwake & ~B(Sleepy) & ~B(Sad),
+    /*Mischievous*/ kAwake & ~B(Sleepy) & ~B(Sad),
+    /*Shy*/       kAwake & ~B(Angry),
+    /*Proud*/     kAwake & ~B(Scared),
+    /*Dizzy*/     kAwake,
+    /*Yawning*/   kAwake | B(Sleeping),
+    /*Cold*/      kAwake,
+    /*Hot*/       kAwake,
+    /*Dreamy*/    kAwake | B(Sleeping),
+    /*Focused*/   kAwake & ~B(Sleepy),
+    /*Winking*/   kAwake & ~B(Sad) & ~B(Sleepy),
+    /*Smug*/      kAwake & ~B(Terrified),
+    /*Skeptical*/ kAwake,
+    /*Guilty*/    kAwake & ~B(VeryHappy) & ~B(Laughing),
+    /*Embarrassed*/ kAwake & ~B(Angry),
+    /*Hopeful*/   kAwake,
+    /*Lonely*/    kAwake & ~B(VeryHappy) & ~B(Laughing),
+    /*Grateful*/  kAwake & ~B(Angry) & ~B(Disgusted),
+    /*Jealous*/   kAwake,
+    /*Determined*/ kAwake & ~B(Sleepy),
+    /*Terrified*/ kAwake & ~B(Smug) & ~B(Laughing) & ~B(Sleepy),
+    /*Disgusted*/ kAwake & ~B(Affection) & ~B(Grateful),
+    /*Hungry*/    kAwake,
+    /*Starstruck*/ kAwake & ~B(Sleepy),
+    /*Laughing*/  kAwake & ~B(Crying) & ~B(Sleepy),
+    /*Crying*/    kAwake & ~B(Laughing) & ~B(VeryHappy),
+    /*Relieved*/  kAwake | B(Sleeping),
+    /*Sneaky*/    kAwake & ~B(Sleepy),
+    /*Nostalgic*/ kAwake,
+    /*Playful*/   kAwake & ~B(Sleepy),
+    /*Amazed*/    kAwake & ~B(Sleepy),
+    /*Exhausted*/ kAwake | B(Sleeping),
+    /*Suspicious*/ kAwake,
 };
 #undef B
 
@@ -46,7 +80,11 @@ static const uint32_t kAllowed[kEmotionCount] = {
 static const uint16_t kDwell[kEmotionCount] = {
     /*Neutral*/ 400, /*Happy*/ 900, /*VeryHappy*/ 1200, /*Sad*/ 1400, /*Angry*/ 1000, /*Annoyed*/ 900,
     /*Surprised*/ 650, /*Curious*/ 800, /*Thinking*/ 900, /*Sleepy*/ 1200, /*Sleeping*/ 1500, /*WakingUp*/ 1100,
-    /*Scared*/ 800, /*Affection*/ 1200, /*Bored*/ 1200, /*Attentive*/ 500, /*Confused*/ 900, /*Excited*/ 900};
+    /*Scared*/ 800, /*Affection*/ 1200, /*Bored*/ 1200, /*Attentive*/ 500, /*Confused*/ 900, /*Excited*/ 900,
+    /*Mischievous*/ 900, /*Shy*/ 900, /*Proud*/ 900, /*Dizzy*/ 1200, /*Yawning*/ 2600, /*Cold*/ 1000, /*Hot*/ 1000, /*Dreamy*/ 1200, /*Focused*/ 700, /*Winking*/ 600,
+    /*Smug*/ 900, /*Skeptical*/ 900, /*Guilty*/ 1100, /*Embarrassed*/ 900, /*Hopeful*/ 800, /*Lonely*/ 1400, /*Grateful*/ 1100, /*Jealous*/ 900, /*Determined*/ 700,
+    /*Terrified*/ 900, /*Disgusted*/ 800, /*Hungry*/ 1000, /*Starstruck*/ 900, /*Laughing*/ 1000, /*Crying*/ 1500, /*Relieved*/ 1000, /*Sneaky*/ 800, /*Nostalgic*/ 1400,
+    /*Playful*/ 800, /*Amazed*/ 800, /*Exhausted*/ 1400, /*Suspicious*/ 900};
 
 bool EmotionEngine::allowed(Emotion from, Emotion to) {
   return from == to || (kAllowed[(int)from] >> (int)to) & 1u;
@@ -82,6 +120,7 @@ Emotion EmotionEngine::nextHop(Emotion from, Emotion to) {
 void EmotionEngine::enter(Emotion e) {
   if (e == cur_) return;
   cur_ = e;
+  enteredPrio_ = prio_;
   age_ = 0;
   changed_ = true;
   transitions_++;
@@ -104,6 +143,7 @@ bool EmotionEngine::request(Emotion e, EmotionPriority p, float holdMs) {
   prio_ = held;
   hold_ = hop == e ? holdMs : 0;
   // Forced requests from the test panel may break dwell, never the routing.
+  if (e == cur_) enteredPrio_ = held;
   if (dwellOver || p >= EmotionPriority::Strong) enter(hop);
   route_ = hop;
   return true;

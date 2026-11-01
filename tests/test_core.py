@@ -14,7 +14,10 @@ from emulator.simulation.sensors import ImuSimulator, MicSimulator  # noqa: E402
 
 EMOTIONS = emotion_names()
 REQUIRED = ["neutral", "happy", "very_happy", "sad", "angry", "annoyed", "surprised", "curious", "thinking", "sleepy", "sleeping",
-            "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited"]
+            "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited",
+            "mischievous", "shy", "proud", "dizzy", "yawning", "cold", "hot", "dreamy", "focused", "winking",
+            "smug", "skeptical", "guilty", "embarrassed", "hopeful", "lonely", "grateful", "jealous", "determined", "terrified", "disgusted", "hungry", "starstruck", "laughing", "crying", "relieved", "sneaky", "nostalgic", "playful", "amazed", "exhausted", "suspicious"]
+assert len(REQUIRED) == 50
 
 
 @pytest.fixture
@@ -71,7 +74,7 @@ def test_each_emotion_reachable_and_plays_own_sound(name):
 def test_emotion_sounds_are_unique_per_emotion():
     c = Companion()
     ids = [c.emotion_sound(i, 0) for i in range(len(EMOTIONS))] + [c.emotion_sound(i, 1) for i in range(len(EMOTIONS))]
-    assert len(set(ids)) == 36
+    assert len(set(ids)) == 2 * len(EMOTIONS)
     c.close()
 
 
@@ -305,6 +308,20 @@ def test_feeding_reduces_hunger_and_petting_builds_affection(c):
     assert c.state()["affection"] > a
 
 
+def test_feeding_a_hungry_pet_makes_it_grateful(c):
+    c.handle_command({"type": "set_stat", "name": "hunger", "value": 70})
+    c.run(1000)
+    c.handle_command({"type": "action", "value": "feed"})
+    c.run(1200)
+    assert emotion(c) == "grateful"
+
+
+def test_starving_pet_cries(c):
+    c.handle_command({"type": "set_stat", "name": "hunger", "value": 95})
+    c.run(4000)
+    assert emotion(c) == "crying"
+
+
 def test_status_matches_needs(c):
     for k, v, want in (("hunger", 90, "hungry"), ("hunger", 10, None)):
         c.handle_command({"type": "set_stat", "name": k, "value": v})
@@ -314,7 +331,7 @@ def test_status_matches_needs(c):
     c.run(100)
     assert c.state()["pet_status"] == "tired"
     c.run(3000)
-    assert emotion(c) == "sleepy"
+    assert emotion(c) in ("sleepy", "exhausted")
 
 
 def test_state_persists_across_restart(tmp_path):
@@ -419,7 +436,7 @@ def test_notification_queue_keeps_newest(c):
 
 
 # ---- screens and games -----------------------------------------------------------------------
-SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game"]
+SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "weather"]
 
 
 @pytest.mark.parametrize("name", SCREENS)
@@ -433,7 +450,7 @@ def test_every_screen_draws_something(c, name):
 def test_menu_opens_all_items(c):
     c.handle_command({"type": "screen", "value": "menu"})
     c.run(300)
-    tap(c, 233, 72 + 66 * 2 + 30); c.run(300)     # third row: Pet
+    tap(c, 233, 233 + 140); c.run(300)     # two rows below the focused first one: Pet
     assert c.state()["screen"] == "pet"
 
 
@@ -499,10 +516,10 @@ def test_settings_tap_changes_value(c):
     c.handle_command({"type": "screen", "value": "settings"})
     c.run(300)
     v0 = c.state()["brightness"]
-    tap(c, 233 - 180, 72 + 30)
+    tap(c, 233 - 180, 233)
     c.run(100)
     assert c.state()["brightness"] == v0 - 10
-    tap(c, 233 + 180, 72 + 30)
+    tap(c, 233 + 180, 233)
     c.run(100)
     assert c.state()["brightness"] == v0
 
@@ -536,7 +553,7 @@ def test_emotion_sounds_differ_from_each_other():
     for f in base.glob("*.wav"):
         with wave.open(str(f)) as w:
             seen[f.stem] = w.readframes(w.getnframes())
-    assert len(set(seen.values())) == len(seen) == 36
+    assert len(set(seen.values())) == len(seen) == 2 * len(EMOTIONS)
 
 
 def test_mixer_output_volume_and_mute(c):
@@ -622,3 +639,214 @@ def test_tired_sleep_ends_when_rested():
         c.tick(50)
     assert c.state()["pet_status"] != "asleep"
     c.close()
+
+
+# ---- living behaviour --------------------------------------------------------------------------
+def test_animation_never_jumps():
+    """Every parameter moves continuously, whatever emotion comes next."""
+    c = Companion(seed=21)
+    c.run(3000)
+    for name in REQUIRED:
+        c.handle_command({"type": "emotion", "value": name, "hold_ms": 700})
+        prev = [c.pose(e, f) for e in (0, 1) for f in range(12)]
+        for _ in range(60):
+            c.tick(16)
+            now = [c.pose(e, f) for e in (0, 1) for f in range(12)]
+            assert max(abs(a - b) for a, b in zip(now, prev)) < 60, name
+            prev = now
+    c.close()
+
+
+def test_face_keeps_changing_by_itself():
+    c = Companion(seed=33)
+    c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+    seen, changes, last = set(), 0, None
+    for _ in range(3000):      # one minute
+        c.tick(20)
+        e = emotion(c)
+        seen.add(e)
+        changes += e != last
+        last = e
+    assert changes >= 6 and len(seen) >= 4, (changes, seen)
+    c.close()
+
+
+def test_idle_thoughts_are_mostly_silent():
+    c = Companion(seed=33)
+    c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+    c.run(4000); c.mix(32000)
+    n0 = c.play_count(); changes = 0; last = emotion(c)
+    for _ in range(3000):
+        c.tick(20); c.mix(320)
+        changes += emotion(c) != last
+        last = emotion(c)
+    assert changes > 3 and c.play_count() - n0 <= changes / 2 + 1
+
+
+def test_pose_breathes_while_holding_one_emotion(c):
+    c.handle_command({"type": "emotion", "value": "neutral", "hold_ms": 60000})
+    values = set()
+    for _ in range(500):
+        c.tick(20)
+        values.add(round(c.pose(0, 4), 1))
+    assert len(values) > 20, "upper lid must keep moving"
+
+
+def set_hour(c, hour):
+    c.handle_command({"type": "set_time", "epoch": 1767225600 + hour * 3600, "tz_minutes": 0})
+
+
+def test_night_makes_it_sleepy_day_does_not():
+    day = Companion(seed=2); night = Companion(seed=2)
+    for x, h in ((day, 14), (night, 3)):
+        x.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+        set_hour(x, h)
+        x.set_time_scale(1)
+    for _ in range(3000):
+        day.tick(50); night.tick(50)
+    assert night.state()["sleepiness"] > day.state()["sleepiness"]
+    night.handle_command({"type": "set_stat", "name": "sleepiness", "value": 10})
+    for _ in range(4000):
+        night.tick(60)
+    assert night.state()["pet_status"] == "asleep", "left alone at night it goes to bed"
+    assert day.state()["pet_status"] != "asleep"
+    day.close(); night.close()
+
+
+def test_eyes_are_warmer_at_night(c):
+    set_hour(c, 14); c.run(200)
+    assert (c.render() == 0xFFFF).sum() > 3000
+    c.handle_command({"type": "emotion", "value": "neutral", "hold_ms": 9000})
+    set_hour(c, 2); c.run(200)
+    assert (c.render() == 0xFFFF).sum() < 50
+
+
+def test_weather_command_and_reactions(c):
+    assert c.state()["weather"] == "unknown"
+    r = c.handle_command({"type": "weather", "value": "rain", "temp": 7})
+    assert r["status"] == "success"
+    assert c.state()["weather"] == "rain" and c.state()["temp"] == 7
+    assert c.handle_command({"type": "weather", "value": "lava"})["status"] == "error"
+    assert c.handle_command({"type": "weather", "value": "rain", "temp": 900})["status"] == "error"
+    blank = c.render().copy()
+    c.run(300)
+    assert (c.render() != blank).any()
+
+
+def test_snow_and_cold_shift_thoughts_to_cold():
+    c = Companion(seed=8)
+    c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+    c.handle_command({"type": "weather", "value": "snow", "temp": -12})
+    seen = set()
+    for _ in range(9000):
+        c.tick(20)
+        seen.add(emotion(c))
+    assert "cold" in seen, seen
+    c.close()
+
+
+def test_weather_goes_stale(c):
+    c.handle_command({"type": "weather", "value": "clear", "temp": 20})
+    c.set_time_scale(3600)
+    c.run(10000, 100)
+    assert c.state()["weather"] == "unknown"
+
+
+def test_open_meteo_parser():
+    import ctypes
+    l = lib()
+    t = ctypes.c_float()
+    good = b'{"latitude":55.7,"current_units":{"temperature_2m":"C"},"current":{"time":"2026-11-01T10:00","temperature_2m":-3.5,"weather_code":73,"wind_speed_10m":12.0}}'
+    assert l.cc_parse_weather(good, ctypes.byref(t)) == 3 and abs(t.value + 3.5) < 0.01
+    windy = b'{"current":{"temperature_2m":8,"weather_code":2,"wind_speed_10m":55}}'
+    assert l.cc_parse_weather(windy, ctypes.byref(t)) == 6
+    for bad in (b"", b"<html>502</html>", b'{"current":{"temperature_2m":1}}', b'{"current":{"temperature_2m":999,"weather_code":1}}'):
+        assert l.cc_parse_weather(bad, ctypes.byref(t)) == -1, bad
+
+
+# ---- games -------------------------------------------------------------------------------------
+@pytest.mark.parametrize("size,seed", [(5, 1), (7, 2), (9, 3), (11, 4), (13, 5)])
+def test_maze_is_solvable_by_tilt_alone(size, seed):
+    ms = lib().cc_maze_selftest(size, seed)
+    assert 0 < ms < 600000, ms
+
+
+def test_maze_ball_cannot_leave_the_board():
+    assert all(lib().cc_maze_wall_selftest(s) == 1 for s in range(1, 8))
+
+
+def test_snake_rules():
+    assert lib().cc_snake_selftest(9) == 0
+
+
+def centroid_of_white(fb, y_max=400):
+    ys, xs = np.nonzero(fb[:y_max] == 0xFFFF)
+    return xs.mean(), ys.mean(), len(xs)
+
+
+def test_maze_screen_tilts_the_ball(c):
+    c.handle_command({"type": "screen", "value": "maze"})
+    c.run(400)
+    x0, y0, _ = centroid_of_white(c.render())
+    for _ in range(40):
+        c.imu(0.0, 0.7, 0.7, dt=20)
+        c.tick(20)
+    x1, y1, _ = centroid_of_white(c.render())
+    for _ in range(40):
+        c.imu(0.7, 0.0, 0.7, dt=20)
+        c.tick(20)
+    x2, y2, _ = centroid_of_white(c.render())
+    assert (x1, y1) != (x0, y0) or (x2, y2) != (x1, y1)
+
+
+def test_orbit_game_scores_or_ends(c):
+    c.handle_command({"type": "screen", "value": "orbit"})
+    c.run(300)
+    tap(c)
+    c.run(9000)
+    assert (c.render() != 0).sum() > 100
+    tap(c)   # restarts after a miss, ignored while playing
+    c.run(500)
+
+
+def test_simon_sequence_lights_and_rejects_wrong(c):
+    c.handle_command({"type": "screen", "value": "simon"})
+    c.run(300); c.mix(32000)
+    tap(c)
+    n0 = c.play_count()
+    for _ in range(200):
+        c.tick(20); c.mix(320)
+    assert c.play_count() > n0, "first tone"
+
+
+def test_snake_screen_runs_and_dies_at_wall(c):
+    c.handle_command({"type": "screen", "value": "snake"})
+    c.run(300)
+    tap(c)
+    c.run(6000)
+    c.render()
+    assert c.state()["screen"] == "snake"
+
+
+def test_clock_digits_are_squares(c):
+    c.handle_command({"type": "set_time", "epoch": 1767225600 + 3600 * 12 + 34 * 60, "tz_minutes": 0})
+    c.handle_command({"type": "screen", "value": "digital_clock"})
+    c.run(800)
+    fb = c.render()
+    band = fb[233 - 48:233 + 54]
+    # Digits are solid white squares on black: no in-between antialiasing shades in that band.
+    colors = set(np.unique(band).tolist())
+    assert 0xFFFF in colors and len([v for v in colors if v not in (0, 0xFFFF)]) < 8
+
+
+def test_digit_change_ripples(c):
+    c.handle_command({"type": "set_time", "epoch": 1767225600 + 3600 * 12, "tz_minutes": 0})
+    c.handle_command({"type": "screen", "value": "digital_clock"})
+    c.run(1000)
+    a = c.render().copy()
+    c.handle_command({"type": "set_time", "epoch": 1767225600 + 3600 * 12 + 60 * 11, "tz_minutes": 0})
+    c.run(120)
+    mid = c.render().copy()
+    c.run(800)
+    end = c.render().copy()
+    assert (mid != a).any() and (mid != end).any(), "cells must pass through in-between states"

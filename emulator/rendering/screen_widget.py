@@ -9,9 +9,10 @@ BEZEL = 26
 
 
 class ScreenWidget(QWidget):
-    def __init__(self, on_touch):
+    def __init__(self, on_touch, on_tilt=None):
         super().__init__()
         self.on_touch = on_touch
+        self.on_tilt = on_tilt or (lambda x, y: None)
         self.fb = np.zeros((SCREEN, SCREEN), dtype=np.uint16)
         self.setFixedSize(SCREEN + 2 * BEZEL, SCREEN + 2 * BEZEL)
         self.setCursor(Qt.PointingHandCursor)
@@ -45,11 +46,22 @@ class ScreenWidget(QWidget):
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             self.on_touch(True, *self._pos(e))
+        elif e.button() == Qt.RightButton:
+            self._tilt(e)
 
     def mouseMoveEvent(self, e):
         if e.buttons() & Qt.LeftButton:
             self.on_touch(True, *self._pos(e))
+        if e.buttons() & Qt.RightButton:
+            self._tilt(e)
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton:
             self.on_touch(False, *self._pos(e))
+        elif e.button() == Qt.RightButton:
+            self.on_tilt(0.0, 0.0)
+
+    def _tilt(self, e):
+        # Right button: the distance from the screen centre is how far the device leans.
+        x, y = self._pos(e)
+        self.on_tilt((x - SCREEN / 2) / (SCREEN / 2) * 0.8, (y - SCREEN / 2) / (SCREEN / 2) * 0.8)

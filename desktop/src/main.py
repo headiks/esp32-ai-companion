@@ -216,6 +216,13 @@ class Desktop(QMainWindow):
         b = QPushButton("Сохранить Wi-Fi")
         b.clicked.connect(lambda: self.send({"type": "wifi_config", "ssid": self.ssid.text(), "password": self.wpass.text()}))
         form.addRow(b)
+        self.lat = QLineEdit(placeholderText="55.75")
+        self.lon = QLineEdit(placeholderText="37.62")
+        form.addRow("Широта, для погоды", self.lat)
+        form.addRow("Долгота", self.lon)
+        b = QPushButton("Сохранить координаты")
+        b.clicked.connect(self.save_location)
+        form.addRow(b)
         self.ai = QLineEdit(placeholderText="http://192.168.1.10:8787")
         form.addRow("AI-сервер", self.ai)
         b = QPushButton("Сохранить AI-сервер")
@@ -342,6 +349,13 @@ class Desktop(QMainWindow):
     def send_chat(self):
         self.send({"type": "chat", "text": self.chat.text()})
         self.chat.clear()
+
+    def save_location(self):
+        try:
+            self.send({"type": "setting", "name": "latitude", "value": float(self.lat.text())})
+            self.send({"type": "setting", "name": "longitude", "value": float(self.lon.text())})
+        except ValueError:
+            self.log("Координаты должны быть числами")
 
     def sync_time(self):
         self.send({"type": "set_time", "epoch": int(time.time()), "tz_minutes": -time.timezone // 60})

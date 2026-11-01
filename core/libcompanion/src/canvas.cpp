@@ -4,14 +4,7 @@
 
 namespace cc {
 
-static inline uint16_t mix565(uint16_t bg, uint16_t fg, uint32_t a) {  // a: 0..255
-  if (a >= 250) return fg;
-  a = (a + 4) >> 3;  // 0..32, fits the classic packed-green trick
-  uint32_t b = (bg | ((uint32_t)bg << 16)) & 0x07E0F81F;
-  uint32_t f = (fg | ((uint32_t)fg << 16)) & 0x07E0F81F;
-  uint32_t r = (b + (((f - b) * a) >> 5)) & 0x07E0F81F;
-  return (uint16_t)(r | (r >> 16));
-}
+static inline uint16_t mix565(uint16_t bg, uint16_t fg, uint32_t a) { return blend565(bg, fg, a); }
 
 void Canvas::setTarget(uint16_t* buf, int x0, int y0, int w, int h) {
   buf_ = buf; x0_ = x0; y0_ = y0; w_ = w; h_ = h;

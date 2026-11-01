@@ -4,5 +4,5 @@
 namespace cc {
 struct Glyph { uint32_t cp; uint32_t offset; uint8_t w, h; int8_t xoff; int8_t yoff; uint8_t adv; };
 struct FontInfo { const Glyph* glyphs; int count; const uint8_t* bitmap; int lineH; };
-extern const FontInfo kFonts[4];
+extern const FontInfo kFonts[3];
 }  // namespace cc

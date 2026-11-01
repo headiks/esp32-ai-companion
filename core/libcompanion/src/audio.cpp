@@ -155,16 +155,28 @@ void AudioManager::mix(int16_t* out, int samples) {
 static const float kGain[kEmotionCount] = {
     /*Neutral*/ .45f, /*Happy*/ .85f, /*VeryHappy*/ .95f, /*Sad*/ .6f, /*Angry*/ .8f, /*Annoyed*/ .6f, /*Surprised*/ .9f,
     /*Curious*/ .75f, /*Thinking*/ .55f, /*Sleepy*/ .45f, /*Sleeping*/ .4f, /*WakingUp*/ .65f, /*Scared*/ .85f,
-    /*Affection*/ .7f, /*Bored*/ .45f, /*Attentive*/ .5f, /*Confused*/ .7f, /*Excited*/ .95f};
+    /*Affection*/ .7f, /*Bored*/ .45f, /*Attentive*/ .5f, /*Confused*/ .7f, /*Excited*/ .95f,
+    /*Mischievous*/ .7f, /*Shy*/ .5f, /*Proud*/ .7f, /*Dizzy*/ .7f, /*Yawning*/ .5f, /*Cold*/ .6f, /*Hot*/ .5f, /*Dreamy*/ .45f, /*Focused*/ .45f, /*Winking*/ .6f,
+    /*Smug*/ .6f, /*Skeptical*/ .55f, /*Guilty*/ .5f, /*Embarrassed*/ .5f, /*Hopeful*/ .6f, /*Lonely*/ .45f, /*Grateful*/ .7f, /*Jealous*/ .55f, /*Determined*/ .65f,
+    /*Terrified*/ .9f, /*Disgusted*/ .6f, /*Hungry*/ .6f, /*Starstruck*/ .8f, /*Laughing*/ .85f, /*Crying*/ .65f, /*Relieved*/ .5f, /*Sneaky*/ .45f, /*Nostalgic*/ .45f,
+    /*Playful*/ .75f, /*Amazed*/ .8f, /*Exhausted*/ .45f, /*Suspicious*/ .5f};
 // Minimum silence before the same emotion may speak again.
 static const uint16_t kCooldownMs[kEmotionCount] = {
     /*Neutral*/ 15000, /*Happy*/ 4000, /*VeryHappy*/ 4000, /*Sad*/ 8000, /*Angry*/ 4000, /*Annoyed*/ 5000, /*Surprised*/ 2500,
     /*Curious*/ 6000, /*Thinking*/ 8000, /*Sleepy*/ 15000, /*Sleeping*/ 30000, /*WakingUp*/ 8000, /*Scared*/ 2500,
-    /*Affection*/ 5000, /*Bored*/ 20000, /*Attentive*/ 5000, /*Confused*/ 5000, /*Excited*/ 3000};
+    /*Affection*/ 5000, /*Bored*/ 20000, /*Attentive*/ 5000, /*Confused*/ 5000, /*Excited*/ 3000,
+    /*Mischievous*/ 8000, /*Shy*/ 8000, /*Proud*/ 6000, /*Dizzy*/ 4000, /*Yawning*/ 15000, /*Cold*/ 12000, /*Hot*/ 12000, /*Dreamy*/ 20000, /*Focused*/ 12000, /*Winking*/ 6000,
+    /*Smug*/ 8000, /*Skeptical*/ 8000, /*Guilty*/ 8000, /*Embarrassed*/ 8000, /*Hopeful*/ 8000, /*Lonely*/ 20000, /*Grateful*/ 5000, /*Jealous*/ 10000, /*Determined*/ 8000,
+    /*Terrified*/ 2500, /*Disgusted*/ 6000, /*Hungry*/ 15000, /*Starstruck*/ 5000, /*Laughing*/ 4000, /*Crying*/ 10000, /*Relieved*/ 10000, /*Sneaky*/ 12000, /*Nostalgic*/ 20000,
+    /*Playful*/ 5000, /*Amazed*/ 4000, /*Exhausted*/ 20000, /*Suspicious*/ 10000};
 // Strong reactions may interrupt gentle ones, never the reverse.
 static const uint8_t kPrio[kEmotionCount] = {
     /*Neutral*/ 1, /*Happy*/ 3, /*VeryHappy*/ 4, /*Sad*/ 2, /*Angry*/ 4, /*Annoyed*/ 3, /*Surprised*/ 5, /*Curious*/ 2, /*Thinking*/ 1,
-    /*Sleepy*/ 1, /*Sleeping*/ 1, /*WakingUp*/ 3, /*Scared*/ 5, /*Affection*/ 3, /*Bored*/ 1, /*Attentive*/ 2, /*Confused*/ 2, /*Excited*/ 4};
+    /*Sleepy*/ 1, /*Sleeping*/ 1, /*WakingUp*/ 3, /*Scared*/ 5, /*Affection*/ 3, /*Bored*/ 1, /*Attentive*/ 2, /*Confused*/ 2, /*Excited*/ 4,
+    /*Mischievous*/ 2, /*Shy*/ 2, /*Proud*/ 3, /*Dizzy*/ 4, /*Yawning*/ 1, /*Cold*/ 2, /*Hot*/ 1, /*Dreamy*/ 1, /*Focused*/ 1, /*Winking*/ 2,
+    /*Smug*/ 2, /*Skeptical*/ 2, /*Guilty*/ 2, /*Embarrassed*/ 2, /*Hopeful*/ 2, /*Lonely*/ 1, /*Grateful*/ 3, /*Jealous*/ 2, /*Determined*/ 2,
+    /*Terrified*/ 5, /*Disgusted*/ 3, /*Hungry*/ 2, /*Starstruck*/ 4, /*Laughing*/ 4, /*Crying*/ 3, /*Relieved*/ 2, /*Sneaky*/ 1, /*Nostalgic*/ 1,
+    /*Playful*/ 3, /*Amazed*/ 4, /*Exhausted*/ 1, /*Suspicious*/ 2};
 
 float SoundEmotionEngine::gainOf(Emotion e) const { return kGain[(int)e]; }
 float SoundEmotionEngine::cooldownOf(Emotion e) const { return kCooldownMs[(int)e]; }

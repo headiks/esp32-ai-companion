@@ -18,8 +18,8 @@ struct EyePose {
 };
 constexpr int kPoseFields = sizeof(EyePose) / sizeof(float);
 
-enum class Accent : uint8_t { None, Zzz, Tear, Hearts, Bang, Question, Sparkle, Steam, Dots };
-enum class PupilShape : uint8_t { Round, Heart };
+enum class Accent : uint8_t { None, Zzz, Tear, Hearts, Bang, Question, Sparkle, Steam, Dots, Blush, Sweat, Frost, Stream, Drool };
+enum class PupilShape : uint8_t { Round, Heart, Spiral, Star };
 
 // Everything that makes one emotion look and sound like itself.
 struct EmotionDef {
@@ -50,6 +50,11 @@ class AnimationEngine {
   void setSpeed(float s) { speed_ = clampf(s, 0.25f, 3.0f); }
   void setBlinkScale(float s) { blinkScale_ = clampf(s, 0.0f, 3.0f); }
   void reseed(uint32_t s) { rng_.seed(s); }
+  // Continuous inner state, 0..1 except valence -1..1; tilt in g. It colours every animation layer.
+  void setDrive(float arousal, float valence, float light, float tiltX, float tiltY);
+  // A second emotion mixed into the pose, so faces melt into each other instead of being fixed presets.
+  void setBlend(Emotion e, float weight) { blendE_ = e; blendTarget_ = clampf(weight, 0, 0.6f); }
+  void startPursuit(float ms) { pursuit_ = ms; }   // follows something invisible, as pets watch a fly
 
   // Direct control used by touch, games and the test panel.
   void lookAt(float x, float y, float holdMs);   // screen coordinates
@@ -61,10 +66,11 @@ class AnimationEngine {
   void kick(float vy);                                    // little jump, reaction to touch
   void independentLook(float lx, float ly, float rx, float ry, float holdMs);
 
+  void retriggerCue() { soundPending_ = true; age_ = 0; }  // the same emotion asked for again must still answer
   bool soundCueReady();   // true once per transition, at the frame chosen by soundDelayMs
 
-  const EyePose& leftPose() const { return cur_[0]; }
-  const EyePose& rightPose() const { return cur_[1]; }
+  const EyePose& leftPose() const { return out_[0]; }
+  const EyePose& rightPose() const { return out_[1]; }
   float blinkAmount() const { return blinkAmt_; }
   float gazeX() const { return gazeX_; }
   float gazeY() const { return gazeY_; }
@@ -78,8 +84,11 @@ class AnimationEngine {
  private:
   void updateBlink(float dt);
   void updateGaze(float dt, const EmotionDef& d);
-  Emotion emotion_ = Emotion::Neutral;
-  EyePose cur_[2], vel_[2];
+  void composeLayers();
+  Emotion emotion_ = Emotion::Neutral, blendE_ = Emotion::Neutral;
+  EyePose cur_[2], vel_[2], out_[2];
+  float blendTarget_ = 0, blend_ = 0, arousal_ = 0.6f, valence_ = 0, light_ = 0.7f, tiltX_ = 0, tiltY_ = 0, roll_ = 0;
+  float pursuit_ = 0, microX_ = 0, microY_ = 0, nextMicro_ = 400, squash_ = 0, lastGX_ = 0, lastGY_ = 0;
   float t_ = 0, age_ = 0, speed_ = 1, blinkScale_ = 1;
   // blink
   float blinkAmt_ = 0, blinkT_ = -1, blinkDur_ = 170, blinkPause_ = 0, nextBlink_ = 2500, closedAmt_ = 0;
@@ -102,6 +111,8 @@ class FaceEngine {
   void drawScaled(Canvas& c, const AnimationEngine& a, float cx, float cy, float scale, uint16_t color = kWhite) const;
   // Pixel bounds the face can touch this frame. Firmware pushes only this region to save power.
   Rect bounds(const AnimationEngine& a) const;
+  // Weather behind the eyes: rain, snow, drifting clouds, night stars. Pure functions of time.
+  void drawWeather(Canvas& c, Weather w, float tMs, bool night) const;
  private:
   void drawEye(Canvas& c, const AnimationEngine& a, int eye, float cx, float cy, float scale, uint16_t color) const;
   void drawAccent(Canvas& c, const AnimationEngine& a, float cx, float cy, float scale) const;

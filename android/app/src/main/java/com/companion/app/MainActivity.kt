@@ -193,7 +193,7 @@ private fun PetTab(c: BleClient, s: PetState) {
                 Text("$value", Modifier.width(32.dp), color = Yellow, fontSize = 13.sp)
             }
         }
-        val games = listOf("Крестики" to "tictactoe", "Реакция" to "reaction", "Угадай" to "guess", "Светлячок" to "pet_game", "Часы" to "analog_clock", "Лицо" to "face")
+        val games = listOf("Крестики" to "tictactoe", "Реакция" to "reaction", "Угадай" to "guess", "Светлячок" to "pet_game", "Лабиринт" to "maze", "Орбита" to "orbit", "Змейка" to "snake", "Память" to "simon", "Часы" to "digital_clock", "Лицо" to "face")
         Text("На экран устройства", color = Color.Gray, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         games.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {

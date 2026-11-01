@@ -38,12 +38,12 @@ void PetManager::tick(float dtMs) {
   stats.hunger += s * 0.0115f;                 // full to starving in ~2.4 hours
   if (asleep_) {
     stats.energy += s * 0.055f;                // full recharge in ~30 min
-    stats.sleepiness -= s * 0.07f;
+    stats.sleepiness -= s * 0.07f * (0.4f + alert_);  // sleep at night is deeper and lasts longer
     stats.stress -= s * 0.05f;
     stats.hunger -= s * 0.004f;
   } else {
     stats.energy -= s * 0.0085f;               // ~3 hours awake
-    stats.sleepiness += s * (0.006f + (100 - stats.energy) * 0.00012f);
+    stats.sleepiness += s * (0.006f + (100 - stats.energy) * 0.00012f + (1 - alert_) * 0.022f);
     float bored = idle_ > 60 ? 1.f : 0.25f;
     stats.fun -= s * 0.012f * bored * tr.boredom;
     stats.attention -= s * 0.02f * bored * tr.boredom;
@@ -135,13 +135,14 @@ Emotion PetManager::moodEmotion() const {
   switch (status()) {
     case PetStatus::Asleep: return Emotion::Sleeping;
     case PetStatus::Irritated: return stats.stress >= 82 ? Emotion::Angry : Emotion::Annoyed;
-    case PetStatus::Hungry: return stats.hunger >= 88 ? Emotion::Sad : Emotion::Annoyed;
-    case PetStatus::Tired: return Emotion::Sleepy;
+    case PetStatus::Hungry: return stats.hunger >= 88 ? Emotion::Crying : Emotion::Hungry;
+    case PetStatus::Tired: return stats.energy <= 12 ? Emotion::Exhausted : Emotion::Sleepy;
     case PetStatus::Joyful: return stats.affection >= 80 ? Emotion::Affection : Emotion::Happy;
     case PetStatus::Bored: return Emotion::Bored;
     case PetStatus::Content: break;
   }
   if (stats.happiness < 28) return Emotion::Sad;
+  if (alert_ < 0.2f) return Emotion::Dreamy;
   if (idle_ > 45 && stats.curiosity >= 70) return Emotion::Curious;
   if (idle_ > 300) return Emotion::Bored;
   return Emotion::Neutral;

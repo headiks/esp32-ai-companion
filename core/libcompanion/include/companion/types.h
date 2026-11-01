@@ -12,9 +12,13 @@ constexpr int kSampleRate = 16000;
 enum class Emotion : uint8_t {
   Neutral, Happy, VeryHappy, Sad, Angry, Annoyed, Surprised, Curious, Thinking,
   Sleepy, Sleeping, WakingUp, Scared, Affection, Bored, Attentive, Confused, Excited,
+  Mischievous, Shy, Proud, Dizzy, Yawning, Cold, Hot, Dreamy, Focused, Winking,
+  Smug, Skeptical, Guilty, Embarrassed, Hopeful, Lonely, Grateful, Jealous, Determined, Terrified, Disgusted,
+  Hungry, Starstruck, Laughing, Crying, Relieved, Sneaky, Nostalgic, Playful, Amazed, Exhausted, Suspicious,
   Count
 };
 constexpr int kEmotionCount = (int)Emotion::Count;
+enum class Weather : uint8_t { Clear, Clouds, Rain, Snow, Storm, Fog, Wind, Count };
 const char* emotionName(Emotion e);               // protocol name, e.g. "very_happy"
 bool emotionFromName(const char* s, Emotion* out);
 

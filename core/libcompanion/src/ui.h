@@ -43,6 +43,25 @@ struct Button {
   float x, y, r;
   bool hit(int px, int py) const { float dx = px - x, dy = py - y; return dx * dx + dy * dy <= (r + 8) * (r + 8); }
 };
+// Numbers built from small squares. Changing a digit ripples through its cells instead of switching at once.
+class DotText {
+ public:
+  void set(const char* s);      // call from tick(): draw() runs once per strip
+  void tick(float dtMs) { if (t_ < 1) t_ += dtMs / 340.f; }
+  void draw(Canvas& c, int cx, int y, int cell, int gap, uint16_t on) const;
+  static int width(const char* s, int cell, int gap);
+ private:
+  char cur_[12] = "", prev_[12] = "";
+  float t_ = 1;
+};
+
+// Sixty squares along the rim: seconds, progress, score.
+void drawRimSquares(Canvas& c, float fraction, uint16_t on);
+void drawWeatherIcon(Canvas& c, Weather w, float cx, float cy, float size, float tMs);
+const char* weatherTitle(Weather w);
+
+Screen* gameScreen(ScreenId id);
+
 void drawButton(Canvas& c, const Button& b, const char* label, bool accent = false);
 void drawTitle(Canvas& c, const char* title);
 void formatTime(char* out, int cap, float ms, bool tenths);

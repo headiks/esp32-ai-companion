@@ -69,6 +69,34 @@ DateTime civilFromEpoch(uint32_t t) {
 
 DateTime ClockManager::now() const { return civilFromEpoch(epoch_ + tz_ * 60); }
 
+static const char* const kWeatherNames[(int)Weather::Count] = {"clear", "clouds", "rain", "snow", "storm", "fog", "wind"};
+const char* weatherName(Weather w) { return kWeatherNames[(int)w]; }
+bool weatherFromName(const char* s, Weather* out) {
+  for (int i = 0; i < (int)Weather::Count; i++)
+    if (!strcmp(s, kWeatherNames[i])) { *out = (Weather)i; return true; }
+  return false;
+}
+
+bool parseOpenMeteo(const char* body, Weather* w, float* tempC) {
+  const char* cur = strstr(body, "\"current\":");
+  if (!cur) return false;
+  const char* t = strstr(cur, "\"temperature_2m\":");
+  const char* c = strstr(cur, "\"weather_code\":");
+  const char* v = strstr(cur, "\"wind_speed_10m\":");
+  if (!t || !c) return false;
+  float temp = (float)atof(t + 17);
+  int code = atoi(c + 15);
+  float wind = v ? (float)atof(v + 17) : 0;
+  if (temp < -80 || temp > 70 || code < 0 || code > 99) return false;
+  // WMO weather interpretation codes.
+  Weather r = code <= 1 ? Weather::Clear : code <= 3 ? Weather::Clouds : (code == 45 || code == 48) ? Weather::Fog
+            : (code >= 71 && code <= 77) || code == 85 || code == 86 ? Weather::Snow : code >= 95 ? Weather::Storm : Weather::Rain;
+  if (wind > 40 && (r == Weather::Clear || r == Weather::Clouds)) r = Weather::Wind;
+  *w = r;
+  *tempC = temp;
+  return true;
+}
+
 // ---- notifications ---------------------------------------------------------------------------
 static const char* const kIconNames[] = {"bell", "message", "mail", "phone", "calendar", "warning"};
 NotifIcon notifIconFromName(const char* s) {

@@ -89,8 +89,17 @@ struct Settings {
   int16_t tzMinutes = 180;
   uint16_t reactionBest = 0;
   uint16_t tttWins = 0, tttLosses = 0, tttDraws = 0;
+  uint16_t mazeLevel = 0, orbitBest = 0, snakeBest = 0, simonBest = 0;
+  float latitude = 0, longitude = 0;  // for weather; both zero means not set
 };
-constexpr uint16_t kSettingsVersion = 3;
+constexpr uint16_t kSettingsVersion = 4;
+
+// ---- Weather ----------------------------------------------------------------------------------
+struct WeatherState { Weather cond = Weather::Clear; float tempC = 20; bool known = false; uint32_t at = 0; };
+const char* weatherName(Weather w);
+bool weatherFromName(const char* s, Weather* out);
+// Reads an Open-Meteo "current" response. False on anything unexpected: it comes from the network.
+bool parseOpenMeteo(const char* body, Weather* w, float* tempC);
 
 // ---- PowerManager -----------------------------------------------------------------------------
 enum class PowerState : uint8_t { Active, Dimmed, Asleep };

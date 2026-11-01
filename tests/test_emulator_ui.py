@@ -164,7 +164,7 @@ def test_mouse_hold_opens_menu_and_click_selects(emu):
     pump(350)
     assert state(emu)["screen"] == "menu"
     # An instant click, shorter than one frame, must still count.
-    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 72 + 66 * 2 + 30))
+    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233 + 140))
     pump(400)
     assert state(emu)["screen"] == "pet"
 
@@ -203,3 +203,25 @@ def test_real_sound_card_receives_samples(tmp_path):
         assert peak > 0.02
     finally:
         win.close()
+
+
+def test_arrow_keys_tilt_and_weather_button(emu):
+    QTest.keyPress(emu, Qt.Key_Right)
+    pump(100)
+    assert emu.imu.tilt_x > 0.3
+    assert emu.companion.diag()["ax"] > 0.3
+    QTest.keyRelease(emu, Qt.Key_Right)
+    pump(60)
+    assert emu.imu.tilt_x == 0
+    emu.panel.weather.setCurrentText("snow")
+    click(emu, "Применить погоду")
+    assert state(emu)["weather"] == "snow"
+
+
+def test_right_mouse_tilts(emu):
+    QTest.mousePress(emu.screen, Qt.RightButton, Qt.NoModifier, mouse_point(430, 233))
+    pump(40)
+    assert emu.imu.tilt_x > 0.5
+    QTest.mouseRelease(emu.screen, Qt.RightButton, Qt.NoModifier, mouse_point(430, 233))
+    pump(40)
+    assert emu.imu.tilt_x == 0

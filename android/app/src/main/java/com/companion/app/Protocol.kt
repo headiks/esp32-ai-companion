@@ -14,6 +14,8 @@ object Protocol {
     val EMOTIONS = listOf(
         "neutral", "happy", "very_happy", "sad", "angry", "annoyed", "surprised", "curious", "thinking",
         "sleepy", "sleeping", "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited",
+        "mischievous", "shy", "proud", "dizzy", "yawning", "cold", "hot", "dreamy", "focused", "winking",
+        "smug", "skeptical", "guilty", "embarrassed", "hopeful", "lonely", "grateful", "jealous", "determined", "terrified", "disgusted", "hungry", "starstruck", "laughing", "crying", "relieved", "sneaky", "nostalgic", "playful", "amazed", "exhausted", "suspicious",
     )
 
     fun command(type: String, vararg fields: Pair<String, Any?>): JSONObject {

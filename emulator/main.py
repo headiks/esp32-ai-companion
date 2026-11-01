@@ -5,9 +5,21 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-from PySide6.QtCore import QTimer, Signal, QObject
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QWidget
+try:
+    import numpy as np
+    import PySide6  # noqa: F401
+except ImportError as e:
+    # Windows may start this file with another installed Python, then the console window just flashes.
+    print(f"Не хватает модуля: {e.name}. Этот Python: {sys.executable}\n"
+          f"Запустите run_emulator.bat или установите зависимости:\n"
+          f'  "{sys.executable}" -m pip install -r emulator/requirements.txt')
+    try:
+        input("Нажмите Enter, чтобы закрыть…")
+    except (EOFError, OSError):  # no console to wait on
+        pass
+    sys.exit(1)
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QObject
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLineEdit, QMainWindow, QWidget
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -65,7 +77,8 @@ class Emulator(QMainWindow):
         self.silent = silent
 
         self.touch_queue = []
-        self.screen = ScreenWidget(lambda down, x, y: self.touch_queue.append((down, x, y)))
+        self.screen = ScreenWidget(lambda down, x, y: self.touch_queue.append((down, x, y)), self.set_tilt)
+        QApplication.instance().installEventFilter(self)  # arrow keys tilt the device from anywhere in the window
         self.panel = Panel(self)
         self.panel.setFixedWidth(430)
         root = QWidget()
@@ -88,6 +101,22 @@ class Emulator(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._frame)
         self.timer.start(16)
+
+    def set_tilt(self, x, y):
+        self.imu.tilt_x, self.imu.tilt_y = x, y
+
+    def eventFilter(self, obj, e):
+        if e.type() in (QEvent.KeyPress, QEvent.KeyRelease) and not isinstance(QApplication.focusWidget(), QLineEdit):
+            axis = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}.get(e.key())
+            if axis:
+                if not e.isAutoRepeat():
+                    on = 0.55 if e.type() == QEvent.KeyPress else 0.0
+                    if axis[0]:
+                        self.imu.tilt_x = axis[0] * on
+                    else:
+                        self.imu.tilt_y = axis[1] * on
+                return True
+        return super().eventFilter(obj, e)
 
     def _tap(self, level):
         self.out_level = max(level, self.out_level * 0.8)
@@ -124,7 +153,7 @@ class Emulator(QMainWindow):
             self.demo_wait -= dt
             while self.demo_queue and self.demo_wait <= 0:
                 _, step = self.demo_queue.pop(0)
-                self.local(step)
+                step() if callable(step) else self.local(step)
                 self._log(f"DEMO: {step}")
                 if self.demo_queue:
                     self.demo_wait += self.demo_queue[0][0]
@@ -233,6 +262,7 @@ class Emulator(QMainWindow):
         self.panel.log_line.emit(str(s)) if hasattr(self, "panel") else print(s)
 
     def closeEvent(self, e):
+        QApplication.instance().removeEventFilter(self)
         self.timer.stop()
         self.audio.stop()
         self.hil_close()

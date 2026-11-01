@@ -182,11 +182,157 @@ def e_excited(v):
     return seq(*[note(f, .06, vib=.015, vib_hz=14) for f in n], rest(.02), glide(n[4], n[4] * 1.2, .13))
 
 
+def e_mischievous(v):
+    n = [523, 622, 523, 740] if v == 0 else [587, 698, 587, 831]
+    return seq(note(n[0], .08, .8), note(n[1], .06, .7), rest(.03), note(n[2], .08, .8), glide(n[3], n[3] * 1.06, .16, .85, vib=.02, vib_hz=9))
+
+
+def e_shy(v):
+    return seq(glide(880, 988, .08, .5), rest(.05), glide(932, 831, .18, .45, release=.1)) if v == 0 else glide(784, 932, .2, .5, release=.12, vib=.01)
+
+
+def e_proud(v):
+    n = [523, 659, 784, 1047] if v == 0 else [587, 740, 880, 1175]
+    return seq(note(n[0], .08), note(n[1], .08), note(n[2], .1), glide(n[3], n[3], .28, release=.14, vib=.012, vib_hz=6))
+
+
+def e_dizzy(v):
+    base = 700 if v == 0 else 620
+    return voice([(0, base), (.2, base * 1.5), (.4, base * .8), (.6, base * 1.35), (.8, base * .75), (1, base * .6)], .75, .85, vib=.02, vib_hz=8)
+
+
+def e_yawning(v):
+    return voice([(0, 420), (.35, 660 if v == 0 else 620), (.7, 480), (1, 340)], 1.3, .75, attack=.15, release=.4, breath=.07, harm=.1)
+
+
+def e_cold(v):
+    base = 1100 if v == 0 else 980
+    return seq(*[note(base * (1 + .03 * (i % 2)), .05, .7, attack=.004, vib=.03, vib_hz=30) for i in range(6)])
+
+
+def e_hot(v):
+    return glide(560, 400, .7, .7, attack=.1, release=.3, breath=.09, harm=.08) if v == 0 else seq(glide(520, 460, .3, .65, breath=.08), glide(460, 380, .4, .6, release=.25, breath=.08))
+
+
+def e_dreamy(v):
+    n = [659, 880, 784, 988] if v == 0 else [622, 830, 740, 932]
+    return seq(*[note(f, .24, .55, attack=.07, release=.12, harm=.06, vib=.008, vib_hz=4) for f in n])
+
+
+def e_focused(v):
+    return seq(note(1175, .05, .6), rest(.06), note(1175, .05, .6)) if v == 0 else seq(note(1047, .06, .6), rest(.04), note(1109, .07, .6))
+
+
+def e_winking(v):
+    return seq(glide(880, 1319, .07), rest(.02), note(1760, .05, .8)) if v == 0 else seq(glide(988, 1480, .08), note(1319, .06, .8))
+
+
+def e_smug(v):
+    return seq(note(587, .1, .7), glide(587, 784, .12, .75), note(740, .14, .7, vib=.01)) if v == 0 else seq(glide(523, 698, .16, .7), note(659, .16, .7, vib=.012))
+
+
+def e_skeptical(v):
+    return seq(note(622, .12, .7), rest(.04), glide(622, 830, .2, .7)) if v == 0 else seq(glide(587, 554, .1, .7), rest(.03), glide(554, 740, .18, .7))
+
+
+def e_guilty(v):
+    return seq(note(523, .1, .55), rest(.03), glide(494, 392, .3, .5, vib=.012)) if v == 0 else glide(494, 349, .42, .55, vib=.015, vib_hz=4)
+
+
+def e_embarrassed(v):
+    return seq(*[glide(740 + 40 * i, 660 + 40 * i, .06, .5) for i in range(3)]) if v == 0 else seq(note(784, .05, .5), rest(.02), note(740, .05, .5), rest(.02), note(698, .1, .45))
+
+
+def e_hopeful(v):
+    return seq(note(523, .1, .7), note(659, .1, .7), glide(784, 932, .24, .75, vib=.012)) if v == 0 else seq(glide(494, 659, .16, .7), glide(740, 880, .24, .75, vib=.012))
+
+
+def e_lonely(v):
+    return seq(glide(622, 554, .35, .5, attack=.06, vib=.012, vib_hz=4), rest(.08), glide(523, 415, .45, .45, release=.2, vib=.015, vib_hz=4)) if v == 0 else glide(587, 392, .8, .5, attack=.08, release=.3, vib=.015, vib_hz=4)
+
+
+def e_grateful(v):
+    n = [659, 880, 784, 1047] if v == 0 else [698, 932, 830, 1109]
+    return seq(*[note(f, .13, .75, attack=.02, vib=.008) for f in n[:3]], glide(n[3], n[3], .3, .8, release=.15, vib=.018, vib_hz=5))
+
+
+def e_jealous(v):
+    return seq(glide(466, 494, .16, .7, fm=.5), glide(494, 440, .18, .65, fm=.6)) if v == 0 else seq(note(415, .1, .7, fm=.5), glide(466, 415, .2, .65, fm=.6))
+
+
+def e_determined(v):
+    n = [440, 554, 659] if v == 0 else [494, 622, 740]
+    return seq(note(n[0], .07, .85, attack=.004), rest(.02), note(n[1], .07, .85, attack=.004), rest(.02), note(n[2], .16, .9, attack=.004))
+
+
+def e_terrified(v):
+    base = 1500 if v == 0 else 1320
+    return voice([(0, base), (.15, base * 1.6), (.5, base * 1.4), (1, base * .8)], .4, 1, attack=.002, vib=.08, vib_hz=30)
+
+
+def e_disgusted(v):
+    return glide(392, 262, .24, .8, fm=1.6, harm=.35) if v == 0 else seq(note(349, .08, .75, fm=1.4), glide(330, 247, .2, .75, fm=1.8))
+
+
+def e_hungry(v):
+    return seq(glide(440, 349, .18, .6, fm=.6, vib=.03, vib_hz=12), glide(370, 311, .22, .55, fm=.7, vib=.03, vib_hz=12)) if v == 0 else voice([(0, 392), (.4, 466), (1, 311)], .45, .6, fm=.7, vib=.03, vib_hz=11)
+
+
+def e_starstruck(v):
+    n = [1047, 1319, 1568, 2093] if v == 0 else [1175, 1480, 1760, 2349]
+    return seq(*[note(f, .05, .75, attack=.003) for f in n], rest(.02), *[note(f, .05, .45, attack=.003) for f in n[::-1][:2]])
+
+
+def e_laughing(v):
+    base = 880 if v == 0 else 988
+    return seq(*[seq(glide(base * (1 - i * .03), base * (.86 - i * .03), .07, .85, attack=.005), rest(.035)) for i in range(5)])
+
+
+def e_crying(v):
+    return seq(voice([(0, 700), (.2, 800), (1, 520)], .42, .75, vib=.05, vib_hz=7), rest(.04), voice([(0, 620), (.25, 720), (1, 440)], .5, .7, vib=.055, vib_hz=7)) if v == 0 else voice([(0, 660), (.15, 760), (.5, 620), (1, 415)], .85, .75, vib=.055, vib_hz=6.5)
+
+
+def e_relieved(v):
+    return glide(740, 494, .6, .6, attack=.05, release=.3, breath=.06, harm=.08) if v == 0 else seq(note(659, .14, .55, attack=.03), glide(659, 466, .45, .55, release=.25, breath=.05))
+
+
+def e_sneaky(v):
+    n = [494, 466, 494, 554] if v == 0 else [440, 415, 440, 494]
+    return seq(*[seq(note(f, .05, .5, attack=.004), rest(.07)) for f in n])
+
+
+def e_nostalgic(v):
+    n = [587, 740, 659, 494] if v == 0 else [554, 698, 622, 466]
+    return seq(*[note(f, .26, .5, attack=.08, release=.14, harm=.05, vib=.01, vib_hz=3.5) for f in n])
+
+
+def e_playful(v):
+    n = [659, 988, 784, 1175, 880] if v == 0 else [698, 1047, 830, 1245, 932]
+    return seq(*[glide(f, f * 1.05, .07, .8, attack=.005) for f in n])
+
+
+def e_amazed(v):
+    return seq(glide(392, 1047, .3, .85, attack=.02), note(1047, .22, .8, vib=.02, vib_hz=7, release=.12)) if v == 0 else seq(glide(440, 880, .22, .85), glide(880, 1319, .14), note(1319, .18, .75, release=.1, vib=.02))
+
+
+def e_exhausted(v):
+    return glide(440, 262, 1.0, .55, attack=.1, release=.4, breath=.1, harm=.06) if v == 0 else seq(glide(415, 349, .4, .5, breath=.09), rest(.06), glide(349, 277, .5, .45, release=.25, breath=.1))
+
+
+def e_suspicious(v):
+    return seq(note(523, .13, .6), rest(.1), note(523, .13, .6), rest(.1), glide(523, 587, .2, .6)) if v == 0 else seq(note(494, .16, .6), rest(.12), glide(494, 554, .24, .6))
+
+
 EMOTIONS = {
     "neutral": e_neutral, "happy": e_happy, "very_happy": e_very_happy, "sad": e_sad, "angry": e_angry, "annoyed": e_annoyed,
     "surprised": e_surprised, "curious": e_curious, "thinking": e_thinking, "sleepy": e_sleepy, "sleeping": e_sleeping,
     "waking_up": e_waking_up, "scared": e_scared, "affection": e_affection, "bored": e_bored, "attentive": e_attentive,
-    "confused": e_confused, "excited": e_excited,
+    "confused": e_confused, "excited": e_excited, "mischievous": e_mischievous, "shy": e_shy, "proud": e_proud,
+    "dizzy": e_dizzy, "yawning": e_yawning, "cold": e_cold, "hot": e_hot, "dreamy": e_dreamy, "focused": e_focused, "winking": e_winking,
+    "smug": e_smug, "skeptical": e_skeptical, "guilty": e_guilty, "embarrassed": e_embarrassed, "hopeful": e_hopeful, "lonely": e_lonely,
+    "grateful": e_grateful, "jealous": e_jealous, "determined": e_determined, "terrified": e_terrified, "disgusted": e_disgusted, "hungry": e_hungry,
+    "starstruck": e_starstruck, "laughing": e_laughing, "crying": e_crying, "relieved": e_relieved, "sneaky": e_sneaky, "nostalgic": e_nostalgic,
+    "playful": e_playful, "amazed": e_amazed, "exhausted": e_exhausted, "suspicious": e_suspicious,
 }
 
 INTERACTIONS = {
@@ -219,6 +365,12 @@ GAMES = {
     "wrong": lambda: glide(330, 262, .16, .75, fm=.7),
     "go": lambda: seq(note(880, .08, .75), rest(.03), glide(1175, 1397, .12, .75)),
     "move": lambda: note(1175, .04, .55, attack=.003, release=.025),
+    # Simon: a tonal chord, so the four sectors can be told apart by ear.
+    "tone1": lambda: note(523, .22, .8, release=.08),
+    "tone2": lambda: note(659, .22, .8, release=.08),
+    "tone3": lambda: note(784, .22, .8, release=.08),
+    "tone4": lambda: note(1047, .22, .8, release=.08),
+    "bounce": lambda: glide(900, 1200, .04, .6, attack=.002, release=.02),
 }
 
 

@@ -9,7 +9,8 @@ static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 
 static const char* const kScreenNames[(int)ScreenId::Count] = {
     "face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications",
-    "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game"};
+    "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game",
+    "maze", "orbit", "snake", "simon", "weather"};
 
 const char* screenName(ScreenId s) { return kScreenNames[(int)s]; }
 bool screenFromName(const char* n, ScreenId* out) {
@@ -120,13 +121,132 @@ void drawIcon(Canvas& c, Icon i, float x, float y, float r, uint16_t col) {
   }
 }
 
-void drawTitle(Canvas& c, const char* title) { c.text(kCx, 22, title, FontSize::S, kOrange, Align::Center); }
+void drawTitle(Canvas& c, const char* title) { c.text(kCx, 20, title, FontSize::S, kGray, Align::Center); }
 
 void drawButton(Canvas& c, const Button& b, const char* label, bool accent) {
+  // Outlines, not filled discs: one orange key per screen is the only heavy element.
   if (accent) c.fillCircle(b.x, b.y, b.r, kOrange);
-  else { c.fillCircle(b.x, b.y, b.r, kDark); }
+  else c.ring(b.x, b.y, b.r - 1, 2, kDim);
   FontSize f = Canvas::textWidth(label, FontSize::M) < (int)(b.r * 1.7f) ? FontSize::M : FontSize::S;
   c.text((int)b.x, (int)b.y - Canvas::lineHeight(f) / 2, label, f, accent ? kBlack : kWhite, Align::Center);
+}
+
+// 5x7 cells, one byte per row, low 5 bits, leftmost cell is bit 4.
+static const uint8_t* dotGlyph(char ch) {
+  static const uint8_t k[][7] = {
+      {14, 17, 17, 17, 17, 17, 14}, {4, 12, 4, 4, 4, 4, 14},   {14, 17, 1, 2, 4, 8, 31},   {31, 2, 4, 2, 1, 17, 14},
+      {2, 6, 10, 18, 31, 2, 2},     {31, 16, 30, 1, 1, 17, 14}, {6, 8, 16, 30, 17, 17, 14}, {31, 1, 2, 4, 8, 8, 8},
+      {14, 17, 17, 14, 17, 17, 14}, {14, 17, 17, 15, 1, 2, 12}};
+  static const uint8_t colon[7] = {0, 4, 4, 0, 4, 4, 0}, minus[7] = {0, 0, 0, 14, 0, 0, 0}, dot[7] = {0, 0, 0, 0, 0, 0, 4}, blank[7] = {0};
+  if (ch >= '0' && ch <= '9') return k[ch - '0'];
+  return ch == ':' ? colon : ch == '-' ? minus : ch == '.' ? dot : blank;
+}
+
+static int dotCols(char ch) { return ch == ':' || ch == '.' ? 3 : 5; }
+
+void DotText::set(const char* s) {
+  if (!strcmp(s, cur_)) return;
+  snprintf(prev_, sizeof(prev_), "%s", cur_);
+  snprintf(cur_, sizeof(cur_), "%s", s);
+  t_ = 0;
+}
+
+int DotText::width(const char* s, int cell, int gap) {
+  int w = 0;
+  for (; *s; s++) w += dotCols(*s) * (cell + gap) + gap * 2;
+  return w - gap * 2;
+}
+
+void DotText::draw(Canvas& c, int cx, int y, int cell, int gap, uint16_t on) const {
+  int x = cx - width(cur_, cell, gap) / 2;
+  size_t plen = strlen(prev_);
+  for (int i = 0; cur_[i]; i++) {
+    char ch = cur_[i];
+    int cols = dotCols(ch);
+    const uint8_t* g = dotGlyph(ch);
+    const uint8_t* p = dotGlyph((size_t)i < plen ? prev_[i] : ' ');
+    int shift = cols == 3 ? 1 : 0;   // narrow glyphs keep their centre column
+    for (int ry = 0; ry < 7; ry++) {
+      for (int cl = 0; cl < cols; cl++) {
+        int bit = 4 - (cl + shift);
+        float a = ((g[ry] >> bit) & 1) ? 1.f : 0.f, b = ((p[ry] >> bit) & 1) ? 1.f : 0.f;
+        // A diagonal wave sweeps over the digit: each cell flips at its own moment.
+        float v = lerpf(b, a, smooth01((t_ - (cl + ry) * 0.05f) * 2.2f));
+        int px = x + cl * (cell + gap), py = y + ry * (cell + gap);
+        if (v < 0.04f) continue;
+        int sz = (int)(cell * (0.45f + 0.55f * v) + 0.5f), off = (cell - sz) / 2;
+        c.fillRect(px + off, py + off, sz, sz, blend565(kBlack, on, (uint32_t)(v * 255)));
+      }
+    }
+    x += cols * (cell + gap) + gap * 2;
+  }
+}
+
+void drawRimSquares(Canvas& c, float fraction, uint16_t on) {
+  int lit = (int)(fraction * 60 + 0.001f);
+  for (int i = 0; i < 60; i++) {
+    float ang = i * 0.10472f, sx = sinf(ang), co = -cosf(ang);
+    int x = (int)(kCx + sx * (kCx - 11)), y = (int)(kCy + co * (kCy - 11));
+    if (i < lit) c.fillRect(x - 2, y - 2, 5, 5, on);
+    else c.fillRect(x - 1, y - 1, 3, 3, i % 5 == 0 ? kDim : kDark);
+  }
+}
+
+const char* weatherTitle(Weather w) {
+  static const char* const t[] = {"Ясно", "Облачно", "Дождь", "Снег", "Гроза", "Туман", "Ветер"};
+  return t[(int)w];
+}
+
+void drawWeatherIcon(Canvas& c, Weather w, float x, float y, float r, float t) {
+  float ts = t * 0.001f;
+  if (w == Weather::Clear) {
+    c.fillCircle(x, y, r * 0.42f, kYellow);
+    for (int k = 0; k < 12; k++) {
+      float a = k * 0.5236f + ts * 0.25f, l = r * (0.62f + 0.06f * sinf(ts * 2 + k));
+      c.line(x + sinf(a) * l, y + cosf(a) * l, x + sinf(a) * (l + r * 0.2f), y + cosf(a) * (l + r * 0.2f), 3, kOrange);
+    }
+    return;
+  }
+  if (w == Weather::Wind) {
+    for (int k = 0; k < 3; k++) {
+      float yy = y - r * 0.4f + k * r * 0.4f, off = r * 0.14f * sinf(ts * 1.6f + k);
+      c.line(x - r * 0.8f + off, yy, x + r * 0.7f + off, yy, 4, kWhite);
+    }
+    return;
+  }
+  if (w == Weather::Fog) {
+    for (int k = 0; k < 4; k++) {
+      float yy = y - r * 0.45f + k * r * 0.3f, off = r * 0.12f * sinf(ts + k * 1.3f);
+      c.line(x - r * 0.7f + off, yy, x + r * 0.7f - off, yy, 4, kGray);
+    }
+    return;
+  }
+  // A cloud from three discs, breathing slightly.
+  float b = 1 + 0.03f * sinf(ts * 1.2f);
+  float cy = y - r * 0.12f;
+  uint16_t col = w == Weather::Storm ? kGray : kWhite;
+  c.fillCircle(x - r * 0.38f, cy + r * 0.08f, r * 0.3f * b, col);
+  c.fillCircle(x + r * 0.06f, cy - r * 0.1f, r * 0.42f * b, col);
+  c.fillCircle(x + r * 0.46f, cy + r * 0.1f, r * 0.26f * b, col);
+  c.fillRect((int)(x - r * 0.4f), (int)(cy + r * 0.1f), (int)(r * 0.88f), (int)(r * 0.26f), col);
+  if (w == Weather::Rain || w == Weather::Storm) {
+    for (int k = 0; k < 5; k++) {
+      float ph = fmodf(ts * 1.1f + k * 0.37f, 1.f);
+      float xx = x - r * 0.5f + k * r * 0.25f, yy = cy + r * 0.45f + ph * r * 0.5f;
+      c.line(xx, yy, xx - 2, yy + r * 0.1f, 2.5f, kOrange);
+    }
+  }
+  if (w == Weather::Storm && fmodf(ts * 0.5f, 1.f) < 0.2f) {
+    c.line(x + 4, cy + r * 0.32f, x - r * 0.12f, cy + r * 0.65f, 4, kYellow);
+    c.line(x - r * 0.12f, cy + r * 0.65f, x + r * 0.1f, cy + r * 0.65f, 4, kYellow);
+    c.line(x + r * 0.1f, cy + r * 0.65f, x - r * 0.05f, cy + r, 4, kYellow);
+  }
+  if (w == Weather::Snow) {
+    for (int k = 0; k < 5; k++) {
+      float ph = fmodf(ts * 0.42f + k * 0.29f, 1.f);
+      c.fillCircle(x - r * 0.5f + k * r * 0.25f + 4 * sinf(ts * 2 + k), cy + r * 0.45f + ph * r * 0.55f, 3, kWhite);
+    }
+  }
 }
 
 void formatTime(char* out, int cap, float ms, bool tenths) {
@@ -136,51 +256,53 @@ void formatTime(char* out, int cap, float ms, bool tenths) {
   else snprintf(out, (size_t)cap, "%02u:%02u", (unsigned)m, (unsigned)s);
 }
 
-static constexpr int kRowH = 66;
+static constexpr int kRowH = 70;
 
+// A wheel: rows pass through the centre of the screen, where the focused one is bright. Any row can be tapped.
 void ListView::draw(Canvas& c, const char* title, int count, ListRow (*rowFn)(App&, int, void*), App& a, void* ctx) {
   for (int i = 0; i < count; i++) {
-    float y = 72 + i * kRowH - scroll_;
-    if (y < 30 || y > kScreenH - 8) continue;
-    if (!c.intersects(0, (int)y, kScreenW, kRowH)) continue;
+    float mid = kCy + i * kRowH - scroll_;
+    if (mid < 30 || mid > kScreenH - 20) continue;
+    if (!c.intersects(0, (int)mid - kRowH / 2, kScreenW, kRowH)) continue;
     ListRow r = rowFn(a, i, ctx);
-    float mid = y + kRowH / 2.f - 4;
-    float dy = mid - kCy, half = sqrtf(fabsf(kCy * kCy - dy * dy));
-    float maxW = half * 2 - 56;
-    uint16_t col = (mid < 66 || mid > kScreenH - 42) ? kGray : kWhite;
+    float dist = fabsf(mid - kCy) / kRowH;
+    uint16_t col = dist < 0.5f ? kWhite : (dist < 1.5f ? kGray : kDim);
     if (r.value) {
-      c.text(kCx, (int)y + 4, r.title, FontSize::S, col, Align::Center);
-      c.text(kCx, (int)y + 28, r.value, FontSize::M, col == kWhite ? kYellow : kGray, Align::Center);
-      if (r.adjustable && maxW > 200) {
-        c.text(kCx - (int)(maxW / 2), (int)y + 18, "<", FontSize::M, kOrange, Align::Center);
-        c.text(kCx + (int)(maxW / 2), (int)y + 18, ">", FontSize::M, kOrange, Align::Center);
+      c.text(kCx, (int)mid - 25, r.title, FontSize::S, dist < 0.5f ? kGray : kDim, Align::Center);
+      c.text(kCx, (int)mid - 2, r.value, FontSize::M, dist < 0.5f ? kYellow : col, Align::Center);
+      if (r.adjustable && dist < 0.5f) {
+        c.line(kCx - 176, mid + 10, kCx - 186, mid, 3, kOrange);
+        c.line(kCx - 186, mid, kCx - 176, mid - 10, 3, kOrange);
+        c.line(kCx + 176, mid + 10, kCx + 186, mid, 3, kOrange);
+        c.line(kCx + 186, mid, kCx + 176, mid - 10, 3, kOrange);
       }
     } else {
       int tw = Canvas::textWidth(r.title, FontSize::M);
-      int ix = kCx - tw / 2 - 26;
-      if (r.hasIcon) drawIcon(c, r.icon, (float)ix, mid, 15, kOrange);
+      if (r.hasIcon) drawIcon(c, r.icon, (float)(kCx - tw / 2 - 22), mid, 13, dist < 0.5f ? kOrange : kDim);
       c.text(kCx + (r.hasIcon ? 4 : 0), (int)mid - Canvas::lineHeight(FontSize::M) / 2, r.title, FontSize::M, col, Align::Center);
     }
-    if (i + 1 < count) c.line(kCx - 60, y + kRowH - 4, kCx + 60, y + kRowH - 4, 1, kDark);
   }
-  c.fillRect(0, 0, kScreenW, 52, kBlack);
   drawTitle(c, title);
-  float maxScroll = count * kRowH - (kScreenH - 110);
+  float maxScroll = (count - 1) * kRowH;
   if (maxScroll > 0) {
-    float a0 = 60, a1 = 120, p = scroll_ / maxScroll;
-    c.arc(kCx, kCy, kCx - 7, 3, a0, a1, kDark);
-    float at = a0 + (a1 - a0 - 12) * clampf(p, 0, 1);
-    c.arc(kCx, kCy, kCx - 7, 3, at, at + 12, kOrange);
+    float at = 70 + 40 * clampf(scroll_ / maxScroll, 0, 1);
+    c.arc(kCx, kCy, kCx - 8, 3, 70, 110, kDark);
+    c.arc(kCx, kCy, kCx - 8, 3, at - 3, at + 3, kOrange);
   }
 }
 
 void ListView::tick(float dt, int count) {
-  float maxScroll = count * kRowH - (kScreenH - 110);
+  float maxScroll = (count - 1) * kRowH;
   if (maxScroll < 0) maxScroll = 0;
   if (!dragging_) {
     scroll_ += vel_ * dt;
-    vel_ *= powf(0.994f, dt);
-    if (fabsf(vel_) < 0.01f) vel_ = 0;
+    vel_ *= powf(0.993f, dt);
+    if (fabsf(vel_) < 0.05f) {
+      // Glide to the nearest row: the wheel always rests on an item.
+      vel_ = 0;
+      float snap = roundf(scroll_ / kRowH) * kRowH;
+      scroll_ += (snap - scroll_) * clampf(dt / 70.f, 0, 1);
+    }
   }
   if (scroll_ < 0) { scroll_ = 0; vel_ = 0; }
   if (scroll_ > maxScroll) { scroll_ = maxScroll; vel_ = 0; }
@@ -194,9 +316,9 @@ int ListView::gesture(const GestureEvent& e, int count, int* zone) {
       break;
     case Gesture::Up: dragging_ = false; break;
     case Gesture::Tap: {
-      int row = (int)floorf((e.y - 72 + scroll_) / kRowH);
+      int row = (int)floorf((e.y - kCy + kRowH / 2.f + scroll_) / kRowH);
       if (row < 0 || row >= count || e.y < 40) return -1;
-      if (zone) *zone = e.x < kCx - 60 ? -1 : (e.x > kCx + 60 ? 1 : 0);
+      if (zone) *zone = e.x < kCx - 80 ? -1 : (e.x > kCx + 80 ? 1 : 0);
       return row;
     }
     default: break;
@@ -207,7 +329,11 @@ int ListView::gesture(const GestureEvent& e, int count, int* zone) {
 // ---- face ------------------------------------------------------------------------------------
 class FaceScreen : public Screen {
  public:
-  void draw(App& a, Canvas& c) override { a.face.draw(c, a.anim); }
+  void draw(App& a, Canvas& c) override {
+    if (a.thunderFlashMs > 0) c.clear(kDim);
+    if (a.weather.known) a.face.drawWeather(c, a.weather.cond, a.nowMs(), a.alertness() < 0.3f);
+    a.face.draw(c, a.anim, a.eyeColor());
+  }
   bool wantsDoubleTap() const override { return true; }
   void onGesture(App& a, const GestureEvent& e) override {
     switch (e.g) {
@@ -239,7 +365,7 @@ class FaceScreen : public Screen {
         a.anim.kick(-0.3f);
         a.sfx.play("interactions/double_tap");
         if (a.pet.irritatedByRepeats()) a.react(Emotion::Annoyed, 2000);
-        else a.react(a.pet.stats.happiness > 55 ? Emotion::Happy : Emotion::Surprised, 1800);
+        else a.react(a.pet.stats.fun > 75 ? Emotion::Laughing : (a.pet.stats.happiness > 55 ? Emotion::Happy : Emotion::Surprised), 1800);
         break;
       case Gesture::LongPress: a.sfx.play("interactions/hold"); a.showScreen(ScreenId::Menu); break;
       case Gesture::SwipeUp: a.sfx.play("interactions/swipe"); a.showScreen(ScreenId::Settings); break;
@@ -258,8 +384,9 @@ static const MenuItem kMenu[] = {
     {"Поговорить", Icon::Message, ScreenId::Count},  // not a screen: starts a voice dialog
     {"Питомец", Icon::Heart, ScreenId::Pet},
     {"Игры", Icon::Game, ScreenId::Games},
-    {"Аналоговые часы", Icon::Clock, ScreenId::AnalogClock},
-    {"Цифровые часы", Icon::Clock, ScreenId::DigitalClock},
+    {"Погода", Icon::Sun, ScreenId::Weather},
+    {"Часы", Icon::Clock, ScreenId::DigitalClock},
+    {"Циферблат", Icon::Clock, ScreenId::AnalogClock},
     {"Таймер", Icon::Timer, ScreenId::Timer},
     {"Секундомер", Icon::Stopwatch, ScreenId::Stopwatch},
     {"Уведомления", Icon::Bell, ScreenId::Notifications},
@@ -274,7 +401,7 @@ class MenuScreen : public Screen {
   void enter(App&) override { list_.reset(); }
   void tick(App&, float dt) override { list_.tick(dt, kMenuCount); }
   void draw(App& a, Canvas& c) override {
-    list_.draw(c, "Меню", kMenuCount, [](App&, int i, void*) { return ListRow{kMenu[i].title, nullptr, kMenu[i].icon, true, false}; }, a, nullptr);
+    list_.draw(c, "", kMenuCount, [](App&, int i, void*) { return ListRow{kMenu[i].title, nullptr, kMenu[i].icon, true, false}; }, a, nullptr);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     int row = list_.gesture(e, kMenuCount, nullptr);
@@ -296,29 +423,32 @@ static const char* petStatusTitle(PetStatus s) {
 class PetScreen : public Screen {
  public:
   void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Питомец");
-    a.face.drawScaled(c, a.anim, kCx, 112, 0.42f);
-    c.text(kCx, 154, petStatusTitle(a.pet.status()), FontSize::M, kYellow, Align::Center);
     const PetStats& s = a.pet.stats;
-    struct { const char* n; float v; } st[6] = {{"Еда", 100 - s.hunger}, {"Энергия", s.energy}, {"Веселье", s.fun},
-                                                {"Внимание", s.attention}, {"Привязан.", s.affection}, {"Здоровье", s.health}};
+    struct { Icon i; float v; } st[6] = {{Icon::Food, 100 - s.hunger}, {Icon::Sun, s.energy}, {Icon::Ball, s.fun},
+                                         {Icon::Face, s.attention}, {Icon::Heart, s.affection}, {Icon::Warning, s.health}};
+    // Six gauges form the rim. Each spans 54 degrees, the gaps separate them.
     for (int i = 0; i < 6; i++) {
-      int col = i % 2, row = i / 2;
-      float x = col ? kCx + 8.f : kCx - 170.f, y = 196.f + row * 46;
-      float w = 162;
+      float a0 = i * 60.f + 3, a1 = a0 + 54;
+      c.arc(kCx, kCy, kCx - 10, 4, a0, a1, kDark);
+      float lvl = clampf(st[i].v, 0, 100) / 100;
+      if (lvl > 0.02f) c.arc(kCx, kCy, kCx - 10, 4, a0, a0 + 54 * lvl, st[i].v < 25 ? kOrange : kYellow);
+    }
+    a.face.drawScaled(c, a.anim, kCx, 118, 0.5f, a.eyeColor());
+    c.text(kCx, 164, petStatusTitle(a.pet.status()), FontSize::S, kGray, Align::Center);
+    for (int i = 0; i < 6; i++) {
+      float x = kCx - 112 + (i % 3) * 112, y = 216 + (i / 3) * 48;
+      drawIcon(c, st[i].i, x - 28, y, 11, st[i].v < 25 ? kOrange : kDim);
       char pct[8];
-      snprintf(pct, sizeof(pct), "%d%%", (int)(st[i].v + 0.5f));
-      c.text((int)x, (int)y, st[i].n, FontSize::S, kWhite);
-      c.text((int)(x + w), (int)y, pct, FontSize::S, st[i].v < 25 ? kOrange : kYellow, Align::Right);
-      c.roundRect(x, y + 25, w, 6, 3, kDark);
-      float fw = w * clampf(st[i].v, 0, 100) / 100;
-      if (fw > 6) c.roundRect(x, y + 25, fw, 6, 3, st[i].v < 25 ? kOrange : kYellow);
+      snprintf(pct, sizeof(pct), "%d", (int)(st[i].v + 0.5f));
+      c.text((int)x - 10, (int)y - Canvas::lineHeight(FontSize::M) / 2, pct, FontSize::M, st[i].v < 25 ? kOrange : kWhite);
+      c.text((int)x + Canvas::textWidth(pct, FontSize::M) - 8, (int)y - 4, "%", FontSize::S, kDim);
     }
     static const Icon icons[5] = {Icon::Food, Icon::Heart, Icon::Ball, Icon::Moon, Icon::Sun};
     for (int i = 0; i < 5; i++) {
       Button b = action(i);
-      c.fillCircle(b.x, b.y, b.r, flash_ == i ? kOrange : kDark);
-      drawIcon(c, icons[i], b.x, b.y, 18, flash_ == i ? kBlack : kYellow);
+      if (flash_ == i) c.fillCircle(b.x, b.y, b.r, kOrange);
+      else c.ring(b.x, b.y, b.r - 1, 2, kDim);
+      drawIcon(c, icons[i], b.x, b.y, 16, flash_ == i ? kBlack : kWhite);
     }
   }
   void tick(App&, float dt) override { if (flashMs_ > 0) { flashMs_ -= dt; if (flashMs_ <= 0) flash_ = -1; } }
@@ -343,72 +473,98 @@ class PetScreen : public Screen {
 };
 
 // ---- clocks ----------------------------------------------------------------------------------
-static const char* const kWeekdays[7] = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
+static const char* const kWeekdays[7] = {"ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"};
 static const char* const kMonths[12] = {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"};
 
 class AnalogClockScreen : public Screen {
  public:
   void draw(App& a, Canvas& c) override {
-    const float R = kCx - 6;
-    for (int i = 0; i < 60; i++) {
-      float ang = i * 6 * 0.0174533f, s = sinf(ang), co = -cosf(ang);
-      bool hour = i % 5 == 0;
-      float r0 = R - (hour ? 26 : 10);
-      float x0 = kCx + s * r0, y0 = kCy + co * r0, x1 = kCx + s * (R - 2), y1 = kCy + co * (R - 2);
-      if (!c.intersects((int)(x0 < x1 ? x0 : x1) - 3, (int)(y0 < y1 ? y0 : y1) - 3, (int)fabsf(x1 - x0) + 7, (int)fabsf(y1 - y0) + 7)) continue;
-      c.line(x0, y0, x1, y1, hour ? 5 : 2, (i % 15 == 0) ? kOrange : (hour ? kWhite : kGray));
-    }
     DateTime d = a.clock.now();
-    char date[32];
-    snprintf(date, sizeof(date), "%d %s", d.day, kMonths[d.month - 1]);
-    c.text(kCx, kCy + 78, date, FontSize::S, kYellow, Align::Center);
     float secF = d.second + a.clock.secondFraction();
+    drawRimSquares(c, secF / 60, kOrange);
+    for (int i = 0; i < 12; i++) {
+      float ang = i * 30 * 0.0174533f, s = sinf(ang), co = -cosf(ang);
+      float r0 = kCx - 44, r1 = kCx - 26;
+      c.line(kCx + s * r0, kCy + co * r0, kCx + s * r1, kCy + co * r1, i % 3 == 0 ? 5 : 2.5f, i % 3 == 0 ? kWhite : kGray);
+    }
+    char date[32];
+    snprintf(date, sizeof(date), "%s %d", kWeekdays[d.weekday], d.day);
+    c.text(kCx, kCy + 84, date, FontSize::S, kGray, Align::Center);
     float mF = d.minute + secF / 60, hF = (d.hour % 12) + mF / 60;
     auto hand = [&](float deg, float len, float tail, float w, uint16_t col) {
       float rad = deg * 0.0174533f, s = sinf(rad), co = -cosf(rad);
       c.line(kCx - s * tail, kCy - co * tail, kCx + s * len, kCy + co * len, w, col);
     };
-    hand(hF * 30, 112, 18, 11, kWhite);
-    hand(mF * 6, 176, 22, 7, kWhite);
-    hand(secF * 6, 192, 36, 3, kOrange);
-    c.fillCircle(kCx, kCy, 9, kOrange);
-    c.fillCircle(kCx, kCy, 3, kBlack);
+    hand(hF * 30, 104, 0, 7, kWhite);
+    hand(mF * 6, 164, 0, 4, kWhite);
+    c.fillCircle(kCx, kCy, 7, kWhite);
+    c.fillCircle(kCx, kCy, 3, kOrange);
   }
 };
 
 class DigitalClockScreen : public Screen {
  public:
+  void tick(App& a, float dt) override {
+    DateTime d = a.clock.now();
+    char t[12];
+    snprintf(t, sizeof(t), "%02d:%02d", d.hour, d.minute);
+    time_.set(t);
+    time_.tick(dt);
+  }
   void draw(App& a, Canvas& c) override {
     DateTime d = a.clock.now();
-    char t[16], date[40], sec[8];
-    snprintf(t, sizeof(t), "%02d:%02d", d.hour, d.minute);
-    snprintf(sec, sizeof(sec), "%02d", d.second);
-    snprintf(date, sizeof(date), "%d %s", d.day, kMonths[d.month - 1]);
-    c.text(kCx, kCy - 72, t, FontSize::XL, kWhite, Align::Center);
-    c.text(kCx, kCy + 38, sec, FontSize::L, kOrange, Align::Center);
-    c.text(kCx, 96, kWeekdays[d.weekday], FontSize::M, kYellow, Align::Center);
-    c.text(kCx, kCy + 100, date, FontSize::M, kGray, Align::Center);
-    if (!a.clock.isSet()) c.text(kCx, kCy + 142, "время не задано", FontSize::S, kDim, Align::Center);
-    if (a.power.batteryPresent()) {
-      char b[12];
-      snprintf(b, sizeof(b), "%d%%", a.power.batteryPercent());
-      c.text(kCx, 56, b, FontSize::S, a.power.lowBattery() ? kOrange : kDim, Align::Center);
+    drawRimSquares(c, (d.second + 1) / 60.f, kOrange);
+    time_.draw(c, kCx, kCy - 48, 12, 2, kWhite);
+    char date[40];
+    snprintf(date, sizeof(date), "%s  %d %s", kWeekdays[d.weekday], d.day, kMonths[d.month - 1]);
+    c.text(kCx, kCy + 66, date, FontSize::S, kGray, Align::Center);
+    if (a.weather.known) {
+      char w[16];
+      snprintf(w, sizeof(w), "%d°", (int)roundf(a.weather.tempC));
+      drawWeatherIcon(c, a.weather.cond, kCx - 24, kCy - 96, 17, a.nowMs());
+      c.text(kCx + 6, kCy - 110, w, FontSize::M, kWhite);
+    } else if (!a.clock.isSet()) {
+      c.text(kCx, kCy + 94, "время не задано", FontSize::S, kDim, Align::Center);
     }
   }
+ private:
+  DotText time_;
+};
+
+class WeatherScreen : public Screen {
+ public:
+  void tick(App& a, float dt) override {
+    char t[12];
+    snprintf(t, sizeof(t), a.weather.known ? "%d" : "--", (int)roundf(a.weather.tempC));
+    temp_.set(t);
+    temp_.tick(dt);
+  }
+  void draw(App& a, Canvas& c) override {
+    Weather w = a.weather.known ? a.weather.cond : Weather::Clouds;
+    drawWeatherIcon(c, w, kCx, 130, 66, a.nowMs());
+    temp_.draw(c, kCx, 214, 8, 2, kWhite);
+    if (a.weather.known) c.text(kCx, 300, weatherTitle(w), FontSize::M, kYellow, Align::Center);
+    else c.textWrapped(kCx, 296, 300, "Нет данных: нужен Wi-Fi с координатами или приложение", FontSize::S, kGray, Align::Center, 3);
+    a.face.drawScaled(c, a.anim, kCx, 392, 0.28f, a.eyeColor());
+  }
+ private:
+  DotText temp_;
 };
 
 // ---- timer / stopwatch -----------------------------------------------------------------------
 class TimerScreen : public Screen {
  public:
-  void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Таймер");
+  void tick(App& a, float dt) override {
     char t[16];
+    formatTime(t, sizeof(t), (a.timerRunning || a.timerLeftMs > 0 ? a.timerLeftMs : a.timerSetMs) + 999, false);
+    time_.set(t);
+    time_.tick(dt);
+  }
+  void draw(App& a, Canvas& c) override {
     float ms = a.timerRunning || a.timerLeftMs > 0 ? a.timerLeftMs : a.timerSetMs;
-    formatTime(t, sizeof(t), ms + 999, false);
-    float prog = a.timerSetMs > 0 ? clampf(ms / a.timerSetMs, 0, 1) : 0;
-    c.arc(kCx, kCy, kCx - 14, 10, 0, 359.9f, kDark);
-    if (prog > 0.002f) c.arc(kCx, kCy, kCx - 14, 10, 0, 360 * prog, kOrange);
-    c.text(kCx, kCy - 96, t, FontSize::XL, kWhite, Align::Center);
+    drawRimSquares(c, a.timerSetMs > 0 ? clampf(ms / a.timerSetMs, 0, 1) : 0, kOrange);
+    drawTitle(c, "");
+    time_.draw(c, kCx, kCy - 104, 11, 2, kWhite);
     drawButton(c, kMinus, "-1");
     drawButton(c, kPlus, "+1");
     drawButton(c, kGo, a.timerRunning ? "Пауза" : "Старт", true);
@@ -431,6 +587,7 @@ class TimerScreen : public Screen {
     }
   }
  private:
+  DotText time_;
   static constexpr Button kMinus{kCx - 112, kCy + 40, 36}, kPlus{kCx + 112, kCy + 40, 36};
   static constexpr Button kGo{kCx - 52, kCy + 128, 46}, kReset{kCx + 52, kCy + 128, 46};
 };
@@ -438,22 +595,25 @@ constexpr Button TimerScreen::kMinus, TimerScreen::kPlus, TimerScreen::kGo, Time
 
 class StopwatchScreen : public Screen {
  public:
-  void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Секундомер");
-    char t[16], l[32];
+  void tick(App& a, float dt) override {
+    char t[16];
     formatTime(t, sizeof(t), a.swMs, false);
-    c.text(kCx, kCy - 106, t, FontSize::XL, kWhite, Align::Center);
-    int tenth = ((int)a.swMs / 100) % 10;
-    snprintf(l, sizeof(l), ".%d", tenth);
-    c.text(kCx, kCy - 8, l, FontSize::L, kOrange, Align::Center);
-    float secs = fmodf(a.swMs / 1000.f, 60.f);
-    c.arc(kCx, kCy, kCx - 14, 8, 0, 359.9f, kDark);
-    if (secs > 0.05f) c.arc(kCx, kCy, kCx - 14, 8, 0, secs * 6, kOrange);
+    time_.set(t);
+    time_.tick(dt);
+    char l[8];
+    snprintf(l, sizeof(l), ".%d", ((int)a.swMs / 100) % 10);
+    tenths_.set(l);
+    tenths_.tick(dt * 4);
+  }
+  void draw(App& a, Canvas& c) override {
+    drawRimSquares(c, fmodf(a.swMs / 1000.f, 60.f) / 60, kOrange);
+    time_.draw(c, kCx, kCy - 106, 11, 2, kWhite);
+    tenths_.draw(c, kCx, kCy - 8, 5, 1, kOrange);
     if (a.swLap > 0) {
-      char lap[24];
+      char t[16], lap[24];
       formatTime(t, sizeof(t), a.swLap, true);
       snprintf(lap, sizeof(lap), "Круг %s", t);
-      c.text(kCx, kCy + 44, lap, FontSize::S, kYellow, Align::Center);
+      c.text(kCx, kCy + 44, lap, FontSize::S, kGray, Align::Center);
     }
     drawButton(c, kGo, a.swRunning ? "Стоп" : "Старт", true);
     drawButton(c, kLap, a.swRunning ? "Круг" : "Сброс");
@@ -468,6 +628,7 @@ class StopwatchScreen : public Screen {
     }
   }
  private:
+  DotText time_, tenths_;
   static constexpr Button kGo{kCx - 56, kCy + 124, 48}, kLap{kCx + 56, kCy + 124, 48};
 };
 constexpr Button StopwatchScreen::kGo, StopwatchScreen::kLap;
@@ -492,7 +653,7 @@ class NotificationsScreen : public Screen {
       c.textWrapped(kCx, y + 8, 370, m.text, FontSize::S, kWhite, Align::Center, 7);
       DateTime d = civilFromEpoch(m.time + a.clock.tzMinutes() * 60);
       char t[40];
-      snprintf(t, sizeof(t), "%02d:%02d  %d %s  %s", d.hour, d.minute, d.day, kMonths[d.month - 1], m.source);
+      snprintf(t, sizeof(t), "%02d:%02d  %s", d.hour, d.minute, m.source);
       c.text(kCx, kScreenH - 64, t, FontSize::S, kGray, Align::Center);
       return;
     }
@@ -502,7 +663,7 @@ class NotificationsScreen : public Screen {
       c.text(kCx, kCy + 20, "Пока ничего нет", FontSize::M, kGray, Align::Center);
       return;
     }
-    list_.draw(c, "Уведомления", n + 1, [](App& ap, int i, void*) {
+    list_.draw(c, "", n + 1, [](App& ap, int i, void*) {
       if (i >= ap.notifications.count()) return ListRow{"Очистить всё", nullptr, Icon::Warning, true, false};
       const Notification& m = ap.notifications.at(i);
       static char buf[60];
@@ -538,7 +699,7 @@ class SettingsScreen : public Screen {
   void enter(App&) override { list_.reset(); confirm_ = false; }
   void tick(App&, float dt) override { list_.tick(dt, kSettingRows); }
   void draw(App& a, Canvas& c) override {
-    list_.draw(c, "Настройки", kSettingRows, [](App& ap, int i, void* ctx) {
+    list_.draw(c, "", kSettingRows, [](App& ap, int i, void* ctx) {
       static char v[28];
       const Settings& s = ap.settings;
       auto onoff = [](bool b) { return b ? "Вкл" : "Выкл"; };
@@ -656,18 +817,20 @@ class InfoScreen : public Screen {
 
 // ---- games -----------------------------------------------------------------------------------
 struct GameItem { const char* title; ScreenId id; };
-static const GameItem kGames[] = {{"Крестики-нолики", ScreenId::TicTacToe}, {"Реакция", ScreenId::Reaction},
-                                  {"Угадай число", ScreenId::Guess}, {"Поймай светлячка", ScreenId::PetGame}};
+static const GameItem kGames[] = {{"Лабиринт", ScreenId::Maze}, {"Орбита", ScreenId::Orbit}, {"Змейка", ScreenId::Snake}, {"Память", ScreenId::Simon},
+                                  {"Крестики-нолики", ScreenId::TicTacToe}, {"Реакция", ScreenId::Reaction},
+                                  {"Угадай число", ScreenId::Guess}, {"Светлячок", ScreenId::PetGame}};
+static constexpr int kGameCount = sizeof(kGames) / sizeof(kGames[0]);
 
 class GamesScreen : public Screen {
  public:
   void enter(App&) override { list_.reset(); }
-  void tick(App&, float dt) override { list_.tick(dt, 4); }
+  void tick(App&, float dt) override { list_.tick(dt, kGameCount); }
   void draw(App& a, Canvas& c) override {
-    list_.draw(c, "Игры", 4, [](App&, int i, void*) { return ListRow{kGames[i].title, nullptr, Icon::Game, true, false}; }, a, nullptr);
+    list_.draw(c, "", kGameCount, [](App&, int i, void*) { return ListRow{kGames[i].title, nullptr, Icon::Game, true, false}; }, a, nullptr);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    int row = list_.gesture(e, 4, nullptr);
+    int row = list_.gesture(e, kGameCount, nullptr);
     if (row >= 0) { a.sfx.play("system/click"); a.showScreen(kGames[row].id); }
   }
  private:
@@ -758,7 +921,7 @@ class TicTacToeScreen : public Screen {
     if (mode_ == 2) { a.sfx.play(result_ == 3 ? "games/draw" : "games/win"); a.react(result_ == 3 ? Emotion::Confused : Emotion::Excited, 2000); return; }
     if (result_ == 1) {
       a.settings.tttWins++; a.pet.event(PetEvent::GameLose);
-      a.sfx.play("games/lose"); a.react(Emotion::Sad, 2400);
+      a.sfx.play("games/lose"); a.react(a.rng.range(0, 2) == 0 ? Emotion::Crying : Emotion::Sad, 2400);
     } else if (result_ == 2) {
       a.settings.tttLosses++; a.pet.event(PetEvent::GameWin);
       a.sfx.play("games/win"); a.react(Emotion::VeryHappy, 2400);
@@ -891,12 +1054,16 @@ class ReactionScreen : public Screen {
 class GuessScreen : public Screen {
  public:
   void enter(App& a) override { restart(a); }
-  void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Угадай число");
-    a.face.drawScaled(c, a.anim, kCx, 96, 0.34f);
-    char b[32];
+  void tick(App&, float dt) override {
+    char b[8];
     snprintf(b, sizeof(b), "%d", guess_);
-    c.text(kCx, 150, b, FontSize::XL, won_ ? kOrange : kWhite, Align::Center);
+    num_.set(b);
+    num_.tick(dt);
+  }
+  void draw(App& a, Canvas& c) override {
+    a.face.drawScaled(c, a.anim, kCx, 86, 0.34f);
+    char b[32];
+    num_.draw(c, kCx, 142, 11, 2, won_ ? kOrange : kWhite);
     c.text(kCx, 256, hint_, FontSize::M, kYellow, Align::Center);
     snprintf(b, sizeof(b), "Попыток: %d", tries_);
     c.text(kCx, 290, b, FontSize::S, kGray, Align::Center);
@@ -930,6 +1097,7 @@ class GuessScreen : public Screen {
     a.sfx.play("games/go");
   }
   static constexpr Button kM10{kCx - 150, 292, 31}, kM1{kCx - 84, 342, 31}, kP1{kCx + 84, 342, 31}, kP10{kCx + 150, 292, 31}, kOk{kCx, 382, 42};
+  DotText num_;
   int secret_ = 1, guess_ = 50, tries_ = 0;
   bool won_ = false;
   char hint_[48] = "";
@@ -1001,8 +1169,9 @@ Screen* screenInstance(ScreenId id) {
   static DigitalClockScreen digital; static TimerScreen timer; static StopwatchScreen sw;
   static NotificationsScreen notes; static SettingsScreen settings; static DiagnosticsScreen diag;
   static GamesScreen games; static InfoScreen info; static TicTacToeScreen ttt; static ReactionScreen react;
-  static GuessScreen guess; static PetGameScreen pg;
-  Screen* all[(int)ScreenId::Count] = {&face, &menu, &pet, &analog, &digital, &timer, &sw, &notes, &settings, &diag, &games, &info, &ttt, &react, &guess, &pg};
+  static GuessScreen guess; static PetGameScreen pg; static WeatherScreen weather;
+  Screen* all[(int)ScreenId::Count] = {&face, &menu, &pet, &analog, &digital, &timer, &sw, &notes, &settings, &diag, &games, &info, &ttt, &react, &guess, &pg,
+                                       gameScreen(ScreenId::Maze), gameScreen(ScreenId::Orbit), gameScreen(ScreenId::Snake), gameScreen(ScreenId::Simon), &weather};
   return all[(int)id];
 }
 

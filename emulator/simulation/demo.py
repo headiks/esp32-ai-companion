@@ -27,7 +27,15 @@ def steps(ctl):
         (2600, screen("tictactoe")),
         (1200, {"type": "gesture", "value": "tap", "x": 148, "y": 300}),   # choose "with the pet"
         (1200, {"type": "gesture", "value": "tap", "x": 233, "y": 247}),   # centre cell
-        (2400, screen("analog_clock")),
+        (2400, screen("maze")),
+        (0, lambda: ctl.set_tilt(0.5, 0.0)),
+        (1000, lambda: ctl.set_tilt(0.0, 0.5)),
+        (1000, lambda: ctl.set_tilt(0.0, 0.0)),
+        (600, {"type": "weather", "value": "rain", "temp": 9}),
+        (0, screen("weather")),
+        (2400, screen("face")),
+        (3000, {"type": "weather", "value": "snow", "temp": -4}),
+        (3400, screen("analog_clock")),
         (2600, screen("digital_clock")),
         (2600, screen("face")),
         (800, {"type": "notify", "title": "Демо", "text": "Так выглядит уведомление", "icon": "message", "source": "demo"}),

@@ -1,5 +1,6 @@
 // C ABI over cc::App for desktop hosts (emulator, simulated device, tests), loaded with ctypes.
 #include "companion/app.h"
+#include "companion/games.h"
 #include "companion/services.h"
 #include <stdio.h>
 #include <string>
@@ -130,6 +131,56 @@ CC_API int cc_state(void* p, char* out, int cap) { return ((Host*)p)->app.stateE
 CC_API void cc_set_battery(void* p, int percent, int charging, int present, int mv) { ((Host*)p)->app.power.setBattery(percent, charging != 0, present != 0, mv); }
 CC_API void cc_set_time_scale(void* p, float s) { ((Host*)p)->app.clock.setScale(s); }
 CC_API void cc_set_fps(void* p, float fps) { ((Host*)p)->app.hal.fps = fps; }
+// Test autopilot: steers the real maze physics by tilt only. Returns milliseconds to the exit, -1 if it never gets there.
+CC_API int cc_maze_selftest(int size, uint32_t seed) {
+  static MazeGame m;
+  Rng rng(seed);
+  m.generate(size, rng);
+  for (int ms = 0; ms < 600000; ms += 16) {
+    int cx, cy;
+    m.nextCellToExit(&cx, &cy);
+    float vx0 = m.x(), vy0 = m.y();
+    static float px = 0, py = 0;
+    float vx = (vx0 - px) / 0.016f, vy = (vy0 - py) / 0.016f;
+    px = vx0; py = vy0;
+    float ax = clampf(((cx + 0.5f) - m.x()) * 0.9f - vx * 0.12f, -0.7f, 0.7f);
+    float ay = clampf(((cy + 0.5f) - m.y()) * 0.9f - vy * 0.12f, -0.7f, 0.7f);
+    m.step(ax, ay, 16);
+    if (m.x() < 0 || m.y() < 0 || m.x() > m.size() || m.y() > m.size()) return -2;
+    if (m.won()) return ms;
+  }
+  return -1;
+}
+// Walks into a wall: the ball must stay inside its cell whatever the tilt.
+CC_API int cc_maze_wall_selftest(uint32_t seed) {
+  static MazeGame m;
+  Rng rng(seed);
+  m.generate(7, rng);
+  for (int i = 0; i < 2000; i++) {
+    m.step(i % 300 < 150 ? 1.f : -1.f, 1.f, 16);
+    if (m.x() < 0 || m.y() < 0 || m.x() > 7 || m.y() > 7) return 0;
+  }
+  return 1;
+}
+// Snake rules: eats and grows, refuses to reverse, dies on the wall.
+CC_API int cc_snake_selftest(uint32_t seed) {
+  static SnakeGame s;
+  Rng rng(seed);
+  s.reset(rng);
+  s.placeFoodForTest(s.segX(0) + 1, s.segY(0));
+  if (!s.step(rng) || s.length() != 4) return 1;
+  s.turn(-1, 0);
+  int x = s.segX(0);
+  s.step(rng);
+  if (s.segX(0) != x + 1) return 2;
+  for (int i = 0; i < 40 && s.alive(); i++) s.step(rng);
+  if (s.alive()) return 3;
+  return 0;
+}
+CC_API int cc_parse_weather(const char* body, float* temp) {
+  Weather w;
+  return parseOpenMeteo(body, &w, temp) ? (int)w : -1;
+}
 CC_API int cc_emotion_count() { return kEmotionCount; }
 CC_API const char* cc_emotion_name(int i) { return emotionName((Emotion)i); }
 CC_API int cc_allowed(int from, int to) { return EmotionEngine::allowed((Emotion)from, (Emotion)to); }

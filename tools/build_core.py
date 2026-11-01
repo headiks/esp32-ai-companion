@@ -2,6 +2,7 @@
 Uses the system compiler when present, otherwise `pip install ziglang`. Usage: python tools/build_core.py [--tests]"""
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,7 @@ def build():
     newest = max(p.stat().st_mtime for p in list(CORE.rglob("*.cpp")) + list(CORE.rglob("*.h")) + sources)
     if LIB.exists() and LIB.stat().st_mtime > newest:
         return LIB
+    print("Сборка ядра, это может занять до минуты…", flush=True)
     # Compile from a temporary ASCII mirror: some toolchains mishandle non-ASCII project paths.
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -44,9 +46,9 @@ def build():
                             "-w", "-o", str(out)] + srcs
         if platform.system() == "Windows" and "ziglang" in cmd:
             cmd.remove("-fPIC")
-        for _ in range(3):  # zig occasionally fails with a transient cache "Unexpected" error on Windows
+        for _ in range(4):  # zig on Windows fails now and then on its cache; only a real source error is final
             res = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, encoding="utf-8", errors="replace")
-            if res.returncode == 0 or "error: Unexpected" not in res.stderr:
+            if res.returncode == 0 or re.search(r"\.(cpp|h):\d+:\d+: error: (?!Unexpected)", res.stderr):
                 break
         if res.returncode:
             sys.stderr.write(res.stderr[-6000:])
