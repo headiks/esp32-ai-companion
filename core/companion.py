@@ -30,7 +30,7 @@ def lib():
             "cc_set_fps": (None, [p, f]), "cc_emotion_count": (i, []), "cc_emotion_name": (C.c_char_p, [i]), "cc_allowed": (i, [i, i]),
             "cc_sound_count": (i, [p]), "cc_sound_name": (C.c_char_p, [p, i]), "cc_emotion_sound": (i, [p, i, i]), "cc_last_sound": (i, [p]),
             "cc_play_count": (C.c_uint32, [p]), "cc_blink_amount": (f, [p]), "cc_pose": (f, [p, i, i]), "cc_gaze": (f, [p, i]),
-            "cc_maze_selftest": (i, [i, C.c_uint32]), "cc_maze_wall_selftest": (i, [C.c_uint32]), "cc_snake_selftest": (i, [C.c_uint32]), "cc_parse_weather": (i, [C.c_char_p, C.POINTER(f)]),
+            "cc_maze_selftest": (i, [i, C.c_uint32]), "cc_maze_wall_selftest": (i, [C.c_uint32]), "cc_snake_selftest": (i, [C.c_uint32]), "cc_poll_input": (i, [p, C.c_char_p, i]), "cc_parse_weather": (i, [C.c_char_p, C.POINTER(f)]),
         }
         for name, (res, args) in sigs.items():
             fn = getattr(_lib, name)
@@ -94,6 +94,10 @@ class Companion:
         flag = C.c_int(1 if authed else 0)
         n = self.l.cc_command_unauth(self.h, json.dumps(cmd, ensure_ascii=False).encode(), self._out, len(self._out), C.byref(flag))
         return json.loads(self._out.raw[:n].decode("utf-8", "replace")), bool(flag.value)
+
+    def poll_input(self):
+        n = self.l.cc_poll_input(self.h, self._out, len(self._out))
+        return json.loads(self._out.raw[:n].decode()) if n > 0 else None
 
     def state(self):
         return self.handle_command({"type": "get_state"})

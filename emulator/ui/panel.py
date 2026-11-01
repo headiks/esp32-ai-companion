@@ -13,7 +13,9 @@ STAT_RU = {"happiness": "Счастье", "energy": "Энергия", "curiosity
 SCREENS = [("face", "Лицо"), ("menu", "Меню"), ("pet", "Питомец"), ("analog_clock", "Аналог. часы"), ("digital_clock", "Цифр. часы"), ("timer", "Таймер"),
            ("stopwatch", "Секундомер"), ("notifications", "Уведомления"), ("settings", "Настройки"), ("diagnostics", "Диагностика"), ("games", "Игры"), ("info", "Инфо"),
            ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
-           ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"), ("weather", "Погода")]
+           ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"),
+           ("coin", "Монетка"), ("dice", "Кубики"), ("magic_ball", "Шар"), ("balance", "Баланс"), ("duel", "Дуэль"), ("shaker", "Шейкер"), ("safe", "Сейф"),
+           ("workout", "Зарядка"), ("mole", "Кротики"), ("weather", "Погода")]
 
 
 def grid(buttons, cols=3):
@@ -194,6 +196,10 @@ class Panel(QWidget):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.addWidget(grid([(t, lambda v=v: self.ctl.send({"type": "screen", "value": v})) for v, t in SCREENS]))
+        lay.addWidget(QLabel("Контроллер для телефона (наклон: стрелки, правая кнопка мыши):"))
+        lay.addWidget(grid([("Контроллер: геймпад", lambda: self.ctl.start_controller("pad", "", "Гонки")),
+                            ("Контроллер: карты", lambda: self.ctl.start_controller("cards", "As,10h,Kd,2c,7s", "Покер")),
+                            ("Выйти из контроллера", lambda: self.ctl.stop_controller())], 2))
         form = QFormLayout()
         self.n_title = QLineEdit("Сообщение")
         self.n_text = QLineEdit("Привет! Как дела?")

@@ -487,7 +487,7 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
         if (t < 1200) break;
         int x = (int)(ox + 96 + ph * 70 + 8 * sinf(ph * 9));
         int y = (int)(oy - 70 - ph * 90);
-        c.text(x, y, "z", i == 1 ? FontSize::L : FontSize::M, ph > 0.8f ? kDim : kOrange);
+        c.text(x, y, "z", i == 1 ? FontSize::L : FontSize::M, ph > 0.8f ? kDim : kAccent);
       }
       break;
     }
@@ -495,8 +495,8 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
       float ph = fmodf(ts * 0.28f, 1.f);
       if (t < 900 || ph > 0.75f) break;
       float y = oy + 46 + ph * 120, x = ox - 150;
-      c.fillCircle(x, y, 7, kOrange);
-      c.line(x, y - 11, x, y - 3, 4, kOrange);
+      c.fillCircle(x, y, 7, kAccent);
+      c.line(x, y - 11, x, y - 3, 4, kAccent);
       break;
     }
     case Accent::Hearts: {
@@ -504,28 +504,28 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
         float ph = fmodf(ts * 0.3f + i * 0.5f, 1.f);
         if (ph > 0.85f) continue;
         float x = ox + (i ? 110.f : -118.f) + 10 * sinf(ph * 7);
-        c.heart(x, oy - 150 - ph * 44, 11 + 5 * sinf(ph * 3.1f), kOrange);
+        c.heart(x, oy - 150 - ph * 44, 11 + 5 * sinf(ph * 3.1f), kAccent);
       }
       break;
     }
     case Accent::Bang:
       if (t < 800) {
         float grow = smooth01(t / 90);
-        c.roundRect(ox - 5, oy - 186 * grow, 10, 42 * grow, 5, kYellow);
-        c.fillCircle(ox, oy - 132 * grow, 6 * grow, kYellow);
+        c.roundRect(ox - 5, oy - 186 * grow, 10, 42 * grow, 5, kSoft);
+        c.fillCircle(ox, oy - 132 * grow, 6 * grow, kSoft);
       }
       break;
     case Accent::Question:
       if (fmodf(ts * 0.35f, 1.f) < 0.55f)
-        c.text((int)ox + 6, (int)oy - 170, "?", FontSize::L, kYellow, Align::Center);
+        c.text((int)ox + 6, (int)oy - 170, "?", FontSize::L, kSoft, Align::Center);
       break;
     case Accent::Sparkle:
       for (int i = 0; i < 3; i++) {
         float ph = fmodf(ts * 0.9f + i * 0.37f, 1.f);
         float sz = 9 * sinf(ph * 3.14159f);
         float x = ox + (i == 0 ? -128.f : i == 1 ? 132.f : 4.f), y = oy + (i == 2 ? -176.f : -158.f);
-        c.line(x - sz, y, x + sz, y, 3, kYellow);
-        c.line(x, y - sz, x, y + sz, 3, kYellow);
+        c.line(x - sz, y, x + sz, y, 3, kSoft);
+        c.line(x, y - sz, x, y + sz, 3, kSoft);
       }
       break;
     case Accent::Steam:
@@ -533,20 +533,20 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
         float ph = fmodf(ts * 1.1f + i * 0.5f, 1.f);
         float x = ox + (i ? 40.f : -40.f), y = oy - 104 - ph * 44;
         float r = 3 + ph * 7;
-        c.ring(x, y, r, 3, ph > 0.7f ? kDim : kOrange);
+        c.ring(x, y, r, 3, ph > 0.7f ? kDim : kAccent);
       }
       break;
     case Accent::Blush:
       for (int i = 0; i < 2; i++) {
         float x = ox + (i ? 122.f : -122.f);
-        for (int k = 0; k < 3; k++) c.line(x - 16 + k * 14, oy + 58, x - 22 + k * 14, oy + 70, 4, rgb565(170, 80, 0));
+        for (int k = 0; k < 3; k++) c.line(x - 16 + k * 14, oy + 58, x - 22 + k * 14, oy + 70, 4, kRose);
       }
       break;
     case Accent::Sweat: {
       float ph = fmodf(ts * 0.42f, 1.f);
       float y = oy - 100 + ph * 150, x = ox + 196 - ph * 8;
-      c.fillCircle(x, y, 6, kYellow);
-      c.line(x, y - 10, x, y - 2, 3.5f, kYellow);
+      c.fillCircle(x, y, 6, kSoft);
+      c.line(x, y - 10, x, y - 2, 3.5f, kSoft);
       break;
     }
     case Accent::Stream:
@@ -554,15 +554,15 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
         float x = ox + (i ? 110.f : -110.f);
         for (int k = 0; k < 4; k++) {
           float ph = fmodf(ts * 0.9f + k * 0.25f, 1.f);
-          c.fillCircle(x + 4 * sinf(ph * 6 + i), oy + 34 + ph * 150, 6 - ph * 3, kOrange);
+          c.fillCircle(x + 4 * sinf(ph * 6 + i), oy + 34 + ph * 150, 6 - ph * 3, kAccent);
         }
       }
       break;
     case Accent::Drool: {
       float ph = fmodf(ts * 0.35f, 1.f);
       float x = ox - 112, y = oy + 42 + ph * ph * 34;
-      c.line(x, oy + 36, x, y, 3, kYellow);
-      c.fillCircle(x, y, 4.5f, kYellow);
+      c.line(x, oy + 36, x, y, 3, kSoft);
+      c.fillCircle(x, y, 4.5f, kSoft);
       break;
     }
     case Accent::Frost:
@@ -578,7 +578,7 @@ void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float
       for (int i = 0; i < 3; i++) {
         float ph = fmodf(ts * 0.8f - i * 0.18f, 1.f);
         float s = 3.5f + 2.5f * sinf(ph * 6.283f);
-        c.fillCircle(ox - 16 + i * 16, oy - 130, s, kYellow);
+        c.fillCircle(ox - 16 + i * 16, oy - 130, s, kSoft);
       }
       break;
     default: break;

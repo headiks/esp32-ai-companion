@@ -101,7 +101,7 @@ void App::showScreen(ScreenId s) {
 
 void App::goBack() {
   ScreenId s = screenId_;
-  if (s >= ScreenId::TicTacToe && s <= ScreenId::Simon) showScreen(ScreenId::Games);
+  if (s >= ScreenId::TicTacToe && s <= ScreenId::Mole) showScreen(ScreenId::Games);
   else if (s == ScreenId::Face) return;
   else if (s == ScreenId::Menu || s == ScreenId::Settings || s == ScreenId::Notifications) showScreen(ScreenId::Face);
   else showScreen(ScreenId::Menu);
@@ -161,6 +161,7 @@ void App::imuInput(float ax, float ay, float az, float gx, float gy, float gz, f
 }
 
 void App::motion(MotionEvent e) {
+  if (cur()->onMotion(*this, e)) { power.activity(); return; }
   switch (e) {
     case MotionEvent::FaceDown:
       pet.event(PetEvent::FaceDown);
@@ -350,6 +351,25 @@ Emotion App::chooseThought() {
   return Emotion::Neutral;
 }
 
+void App::pushInput(const char* action, int index) {
+  int n = (inputHead_ + 1) % kInputQueue;
+  if (n == inputTail_) return;  // host not reading: dropping beats blocking the game loop
+  inputQ_[inputHead_] = InputEvent{action, index};
+  inputHead_ = n;
+}
+
+int App::pollInput(char* out, int cap) {
+  if (!controller.active) { inputTail_ = inputHead_; return 0; }
+  if (inputTail_ != inputHead_) {
+    InputEvent e = inputQ_[inputTail_];
+    inputTail_ = (inputTail_ + 1) % kInputQueue;
+    return snprintf(out, (size_t)cap, "{\"event\":\"input\",\"action\":\"%s\",\"index\":%d}", e.action, e.index);
+  }
+  if (nowMs_ < tiltDueMs_) return 0;
+  tiltDueMs_ = nowMs_ + 50;
+  return snprintf(out, (size_t)cap, "{\"event\":\"input\",\"ax\":%.2f,\"ay\":%.2f}", (double)hal.ax, (double)hal.ay);
+}
+
 void App::tickIdleLife(float dt) {
   // Slow background mix: the current face always carries a trace of how the creature really feels.
   blendIn_ -= dt;
@@ -502,14 +522,14 @@ void App::drawOverlays(Canvas& c) {
     float inT = smooth01((3800 - toastMs_) / 180), outT = smooth01(toastMs_ / 180);
     float y = lerpf(-74, 46, inT < outT ? inT : outT);
     c.roundRect(kScreenW / 2.f - 140, y, 280, 64, 26, kDark);
-    c.fillCircle(kScreenW / 2.f - 118, y + 32, 6, kOrange);
+    c.fillCircle(kScreenW / 2.f - 118, y + 32, 6, kAccent);
     char fit[64];
     fitText(fit, sizeof(fit), toast_.title, FontSize::S, 216);
     c.text(kScreenW / 2 + 8, (int)y + 6, fit, FontSize::S, kWhite, Align::Center);
     fitText(fit, sizeof(fit), toastText_, FontSize::S, 216);
-    c.text(kScreenW / 2 + 8, (int)y + 32, fit, FontSize::S, kYellow, Align::Center);
+    c.text(kScreenW / 2 + 8, (int)y + 32, fit, FontSize::S, kSoft, Align::Center);
   }
-  if (captionMs_ > 0) c.textWrapped(kScreenW / 2, kScreenH - 110, 330, caption_, FontSize::S, kYellow, Align::Center, 3);
+  if (captionMs_ > 0) c.textWrapped(kScreenW / 2, kScreenH - 110, 330, caption_, FontSize::S, kSoft, Align::Center, 3);
 }
 
 void App::render(Canvas& c) {

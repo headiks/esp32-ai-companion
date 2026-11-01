@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -25,6 +26,7 @@ import java.util.ArrayDeque
 
 enum class LinkState { Disconnected, Scanning, Connecting, Connected, Authenticated }
 data class FoundDevice(val name: String, val address: String)
+data class InputAction(val action: String, val index: Int)
 
 /** Single BLE connection shared by the UI and the notification forwarder. Permissions are checked by MainActivity. */
 @SuppressLint("MissingPermission")
@@ -41,6 +43,9 @@ class BleClient private constructor(private val context: Context) {
     val devices = MutableStateFlow<List<FoundDevice>>(emptyList())
     val log = MutableStateFlow<List<String>>(emptyList())
     val lastError = MutableStateFlow<String?>(null)
+    /** Controller mode: device tilt in g and its gestures. */
+    val tilt = MutableStateFlow(0f to 0f)
+    val actions = MutableSharedFlow<InputAction>(extraBufferCapacity = 32)
 
     private val prefs = context.getSharedPreferences("companion", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
@@ -171,6 +176,11 @@ class BleClient private constructor(private val context: Context) {
         for (line in assembler.feed(data)) {
             try {
                 val o = JSONObject(line)
+                if (o.optString("event") == "input") { // 20 messages a second: never logged
+                    if (o.has("action")) actions.tryEmit(InputAction(o.getString("action"), o.optInt("index")))
+                    else tilt.value = o.optDouble("ax").toFloat() to o.optDouble("ay").toFloat()
+                    continue
+                }
                 if (o.optString("error") == "auth_failed" || o.optString("error") == "auth_required") {
                     lastError.value = "Неверный PIN: посмотрите экран «Об устройстве»"
                 }
@@ -186,6 +196,7 @@ class BleClient private constructor(private val context: Context) {
     }
 
     fun send(cmd: JSONObject) {
+        if (rx == null) return // not connected: an old command must not fire on the next connection
         cmd.put("request_id", nextId++)
         val line = cmd.toString()
         addLog("→ $line")

@@ -436,7 +436,7 @@ def test_notification_queue_keeps_newest(c):
 
 
 # ---- screens and games -----------------------------------------------------------------------
-SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "weather"]
+SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather"]
 
 
 @pytest.mark.parametrize("name", SCREENS)
@@ -850,3 +850,240 @@ def test_digit_change_ripples(c):
     c.run(800)
     end = c.render().copy()
     assert (mid != a).any() and (mid != end).any(), "cells must pass through in-between states"
+
+
+# ---- palette ------------------------------------------------------------------------------------
+def is_saturated_warm(fb):
+    r = ((fb >> 11) & 31) * 8
+    g = ((fb >> 5) & 63) * 4
+    b = (fb & 31) * 8
+    return (r.astype(int) - b.astype(int) > 110) & (r.astype(int) - g.astype(int) > 40)
+
+
+@pytest.mark.parametrize("name", SCREENS)
+def test_no_orange_anywhere(c, name):
+    c.handle_command({"type": "notify", "title": "t", "text": "x"})
+    c.handle_command({"type": "screen", "value": name})
+    c.run(500)
+    assert not is_saturated_warm(c.render()).any(), name
+
+
+@pytest.mark.parametrize("emo", REQUIRED)
+def test_no_orange_in_emotion_accents(c, emo):
+    c.handle_command({"type": "emotion", "value": emo, "hold_ms": 9000})
+    c.run(1600)
+    assert not is_saturated_warm(c.render()).any(), emo
+
+
+# ---- party games --------------------------------------------------------------------------------
+def shake(c):
+    for ax in (2.6, 0.0, 2.6, 0.0, 2.6, 0.0, 2.6, 0.0):
+        c.imu(ax, 0.1, 1.0, 400, 0, 0, 20)
+        c.tick(20)
+
+
+def still(c, ms):
+    for _ in range(ms // 20):
+        c.imu(0, 0, 1, 0, 0, 0, 20)
+        c.tick(20)
+
+
+@pytest.mark.parametrize("name", ["coin", "dice", "magic_ball"])
+def test_chance_games_react_to_shake_not_like_pet(c, name):
+    c.handle_command({"type": "screen", "value": name})
+    still(c, 400)
+    a = c.render().copy()
+    shake(c)
+    still(c, 300)
+    b = c.render().copy()
+    assert (a != b).any(), "shaking must start the toy"
+    assert c.state()["emotion"] not in ("surprised", "confused"), "the game takes the shake, not the pet reaction"
+
+
+def test_coin_finishes_and_counts_either_side():
+    results = set()
+    for seed in range(1, 10):
+        c = Companion(seed=seed)
+        c.handle_command({"type": "screen", "value": "coin"})
+        c.run(300)
+        tap(c)
+        c.run(2000)
+        results.add(c.render()[233 - 16].tobytes())
+        assert c.state()["screen"] == "coin"
+        c.close()
+    assert len(results) >= 2, "both sides must come up"
+
+
+def test_duel_false_start_then_win(c):
+    c.handle_command({"type": "screen", "value": "duel"})
+    c.run(300)
+    tap(c)
+    still(c, 1000)
+    c.imu(2.5, 0, 1, 300, 0, 0, 20)   # moving before the signal
+    c.tick(20)
+    still(c, 200)
+    assert emotion(c) == "smug", "the pet gloats over a false start"
+    tap(c)
+    still(c, 1000)
+    for _ in range(400):              # wait for the white disc of the signal
+        still(c, 20)
+        if (c.render() == 0xFFFF).mean() > 0.4:
+            break
+    else:
+        pytest.fail("no signal")
+    c.imu(2.5, 0, 1, 300, 0, 0, 20)   # swing immediately: faster than the pet can be
+    c.tick(20)
+    still(c, 300)
+    assert emotion(c) == "terrified", "the pet lost the duel"
+
+
+def test_shaker_counts_strokes_not_samples(c):
+    c.handle_command({"type": "screen", "value": "shaker"})
+    c.run(300)
+    tap(c)
+    c.mix(32000)
+    n0 = c.play_count()
+    for _ in range(12):
+        c.imu(2.4, 0, 1, 300, 0, 0, 20); c.tick(20); c.mix(320)
+        c.imu(2.4, 0, 1, 300, 0, 0, 20); c.tick(20); c.mix(320)
+        c.imu(0, 0, 1, 0, 0, 0, 20); c.tick(20); c.mix(320)
+        c.imu(0, 0, 1, 0, 0, 0, 20); c.tick(20); c.mix(320)
+    assert 8 <= c.play_count() - n0 <= 16
+
+
+def test_workout_reps_have_refractory_period(c):
+    c.handle_command({"type": "screen", "value": "workout"})
+    c.run(300); c.mix(32000)
+    n0 = c.play_count()
+    for _ in range(30):      # far too fast to be real repetitions
+        c.imu(1.6, 0, 1, 0, 0, 0, 20); c.tick(20); c.mix(320)
+        c.imu(0, 0, 1, 0, 0, 0, 20); c.tick(20); c.mix(320)
+    assert c.play_count() - n0 <= 5, "shaking must not count as a dozen reps"
+
+
+def test_workout_can_be_finished_and_rewards(tmp_path):
+    c = Companion(storage_dir=tmp_path, seed=1)
+    c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+    c.handle_command({"type": "set_stat", "name": "stress", "value": 50})
+    c.handle_command({"type": "screen", "value": "workout"})
+    c.run(300)
+    for _ in range(4):
+        tap(c); c.run(200)
+    assert c.state()["stress"] <= 36
+    c.close()
+
+
+def test_safe_opens_when_dial_on_secret(c):
+    c.handle_command({"type": "screen", "value": "safe"})
+    c.run(300)
+    # Sweep the whole circle by tilt and tap everywhere: three locks must eventually open, wrong taps are harmless.
+    opened = False
+    for deg in range(0, 1800, 4):
+        import math
+        c.imu(math.sin(math.radians(deg)) * 0.5, -math.cos(math.radians(deg)) * 0.5, 0.8, dt=40)
+        c.tick(40)
+        if deg % 8 == 0:
+            tap(c)
+        if emotion(c) == "starstruck":
+            opened = True
+            break
+    assert opened
+
+
+# ---- controller ---------------------------------------------------------------------------------
+def drain(c):
+    out = []
+    while True:
+        m = c.poll_input()
+        if not m:
+            return out
+        out.append(m)
+
+
+def test_no_input_stream_without_controller(c):
+    c.imu(0.3, 0, 0.9, dt=20); c.tick(60)
+    tap(c)
+    assert drain(c) == []
+
+
+def test_controller_pad_streams_tilt_and_actions(c):
+    r = c.handle_command({"type": "controller", "value": "start", "mode": "pad", "title": "Гонки"})
+    assert r["status"] == "success" and c.state()["screen"] == "controller"
+    c.imu(0.4, -0.2, 0.9, dt=20); c.tick(100)
+    msgs = drain(c)
+    assert any("ax" in m and abs(m["ax"] - 0.4) < 0.01 and abs(m["ay"] + 0.2) < 0.01 for m in msgs)
+    tap(c)
+    actions = [m["action"] for m in drain(c) if "action" in m]
+    assert actions == ["down", "up", "tap"]
+
+
+def test_controller_captures_swipes_and_shake(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "pad"})
+    c.run(100); drain(c)
+    swipe(c, 360, 233, 100, 233)
+    assert "swipe_left" in [m.get("action") for m in drain(c)]
+    assert c.state()["screen"] == "controller", "a swipe belongs to the game"
+    shake(c)
+    assert "shake" in [m.get("action") for m in drain(c)]
+    assert c.state()["emotion"] not in ("surprised", "confused")
+
+
+def test_cards_are_chosen_by_tilt_and_sent_by_tap(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,10h,Kd,2c,7s", "marks": "10000", "title": "Покер"})
+    for _ in range(10):
+        c.imu(-0.5, 0, 0.8, dt=20); c.tick(20)
+    drain(c)
+    tap(c)
+    assert [m["index"] for m in drain(c) if m.get("action") == "tap"] == [0]
+    for _ in range(10):
+        c.imu(0.5, 0, 0.8, dt=20); c.tick(20)
+    msgs = drain(c)
+    assert {"event": "input", "action": "select", "index": 4} in msgs
+    tap(c)
+    assert [m["index"] for m in drain(c) if m.get("action") == "tap"] == [4]
+    for _ in range(10):
+        c.imu(0.0, 0, 1, dt=20); c.tick(20)
+    assert [m["index"] for m in drain(c) if m.get("action") == "select"] == [2]
+
+
+def test_card_choice_does_not_flicker_at_a_boundary(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh,Qd,Jc", "title": ""})
+    c.run(100); drain(c)
+    selects = 0
+    for i in range(200):
+        c.imu(0.0 + (0.012 if i % 2 else -0.012), 0, 1, dt=20)  # hand trembling right on the line between two cards
+        c.tick(20)
+        selects += sum(1 for m in drain(c) if m.get("action") == "select")
+    assert selects <= 1
+
+
+def test_cards_screen_redraws_on_update(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": ""})
+    c.run(300)
+    a = c.render().copy()
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "2d,3c", "title": ""})
+    c.run(300)
+    assert (a != c.render()).any()
+
+
+def test_controller_bad_input_rejected(c):
+    assert c.handle_command({"type": "controller", "value": "start", "mode": "banana"})["status"] == "error"
+    assert c.handle_command({"type": "controller", "value": "nope"})["status"] == "error"
+    assert c.handle_command({"type": "controller", "value": "ping"})["error"] == "not_active"
+    too_many = ",".join(["As"] * 30)
+    assert c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": too_many})["status"] == "success"
+    assert c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": ",,,toolongcardlabel,"})["status"] == "success"
+    c.run(200)
+    c.render()
+
+
+def test_controller_times_out_without_host(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "pad"})
+    c.run(7000)
+    assert c.state()["screen"] == "controller"
+    c.handle_command({"type": "controller", "value": "ping"})
+    c.run(7000)
+    assert c.state()["screen"] == "controller"
+    c.run(2000)
+    assert c.state()["screen"] == "face"
+    assert drain(c) == []

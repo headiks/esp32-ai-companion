@@ -13,6 +13,7 @@ class Screen {
   virtual void onGesture(App&, const GestureEvent&) {}
   virtual bool wantsDoubleTap() const { return false; }
   virtual bool capturesSwipes() const { return false; }  // games use the whole screen
+  virtual bool onMotion(App&, MotionEvent) { return false; }  // true: the game used it, no pet reaction
 };
 
 enum class Icon : uint8_t { Food, Heart, Ball, Moon, Sun, Clock, Bell, Gear, Chip, Game, Info, Timer, Stopwatch, Face, Message, Mail, Phone, Calendar, Warning };
@@ -61,6 +62,7 @@ void drawWeatherIcon(Canvas& c, Weather w, float cx, float cy, float size, float
 const char* weatherTitle(Weather w);
 
 Screen* gameScreen(ScreenId id);
+Screen* partyScreen(ScreenId id);
 
 void drawButton(Canvas& c, const Button& b, const char* label, bool accent = false);
 void drawTitle(Canvas& c, const char* title);

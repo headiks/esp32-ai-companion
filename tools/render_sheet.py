@@ -9,7 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.companion import Companion, SCREEN, emotion_names, rgb565_to_rgb888  # noqa: E402
 
 SCREENS = ["face", "menu", "pet", "weather", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info",
-           "maze", "orbit", "snake", "simon", "tictactoe", "reaction", "guess", "pet_game"]
+           "maze", "orbit", "snake", "simon", "tictactoe", "reaction", "guess", "pet_game",
+           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole"]
 WEATHER = ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"]
 
 
@@ -66,6 +67,13 @@ def main():
             c.handle_command({"type": "screen", "value": s})
             c.run(1000)
             items.append((s, snapshot(c)))
+        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,10h,Kd,2c,7s", "marks": "10010", "title": "Покер"})
+        c.run(600)
+        items.append(("controller cards", snapshot(c)))
+        c.handle_command({"type": "controller", "value": "start", "mode": "pad", "title": "Гонки"})
+        c.imu(0.4, 0.2, 0.9, dt=20)
+        c.run(600)
+        items.append(("controller pad", snapshot(c)))
     sheet(items).save(path)
     c.close()
 

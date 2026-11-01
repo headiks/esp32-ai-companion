@@ -71,6 +71,15 @@ void BluetoothManager::setEnabled(cc::App& app, bool on) {
 void BluetoothManager::send(const char* line) {
   if (!isConnected || !txChar) return;
   size_t len = strlen(line), off = 0;
+  static char framed[180];
+  // Short lines such as controller input go out as a single notification, newline included.
+  if (len + 1 < sizeof(framed) && len + 1 <= (NimBLEDevice::getMTU() > 23 ? NimBLEDevice::getMTU() - 3u : 20u)) {
+    memcpy(framed, line, len);
+    framed[len] = '\n';
+    txChar->setValue((const uint8_t*)framed, len + 1);
+    txChar->notify();
+    return;
+  }
   uint16_t mtu = NimBLEDevice::getMTU();
   size_t chunk = mtu > 23 ? mtu - 3 : 20;
   if (chunk > 180) chunk = 180;

@@ -55,13 +55,13 @@ class MazeScreen : public Screen {
       }
     }
     float pulse = 1 + 0.2f * sinf(a.nowMs() * 0.006f);
-    c.fillCircle(x0 + (n - 0.5f) * sc, y0 + (n - 0.5f) * sc, sc * 0.22f * pulse, kOrange);
+    c.fillCircle(x0 + (n - 0.5f) * sc, y0 + (n - 0.5f) * sc, sc * 0.22f * pulse, kAccent);
     c.fillCircle(x0 + m_.x() * sc, y0 + m_.y() * sc, sc * MazeGame::kBall, kWhite);
     char lv[8];
     snprintf(lv, sizeof(lv), "%d", level_ + 1);
     c.text(kCx, 14, lv, FontSize::S, kGray, Align::Center);
     a.face.drawScaled(c, a.anim, kCx, 428, 0.14f, a.eyeColor());
-    if (m_.won()) c.text(kCx, kCy - 24, "Выход!", FontSize::L, kYellow, Align::Center);
+    if (m_.won()) c.text(kCx, kCy - 24, "Выход!", FontSize::L, kSoft, Align::Center);
   }
  private:
   void start(App& a) {
@@ -134,7 +134,7 @@ class OrbitScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     c.ring(kCx, kCy, kRim + 7, 1, kDark);
     float deg = paddle_ * 57.29578f, hw = halfWidth() * 57.29578f;
-    c.arc(kCx, kCy, kRim + 7, 8, deg - hw, deg + hw, kOrange);
+    c.arc(kCx, kCy, kRim + 7, 8, deg - hw, deg + hw, kAccent);
     a.face.drawScaled(c, a.anim, kCx, kCy - 8, 0.42f, a.eyeColor());
     if (running_) c.fillCircle(kCx + bx_, kCy + by_, kBallR, kWhite);
     num_.draw(c, kCx, kCy + 42, 5, 1, running_ ? kGray : kWhite);
@@ -190,7 +190,7 @@ class SnakeScreen : public Screen {
       for (int x = 0; x < SnakeGame::kSize; x++) {
         if (x % 2 == 0 && y % 2 == 0) c.fillRect(ox() + x * kCell + 8, oy() + y * kCell + 8, 2, 2, kDark);
       }
-    c.fillRect(ox() + g_.foodX() * kCell + 2, oy() + g_.foodY() * kCell + 2, kCell - 4, kCell - 4, kOrange);
+    c.fillRect(ox() + g_.foodX() * kCell + 2, oy() + g_.foodY() * kCell + 2, kCell - 4, kCell - 4, kAccent);
     for (int i = g_.length() - 1; i >= 0; i--) {
       // The tail fades: readable direction without any extra elements.
       uint16_t col = blend565(kDim, kWhite, (uint32_t)(255 - 180 * i / (g_.length() > 1 ? g_.length() - 1 : 1)));
@@ -200,7 +200,7 @@ class SnakeScreen : public Screen {
     snprintf(b, sizeof(b), "%d", g_.score());
     c.text(kCx, 18, b, FontSize::S, kGray, Align::Center);
     if (!started_) c.text(kCx, kCy + 60, "Свайпы — повороты", FontSize::S, kGray, Align::Center);
-    if (!g_.alive()) c.text(kCx, kCy - 24, "Конец", FontSize::L, kYellow, Align::Center);
+    if (!g_.alive()) c.text(kCx, kCy - 24, "Конец", FontSize::L, kSoft, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g == Gesture::Tap) {
@@ -241,11 +241,11 @@ class SimonScreen : public Screen {
     }
   }
   void draw(App& a, Canvas& c) override {
-    static const uint16_t col[4] = {kWhite, kYellow, kOrange, kGray};
+    static const uint16_t col[4] = {kRose, kSoft, kMint, kSky};
     for (int i = 0; i < 4; i++) {
       float a0 = i * 90.f + 5, a1 = a0 + 80;
       bool on = lit_ == i;
-      c.arc(kCx, kCy, 190, on ? 62 : 44, a0, a1, on ? col[i] : blend565(kBlack, col[i], 64));
+      c.arc(kCx, kCy, 190, on ? 62 : 44, a0, a1, on ? col[i] : blend565(kBlack, col[i], 96));
     }
     a.face.drawScaled(c, a.anim, kCx, kCy - 14, 0.42f, a.eyeColor());
     char b[12];

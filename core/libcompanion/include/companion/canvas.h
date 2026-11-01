@@ -10,7 +10,9 @@ constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 constexpr uint16_t kBlack = 0x0000, kWhite = 0xFFFF;
-constexpr uint16_t kOrange = rgb565(255, 140, 0), kYellow = rgb565(255, 205, 40);
+// Interface palette: black, white, greys and muted pastels only.
+constexpr uint16_t kAccent = rgb565(182, 190, 214), kSoft = rgb565(220, 214, 196);
+constexpr uint16_t kRose = rgb565(218, 176, 184), kMint = rgb565(174, 208, 192), kSky = rgb565(170, 198, 220);
 constexpr uint16_t kGray = rgb565(120, 120, 120), kDark = rgb565(38, 38, 38), kDim = rgb565(70, 70, 70);
 
 // Alpha blend, a: 0..255.

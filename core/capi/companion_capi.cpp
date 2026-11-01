@@ -177,6 +177,7 @@ CC_API int cc_snake_selftest(uint32_t seed) {
   if (s.alive()) return 3;
   return 0;
 }
+CC_API int cc_poll_input(void* p, char* out, int cap) { return ((Host*)p)->app.pollInput(out, cap); }
 CC_API int cc_parse_weather(const char* body, float* temp) {
   Weather w;
   return parseOpenMeteo(body, &w, temp) ? (int)w : -1;

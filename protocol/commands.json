@@ -16,9 +16,10 @@
     "get_settings": {},
     "notify": {"title": "string, required", "text": "string", "icon": ["bell", "message", "mail", "phone", "calendar", "warning"], "source": "string", "time": "UTC epoch seconds"},
     "notifications": {"value": ["clear", "read_all", "omitted: counts only"], "response": ["count", "unread"]},
-    "screen": {"value": ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "weather"]},
+    "screen": {"value": ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "controller"]},
     "play_sound": {"value": "pack name, e.g. emotions/happy"},
     "weather": {"value": ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"], "temp": "degrees C"},
+    "controller": {"value": ["start", "stop", "ping"], "mode": ["pad", "cards"], "labels": "cards: up to ten, comma separated, rank then suit letter: As,10h,Kd,2c", "marks": "cards: 1 marks a card, for example 10010", "title": "string", "note": "send ping at least every 8 s, otherwise the device leaves this mode"},
     "set_time": {"epoch": "UTC seconds, required", "tz_minutes": "optional"},
     "wifi_config": {"ssid": "string up to 32 bytes, required", "password": "string up to 64 bytes"},
     "chat": {"text": "string, required; answered on the device with emotion and caption"},
@@ -28,5 +29,5 @@
     "diag": {"response": ["platform", "fps", "free_heap", "free_psram", "touch_ok", "imu_ok", "pmic_ok", "codec_ok", "mic_ok", "ble", "wifi", "ip", "mac", "mic_db", "ax", "ay", "az", "battery_mv", "sounds", "sounds_played"]},
     "factory_reset": {"value": "confirm"}
   },
-  "errors": ["bad_json", "too_long", "no_type", "unknown_type", "bad_value", "auth_required", "auth_failed", "auth_locked", "protocol_mismatch", "no_consent"]
+  "errors": ["bad_json", "too_long", "no_type", "unknown_type", "bad_value", "auth_required", "auth_failed", "auth_locked", "protocol_mismatch", "no_consent", "not_active"]
 }

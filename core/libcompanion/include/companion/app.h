@@ -16,7 +16,8 @@ constexpr int kProtocolVersion = 1;
 
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
-  TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon, Weather, Count
+  TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon,
+  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Weather, Controller, Count
 };
 const char* screenName(ScreenId s);
 bool screenFromName(const char* n, ScreenId* out);
@@ -34,6 +35,16 @@ struct HalInfo {
 };
 
 struct Session { bool authed; const char* source; };
+
+// The phone hosts the game and this device acts as its gamepad.
+struct ControllerCfg {
+  bool active = false, cards = false;
+  int count = 0, selected = 0;
+  char labels[10][6] = {};    // card labels such as "10h": rank then suit letter s, h, d, c
+  char marks[11] = "";        // '1' marks a card, for example one held in poker
+  char title[32] = "";
+  float keepaliveMs = 0;
+};
 
 class Screen;
 
@@ -80,9 +91,19 @@ class App {
   uint16_t eyeColor() const;   // warmer at night, like a real light source
   WeatherState weather;
   float thunderFlashMs = 0;
+  ControllerCfg controller;
+  void pushInput(const char* action, int index);
+  // Next message for the host while the controller runs: actions first, then tilt 20 times a second.
+  int pollInput(char* out, int cap);
   void setAIClient(AIClient* ai) { ai_ = ai ? ai : &offlineAi_; }
   AIClient& aiClient() { return *ai_; }
   float nowMs() const { return nowMs_; }
+  static constexpr int kInputQueue = 16;
+  struct InputEvent { const char* action; int index; };
+  InputEvent inputQ_[kInputQueue];
+  int inputHead_ = 0, inputTail_ = 0;
+  float tiltDueMs_ = 0;
+ public:
   bool netDirty = false;       // Wi-Fi/BLE settings changed: the platform re-applies them
   bool sleepRequested = false; // the platform may turn peripherals down
 

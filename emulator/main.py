@@ -34,17 +34,17 @@ from emulator.ui.panel import Panel  # noqa: E402
 STYLE = """
 QWidget { background: #17171b; color: #e8e8ea; font-size: 12px; }
 QPushButton { background: #2a2a30; border: 1px solid #3a3a42; border-radius: 6px; padding: 5px 6px; }
-QPushButton:hover { border-color: #ff8c00; }
-QPushButton:pressed { background: #ff8c00; color: #000; }
-QPushButton#demo { background: #ff8c00; color: #000; font-weight: bold; padding: 9px; font-size: 14px; }
+QPushButton:hover { border-color: #b6bed6; }
+QPushButton:pressed { background: #b6bed6; color: #000; }
+QPushButton#demo { background: #b6bed6; color: #000; font-weight: bold; padding: 9px; font-size: 14px; }
 QTabBar::tab { background: #222; padding: 6px 9px; }
-QTabBar::tab:selected { background: #ff8c00; color: #000; }
+QTabBar::tab:selected { background: #b6bed6; color: #000; }
 QLineEdit, QComboBox, QDateTimeEdit, QPlainTextEdit { background: #101014; border: 1px solid #3a3a42; border-radius: 4px; padding: 3px; }
 QGroupBox { border: 1px solid #333; border-radius: 6px; margin-top: 12px; padding-top: 6px; }
-QGroupBox::title { subcontrol-origin: margin; left: 8px; color: #ffcd28; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; color: #dcd6c4; }
 QProgressBar { background: #101014; border: 1px solid #333; border-radius: 3px; max-height: 8px; }
-QProgressBar::chunk { background: #ff8c00; }
-QSlider::handle:horizontal { background: #ff8c00; width: 12px; border-radius: 6px; margin: -4px 0; }
+QProgressBar::chunk { background: #b6bed6; }
+QSlider::handle:horizontal { background: #b6bed6; width: 12px; border-radius: 6px; margin: -4px 0; }
 QSlider::groove:horizontal { background: #333; height: 4px; }
 """
 
@@ -74,6 +74,7 @@ class Emulator(QMainWindow):
         self.cycle_queue = []
         self.cycle_wait = 0.0
         self.last_state = {}
+        self.controller_ping = 0
         self.silent = silent
 
         self.touch_queue = []
@@ -134,6 +135,15 @@ class Emulator(QMainWindow):
         self.companion.tick(dt)
         self.screen.show_frame(self.companion.render())
         self._run_scripts(dt)
+        if self.controller_ping > 0:
+            self.controller_ping -= dt
+            if self.controller_ping <= 0:
+                self.controller_ping = 3000
+                self.companion.handle_command({"type": "controller", "value": "ping"})
+        # Controller mode: actions go to the log here; on the device they travel to the phone.
+        while (msg := self.companion.poll_input()):
+            if "action" in msg:
+                self._log(f"контроллер ← {msg['action']} {msg['index']}")
         self.frames += 1
         if now - self.fps_t >= 1:
             self.companion.set_fps(self.frames / (now - self.fps_t))
@@ -201,6 +211,14 @@ class Emulator(QMainWindow):
     def play_all_sounds(self):
         self.cycle_queue = [{"type": "play_sound", "value": s} for s in self.companion.sounds()]
         self.cycle_wait = 0
+
+    def start_controller(self, mode, labels, title):
+        self.send({"type": "controller", "value": "start", "mode": mode, "labels": labels, "title": title})
+        self.controller_ping = 3000  # stands in for the phone keeping the session alive
+
+    def stop_controller(self):
+        self.controller_ping = 0
+        self.send({"type": "controller", "value": "stop"})
 
     def set_time_scale(self, s):
         self.companion.set_time_scale(s)

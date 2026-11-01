@@ -395,6 +395,41 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
     ok();
     return done();
   }
+  if (!strcmp(type, "controller")) {
+    ControllerCfg& cc = controller;
+    if (value && !strcmp(value, "ping")) {
+      if (!cc.active) return errorResp(out, cap, "not_active", "controller is not running", id);
+      cc.keepaliveMs = 8000;
+    } else if (value && !strcmp(value, "stop")) {
+      cc.active = false;
+      if (screenId_ == ScreenId::Controller) showScreen(ScreenId::Face);
+    } else if (value && !strcmp(value, "start")) {
+      const char* mode = j.str("mode");
+      const char* labels = j.str("labels");
+      const char* marks = j.str("marks");
+      const char* title = j.str("title");
+      if (!mode || (strcmp(mode, "pad") && strcmp(mode, "cards"))) return errorResp(out, cap, "bad_value", "mode: pad, cards", id);
+      cc.cards = !strcmp(mode, "cards");
+      cc.count = 0;
+      memset(cc.labels, 0, sizeof(cc.labels));
+      // "As,10h,Kd": up to ten short labels; anything malformed is ignored rather than trusted.
+      for (const char* p = labels; p && *p && cc.count < 10;) {
+        const char* e = strchr(p, ',');
+        size_t n = e ? (size_t)(e - p) : strlen(p);
+        if (n > 0 && n < sizeof(cc.labels[0])) { memcpy(cc.labels[cc.count], p, n); cc.count++; }
+        p = e ? e + 1 : nullptr;
+      }
+      snprintf(cc.marks, sizeof(cc.marks), "%s", marks ? marks : "");
+      snprintf(cc.title, sizeof(cc.title), "%s", title ? title : "");
+      cc.active = true;
+      cc.keepaliveMs = 8000;
+      if (cc.selected >= cc.count) cc.selected = 0;
+      showScreen(ScreenId::Controller);
+    } else return errorResp(out, cap, "bad_value", "value: start, stop, ping", id);
+    ok();
+    w.add("active", cc.active);
+    return done();
+  }
   if (!strcmp(type, "ai_listen")) {
     if (!settings.aiVoiceConsent) return errorResp(out, cap, "no_consent", "enable ai_voice_consent first", id);
     listen();

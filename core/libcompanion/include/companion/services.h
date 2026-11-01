@@ -90,9 +90,10 @@ struct Settings {
   uint16_t reactionBest = 0;
   uint16_t tttWins = 0, tttLosses = 0, tttDraws = 0;
   uint16_t mazeLevel = 0, orbitBest = 0, snakeBest = 0, simonBest = 0;
+  uint16_t balanceBest = 0, duelBest = 0, shakerBest = 0, moleBest = 0, workouts = 0;
   float latitude = 0, longitude = 0;  // for weather; both zero means not set
 };
-constexpr uint16_t kSettingsVersion = 4;
+constexpr uint16_t kSettingsVersion = 5;
 
 // ---- Weather ----------------------------------------------------------------------------------
 struct WeatherState { Weather cond = Weather::Clear; float tempC = 20; bool known = false; uint32_t at = 0; };

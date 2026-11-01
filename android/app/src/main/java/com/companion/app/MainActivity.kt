@@ -37,13 +37,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
-private val Orange = Color(0xFFFF8C00)
-private val Yellow = Color(0xFFFFCD28)
+private val Accent = Color(0xFFB6BED6)
+private val Soft = Color(0xFFDCD6C4)
 private val Bg = Color(0xFF0E0E12)
 private val Card = Color(0xFF1C1C22)
 
 private val ColorsScheme = darkColorScheme(
-    primary = Orange, onPrimary = Color.Black, secondary = Yellow, background = Bg, surface = Card,
+    primary = Accent, onPrimary = Color.Black, secondary = Soft, background = Bg, surface = Card,
     onBackground = Color.White, onSurface = Color.White, surfaceVariant = Card,
 )
 
@@ -77,11 +77,11 @@ private fun App(client: BleClient, openNotificationAccess: () -> Unit) {
     val state by client.state.collectAsState()
     val error by client.lastError.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Связь", "Питомец", "Эмоции", "Настройки", "Журнал")
+    val tabs = listOf("Связь", "Питомец", "Игры", "Эмоции", "Настройки", "Журнал")
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         Header(link, state)
         error?.let {
-            Text(it, color = Orange, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).clickable { client.lastError.value = null })
+            Text(it, color = Accent, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).clickable { client.lastError.value = null })
         }
         ScrollableTabRow(selectedTabIndex = tab, containerColor = Bg, edgePadding = 8.dp) {
             tabs.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
@@ -90,8 +90,9 @@ private fun App(client: BleClient, openNotificationAccess: () -> Unit) {
             when (tab) {
                 0 -> ConnectTab(client, link)
                 1 -> PetTab(client, state)
-                2 -> EmotionTab(client)
-                3 -> SettingsTab(client, state, openNotificationAccess)
+                2 -> GamesTab(client)
+                3 -> EmotionTab(client)
+                4 -> SettingsTab(client, state, openNotificationAccess)
                 else -> LogTab(client)
             }
         }
@@ -124,7 +125,7 @@ private fun Header(link: LinkState, s: PetState) {
         Box(Modifier.size(96.dp, 52.dp).clip(RoundedCornerShape(26.dp)).background(Color.Black).padding(10.dp)) { EyesPreview(Modifier.fillMaxSize()) }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(s.emotion, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Yellow)
+            Text(s.emotion, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Soft)
             val linkText = when (link) {
                 LinkState.Authenticated -> "подключено · ${s.status}"
                 LinkState.Connected -> "подключено, ждём PIN"
@@ -190,10 +191,12 @@ private fun PetTab(c: BleClient, s: PetState) {
                     onValueChange = { dragging = it },
                     onValueChangeFinished = { dragging?.let { v -> c.send(Protocol.command("set_stat", "name" to name, "value" to v.toInt())) }; dragging = null },
                 )
-                Text("$value", Modifier.width(32.dp), color = Yellow, fontSize = 13.sp)
+                Text("$value", Modifier.width(32.dp), color = Soft, fontSize = 13.sp)
             }
         }
-        val games = listOf("Крестики" to "tictactoe", "Реакция" to "reaction", "Угадай" to "guess", "Светлячок" to "pet_game", "Лабиринт" to "maze", "Орбита" to "orbit", "Змейка" to "snake", "Память" to "simon", "Часы" to "digital_clock", "Лицо" to "face")
+        val games = listOf("Лабиринт" to "maze", "Орбита" to "orbit", "Монетка" to "coin", "Кубики" to "dice", "Шар" to "magic_ball", "Дуэль" to "duel",
+            "Шейкер" to "shaker", "Сейф" to "safe", "Баланс" to "balance", "Зарядка" to "workout", "Кротики" to "mole", "Змейка" to "snake",
+            "Память" to "simon", "Крестики" to "tictactoe", "Реакция" to "reaction", "Угадай" to "guess", "Светлячок" to "pet_game", "Часы" to "digital_clock", "Погода" to "weather", "Лицо" to "face")
         Text("На экран устройства", color = Color.Gray, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         games.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
@@ -244,6 +247,27 @@ private fun SettingsTab(c: BleClient, s: PetState, openNotificationAccess: () ->
                 OutlinedButton(onClick = { c.send(Protocol.command("setting", "name" to "personality", "value" to v)) }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(2.dp)) { Text(t, fontSize = 11.sp) }
             }
         }
+        Text("Wi-Fi и координаты для погоды", color = Color.Gray, modifier = Modifier.padding(top = 12.dp))
+        var ssid by remember { mutableStateOf("") }
+        var pass by remember { mutableStateOf("") }
+        var lat by remember { mutableStateOf("") }
+        var lon by remember { mutableStateOf("") }
+        OutlinedTextField(ssid, { ssid = it }, label = { Text("Сеть") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(pass, { pass = it }, label = { Text("Пароль") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+        Button(onClick = { c.send(Protocol.command("wifi_config", "ssid" to ssid, "password" to pass)) }, enabled = ssid.isNotEmpty(), modifier = Modifier.padding(top = 6.dp)) { Text("Сохранить Wi-Fi") }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(lat, { lat = it }, label = { Text("Широта") }, modifier = Modifier.weight(1f), singleLine = true)
+            OutlinedTextField(lon, { lon = it }, label = { Text("Долгота") }, modifier = Modifier.weight(1f), singleLine = true)
+        }
+        Button(onClick = {
+            val a = lat.replace(',', '.').toDoubleOrNull()
+            val b = lon.replace(',', '.').toDoubleOrNull()
+            if (a != null && b != null) {
+                c.send(Protocol.command("setting", "name" to "latitude", "value" to a))
+                c.send(Protocol.command("setting", "name" to "longitude", "value" to b))
+            } else c.lastError.value = "Координаты должны быть числами"
+        }, modifier = Modifier.padding(top = 6.dp)) { Text("Сохранить координаты") }
         Text("Тестовое уведомление", color = Color.Gray, modifier = Modifier.padding(top = 12.dp))
         OutlinedTextField(title, { title = it }, label = { Text("Заголовок") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(body, { body = it }, label = { Text("Текст") }, modifier = Modifier.fillMaxWidth())

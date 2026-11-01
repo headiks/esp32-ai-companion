@@ -23,14 +23,14 @@ SOUNDS = ROOT / "assets" / "sounds"
 STYLE = """
 QWidget { background: #15151a; color: #ececee; font-size: 13px; }
 QPushButton { background: #2a2a31; border: 1px solid #3c3c44; border-radius: 7px; padding: 6px 9px; }
-QPushButton:hover { border-color: #ff8c00; } QPushButton:pressed { background: #ff8c00; color: #000; }
-QTabBar::tab { background: #222; padding: 8px 12px; } QTabBar::tab:selected { background: #ff8c00; color: #000; }
+QPushButton:hover { border-color: #b6bed6; } QPushButton:pressed { background: #b6bed6; color: #000; }
+QTabBar::tab { background: #222; padding: 8px 12px; } QTabBar::tab:selected { background: #b6bed6; color: #000; }
 QLineEdit, QComboBox, QPlainTextEdit, QListWidget { background: #0f0f13; border: 1px solid #3c3c44; border-radius: 5px; padding: 4px; }
 QProgressBar { background: #0f0f13; border: 1px solid #333; border-radius: 4px; height: 14px; text-align: center; }
-QProgressBar::chunk { background: #ff8c00; border-radius: 3px; }
+QProgressBar::chunk { background: #b6bed6; border-radius: 3px; }
 QGroupBox { border: 1px solid #333; border-radius: 7px; margin-top: 12px; padding-top: 8px; }
-QGroupBox::title { subcontrol-origin: margin; left: 8px; color: #ffcd28; }
-QSlider::handle:horizontal { background: #ff8c00; width: 14px; border-radius: 7px; margin: -5px 0; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; color: #dcd6c4; }
+QSlider::handle:horizontal { background: #b6bed6; width: 14px; border-radius: 7px; margin: -5px 0; }
 QSlider::groove:horizontal { background: #333; height: 4px; }
 """
 

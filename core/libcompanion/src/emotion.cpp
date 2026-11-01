@@ -129,6 +129,8 @@ void EmotionEngine::enter(Emotion e) {
 bool EmotionEngine::request(Emotion e, EmotionPriority p, float holdMs) {
   if (e == final_ && p <= prio_) { if (holdMs > hold_) hold_ = holdMs; return true; }
   bool dwellOver = age_ >= minDwellMs(cur_);
+  // An event answers quickly: only mood and idle thoughts must wait the full dwell.
+  if (p >= EmotionPriority::Reaction && age_ >= 300) dwellOver = true;
   if (p != EmotionPriority::Forced) {
     if (p < prio_ && hold_ > 0) return false;           // a stronger timed emotion is playing
     if (!dwellOver && p <= prio_) return false;         // too soon: avoid flicker

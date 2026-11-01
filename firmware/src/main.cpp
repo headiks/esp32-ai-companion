@@ -90,6 +90,12 @@ void loop() {
   display.setBrightness(app->power.panelBrightness());
   display.present(*app);
 
+  static char input[160];
+  while (app->pollInput(input, sizeof(input)) > 0) {
+    if (Serial) Serial.println(input);
+    ble.send(input);
+  }
+
   if (now - eventAt >= 2000) {
     eventAt = now;
     static char out[1200];
