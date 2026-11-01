@@ -124,7 +124,7 @@ void drawIcon(Canvas& c, Icon i, float x, float y, float r, uint16_t col) {
 void drawTitle(Canvas& c, const char* title) { c.text(kCx, 20, title, FontSize::S, kGray, Align::Center); }
 
 void drawButton(Canvas& c, const Button& b, const char* label, bool accent) {
-  // Outlines, not filled discs: one orange key per screen is the only heavy element.
+  // Outlines, not filled discs: one accent key per screen is the only heavy element.
   if (accent) c.fillCircle(b.x, b.y, b.r, kAccent);
   else c.ring(b.x, b.y, b.r - 1, 2, kDim);
   FontSize f = Canvas::textWidth(label, FontSize::M) < (int)(b.r * 1.7f) ? FontSize::M : FontSize::S;
