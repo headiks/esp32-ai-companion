@@ -94,12 +94,15 @@ bool EmotionEngine::request(Emotion e, EmotionPriority p, float holdMs) {
     if (p < prio_ && hold_ > 0) return false;           // a stronger timed emotion is playing
     if (!dwellOver && p <= prio_) return false;         // too soon: avoid flicker
   }
+  // Forced only wins the moment of entry. Afterwards it counts as a normal reaction, otherwise a command
+  // from an app would make the character ignore being shaken for the whole hold time.
+  EmotionPriority held = p == EmotionPriority::Forced ? EmotionPriority::Reaction : p;
   final_ = e;
-  pendingPrio_ = p;
+  pendingPrio_ = held;
   pendingHold_ = holdMs;
   Emotion hop = nextHop(cur_, e);
-  if (hop == e) { prio_ = p; hold_ = holdMs; }
-  else { prio_ = p; hold_ = 0; }
+  prio_ = held;
+  hold_ = hop == e ? holdMs : 0;
   // Forced requests from the test panel may break dwell, never the routing.
   if (dwellOver || p >= EmotionPriority::Strong) enter(hop);
   route_ = hop;
@@ -122,6 +125,7 @@ void EmotionEngine::update(float dtMs) {
     if (hold_ <= 0) { hold_ = 0; prio_ = EmotionPriority::Mood; }
     return;
   }
+  prio_ = EmotionPriority::Mood;  // arrived with no hold time: nothing protects this emotion any more
   if (prio_ <= EmotionPriority::Idle && mood_ != cur_ && age_ >= minDwellMs(cur_)) {
     final_ = mood_;
     pendingPrio_ = EmotionPriority::Mood;

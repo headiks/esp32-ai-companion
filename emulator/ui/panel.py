@@ -2,7 +2,7 @@
 import datetime
 import json
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDateTimeEdit, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
                                QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
@@ -28,6 +28,12 @@ def grid(buttons, cols=3):
     return w
 
 
+def on_slider_set(slider, callback):
+    """Fires on drag end and on a click beside the handle; sliderReleased alone misses the click."""
+    slider.sliderReleased.connect(lambda: callback(slider.value()))
+    slider.actionTriggered.connect(lambda action: None if action == slider.SliderAction.SliderMove else QTimer.singleShot(0, lambda: callback(slider.value())))
+
+
 class Panel(QWidget):
     log_line = Signal(str)
 
@@ -36,7 +42,7 @@ class Panel(QWidget):
         self.ctl = ctl
         self.sliders = {}
         self._updating = False
-        tabs = QTabWidget()
+        tabs = self.tabs = QTabWidget()
         tabs.addTab(self._scroll(self._emotions_tab()), "Эмоции")
         tabs.addTab(self._scroll(self._pet_tab()), "Питомец")
         tabs.addTab(self._scroll(self._sensors_tab()), "Датчики")
@@ -103,7 +109,7 @@ class Panel(QWidget):
         for s in STATS:
             sl = QSlider(Qt.Horizontal)
             sl.setRange(0, 100)
-            sl.sliderReleased.connect(lambda s=s, sl=sl: self.ctl.send({"type": "set_stat", "name": s, "value": sl.value()}))
+            on_slider_set(sl, lambda v, s=s: self.ctl.send({"type": "set_stat", "name": s, "value": v}))
             self.sliders[s] = sl
             form.addRow(STAT_RU[s], sl)
         lay.addLayout(form)
@@ -153,11 +159,11 @@ class Panel(QWidget):
         form.addRow(self.snd_on)
         self.vol = QSlider(Qt.Horizontal)
         self.vol.setRange(0, 100)
-        self.vol.sliderReleased.connect(lambda: self.ctl.send({"type": "setting", "name": "volume", "value": self.vol.value()}))
+        on_slider_set(self.vol, lambda v: self.ctl.send({"type": "setting", "name": "volume", "value": v}))
         form.addRow("Громкость", self.vol)
         self.bright = QSlider(Qt.Horizontal)
         self.bright.setRange(5, 100)
-        self.bright.sliderReleased.connect(lambda: self.ctl.send({"type": "setting", "name": "brightness", "value": self.bright.value()}))
+        on_slider_set(self.bright, lambda v: self.ctl.send({"type": "setting", "name": "brightness", "value": v}))
         form.addRow("Яркость", self.bright)
         self.mic_meter = QProgressBar(textVisible=False)
         self.mic_meter.setRange(0, 100)

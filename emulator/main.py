@@ -64,7 +64,8 @@ class Emulator(QMainWindow):
         self.last_state = {}
         self.silent = silent
 
-        self.screen = ScreenWidget(self.companion.touch)
+        self.touch_queue = []
+        self.screen = ScreenWidget(lambda down, x, y: self.touch_queue.append((down, x, y)))
         self.panel = Panel(self)
         self.panel.setFixedWidth(430)
         root = QWidget()
@@ -98,6 +99,9 @@ class Emulator(QMainWindow):
         ax, ay, az, gx, gy, gz = self.imu.sample()
         self.companion.imu(ax, ay, az, gx, gy, gz, dt)
         self.companion.mic(self.micsim.samples(max(1, int(dt * 16))))
+        # One mouse event per frame: the core samples touch once per tick, a fast click would vanish between ticks.
+        if self.touch_queue:
+            self.companion.touch(*self.touch_queue.pop(0))
         self.companion.tick(dt)
         self.screen.show_frame(self.companion.render())
         self._run_scripts(dt)
@@ -148,7 +152,9 @@ class Emulator(QMainWindow):
             except OSError as e:
                 self._log(f"Ошибка связи: {e}")
             return
-        self._log(f"← {self.local(cmd)}" if cmd["type"] in ("ping", "diag", "get_state") else f"→ {cmd}")
+        resp = self.local(cmd)
+        self._log(f"→ {cmd}\n← {resp.get('status')}")
+        return resp
 
     def toggle_demo(self):
         if self.demo_queue:

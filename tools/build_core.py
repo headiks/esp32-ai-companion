@@ -51,6 +51,14 @@ def build():
         if res.returncode:
             sys.stderr.write(res.stderr[-6000:])
             sys.exit(f"core build failed ({res.returncode})")
+        for old in OUT_DIR.glob("*.old"):  # left by earlier builds; still locked ones are skipped
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        if LIB.exists():
+            # Windows refuses to overwrite a DLL loaded by a running emulator, but allows renaming it.
+            LIB.replace(LIB.with_name(f"{LIB.name}.{os.getpid()}.old"))
         shutil.copy(out, LIB)
     return LIB
 
