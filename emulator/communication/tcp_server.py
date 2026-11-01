@@ -1,6 +1,7 @@
 """Lets the Android app connect to the emulator over the network, speaking the same JSON lines as the device.
 Clients start unauthenticated and need the PIN, because anything on the local network can reach this port."""
 import json
+import os
 import queue
 import socket
 import socketserver
@@ -76,7 +77,8 @@ class TcpServer:
                     client.alive = False
                     owner.clients.remove(client)
 
-        socketserver.ThreadingTCPServer.allow_reuse_address = True
+        # On Windows this flag would let a second server share the port silently, and the phone would reach the wrong one.
+        socketserver.ThreadingTCPServer.allow_reuse_address = os.name != "nt"
         self.server = socketserver.ThreadingTCPServer(("0.0.0.0", port), Handler)
         self.server.daemon_threads = True
         threading.Thread(target=self.server.serve_forever, daemon=True).start()

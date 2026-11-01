@@ -22,6 +22,7 @@ from emulator.main import Emulator  # noqa: E402
 ADB = str(Path(os.environ.get("ANDROID_HOME") or Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk") / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb"))
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp())
 OUT.mkdir(parents=True, exist_ok=True)
+PORT = 7796
 app = QApplication([])
 emu = Emulator(storage=tempfile.mkdtemp(), silent=True)
 emu.show()
@@ -91,6 +92,22 @@ def shot(name):
     emu.grab().save(str(OUT / f"{name}_emulator.png"))
 
 
+def frames_differ(seconds=1.5):
+    """Compares two screenshots: a frozen canvas once passed every check that only read text."""
+    from io import BytesIO
+    from PIL import Image, ImageChops
+    a = Image.open(BytesIO(adb("exec-out", "screencap", "-p", binary=True))).convert("L")
+    pump(seconds)
+    b = Image.open(BytesIO(adb("exec-out", "screencap", "-p", binary=True))).convert("L")
+    w, h = a.size
+    box = (0, h // 3, w, h - 150)  # the game area, without the clock in the status bar
+    return ImageChops.difference(a.crop(box), b.crop(box)).getbbox() is not None
+
+
+def rank_cards_on_screen():
+    return [t for t in texts() if re.fullmatch(r"(10|[2-9JQKA])", t)]
+
+
 def check(name, ok, detail=""):
     results.append((name, bool(ok)))
     print(("OK  " if ok else "FAIL"), name, detail)
@@ -111,7 +128,10 @@ def device_swipe_up():
 
 
 def main():
-    emu.set_android_server(True, 7777)
+    # Its own port, so an emulator window left open on 7777 is not mistaken for this one.
+    emu.set_android_server(True, PORT)
+    if not emu.server:
+        raise SystemExit(f"Port {PORT} is busy")
     adb("shell", "pm", "clear", "com.companion.app")  # a saved PIN from an earlier run would get the new one appended
     adb("shell", "am", "start", "-W", "-n", "com.companion.app/.MainActivity")
     fields = []
@@ -123,10 +143,25 @@ def main():
 
     pin = emu.companion.pin()
     check("connection tab has PIN and address fields", len(fields) >= 2)
-    tap_node(fields[0])
-    pump(0.4)
-    adb("shell", "input", "text", pin)
-    pump(0.4)
+    # A slow virtual phone can drop typed characters, so read the field back before trusting it.
+    for _ in range(4):
+        tap_node(fields[0])
+        pump(0.6)
+        adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+        for _ in range(8):
+            adb("shell", "input", "keyevent", "KEYCODE_DEL")
+        adb("shell", "input", "text", pin)
+        pump(1.2)
+        fields = [n for n in nodes() if n.get("class") == "android.widget.EditText"]
+        typed = fields[0].get("text")
+        if typed == pin:
+            break
+    check("PIN typed correctly", typed == pin, f"field holds {typed!r}")
+    tap_node(fields[1])
+    pump(0.6)
+    adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+    adb("shell", "input", "text", f":{PORT}")
+    pump(1)
     adb("shell", "input", "keyevent", "111")  # the keyboard would hide buttons
     pump(0.5)
     tap(r"^Эмулятор$", 2.5)
@@ -147,6 +182,8 @@ def main():
     tap(r"^Подкидной$", 2)
     shot("3_durak_start")
     check("durak turns the emulator into a card controller", state()["screen"] == "controller")
+    pump(1)
+    check("the phone does not show the player's hand in durak", find("на устройстве") is not None and len(rank_cards_on_screen()) <= 12, str(texts()[:16]))
 
     # Wait for the human's move, then choose by tilt and throw with a swipe, as with the real device.
     deadline = time.time() + 25
@@ -164,7 +201,7 @@ def main():
     device_swipe_up()
     pump(1.5)
     shot("6_durak_played")
-    check("a swipe on the device reaches the game", visible("Ходит игрок", "Подкидывайте", "Этими картами", "сюда не подходят", "Беру"), str(texts()[:14]))
+    check("a swipe on the device reaches the game", visible("Ходит игрок", "Подкидывайте", "Этими картами", "сюда не подходят"), str(texts()[:14]))
 
     tap(r"^Назад$", 1.5)
     check("leaving the game releases the controller", state()["screen"] == "face", state()["screen"])
@@ -175,6 +212,43 @@ def main():
     emu.set_tilt(0, 0)
     shot("7_race")
     check("the race score counts on screen", any(re.fullmatch(r"[1-9]\d*", t) for t in texts()), str(texts()[:14]))
+    check("the race picture moves", frames_differ())
+    emu.set_tilt(-0.4, 0)
+    pump(0.6)
+    check("the race picture follows the tilt", frames_differ(0.6))
+    emu.set_tilt(0, 0)
+    tap(r"^Назад$", 1)
+
+    tap(r"^Арканоид$", 1.5)
+    check("breakout starts the pad", state()["screen"] == "controller")
+    device_tap()
+    pump(0.4)
+    check("the breakout ball flies after a tap on the device", frames_differ(0.6))
+    shot("8_breakout")
+    tap(r"^Назад$", 1)
+
+    tap(r"^Покер$", 1.5)
+    tap(r"^Трое$", 2.5)
+    shot("9_poker_table")
+    check("poker turns the emulator into a card controller", state()["screen"] == "controller")
+    check("the phone hides the two hole cards", visible("Ваши карты на устройстве") and len(rank_cards_on_screen()) == 0, str(texts()[:16]))
+    shot("9b_poker_device")
+    # Check or call from the device until the hand is over; every street must add shared cards to the table.
+    board_seen = set()
+    for _ in range(40):
+        if visible("Вскрытие", "банк ваш", "забирает банк"):
+            break
+        board_seen.add(len(rank_cards_on_screen()))
+        device_tap()
+        pump(1.2)
+    shot("10_poker_showdown")
+    finished = visible("Вскрытие", "банк ваш", "забирает банк")
+    check("the hand played from the device finishes", finished, str(texts()[:24]))
+    check("shared cards appear on the table", max(board_seen | {0}) >= 3 or visible("банк ваш", "забирает банк"), str(sorted(board_seen)))
+    device_tap()
+    pump(2.5)
+    shot("11_poker_next_hand")
+    check("a tap on the device deals the next hand", visible("Префлоп", "Флоп", "Тёрн", "Ривер"), str(texts()[:24]))
     tap(r"^Назад$", 1)
 
     crash = adb("logcat", "-d", "-s", "AndroidRuntime:E")

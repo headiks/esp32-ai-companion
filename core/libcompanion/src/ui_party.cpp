@@ -1,4 +1,5 @@
 // Chance toys, motion games in the spirit of Switch party games, and the phone controller screen.
+#include "companion/games.h"
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
@@ -574,6 +575,108 @@ static void drawCard(Canvas& c, float x, float y, float w, float h, const char* 
   if (marked) c.fillCircle(x, y - h / 2 - 11, 5, kMint);
 }
 
+// ---- Twenty-one, played entirely on the device --------------------------------------------------------------------
+class BlackjackScreen : public Screen {
+ public:
+  void enter(App& a) override { if (g_.phase() == BlackjackGame::Phase::Done) start(a); }
+  void tick(App& a, float dt) override {
+    if (g_.phase() != BlackjackGame::Phase::Dealer) return;
+    stepMs_ -= dt;
+    if (stepMs_ > 0) return;
+    stepMs_ = 650;   // the dealer turns cards one at a time, the pause is the tension
+    if (g_.dealerStep()) { a.sfx.play("games/move"); return; }
+    finish(a);
+  }
+  void draw(App& a, Canvas& c) override {
+    bool hide = g_.phase() == BlackjackGame::Phase::Player;
+    char b[32];
+    // Dealer, upper row: the second card stays face down until the player stands.
+    row(c, 92, 50, 70, g_.dealerCount(), [&](int i, char* out) { label(g_.dealerCard(i), out); }, hide ? 1 : -1);
+    snprintf(b, sizeof(b), hide ? "Дилер" : "Дилер: %d", g_.dealerValue());
+    c.text(kCx, 134, b, FontSize::S, kGray, Align::Center);
+    a.face.drawScaled(c, a.anim, kCx, 178, 0.16f, a.eyeColor());
+    // Player, lower row: bigger, the cards are what matters here.
+    row(c, 260, 62, 88, g_.playerCount(), [&](int i, char* out) { label(g_.playerCard(i), out); }, -1);
+    snprintf(b, sizeof(b), "%d", g_.playerValue());
+    c.text(kCx, 310, b, FontSize::M, g_.playerValue() > 21 ? kRose : kWhite, Align::Center);
+    if (g_.phase() == BlackjackGame::Phase::Done) {
+      c.text(kCx, 346, result(), FontSize::M, g_.outcome() > 0 ? kMint : g_.outcome() < 0 ? kRose : kSoft, Align::Center);
+      snprintf(b, sizeof(b), g_.broke() ? "Фишки кончились · нажми" : "Фишки %d · нажми", g_.chips());
+      c.text(kCx, 382, b, FontSize::S, kGray, Align::Center);
+    } else if (g_.phase() == BlackjackGame::Phase::Player) {
+      drawButton(c, kHit, "Ещё", true);
+      drawButton(c, kStand, "Хватит");
+      snprintf(b, sizeof(b), "%d", g_.chips());
+      c.text(kCx, 28, b, FontSize::S, kDim, Align::Center);
+    } else c.text(kCx, 352, "Дилер ходит…", FontSize::S, kGray, Align::Center);
+  }
+  void onGesture(App& a, const GestureEvent& e) override {
+    if (e.g == Gesture::SwipeUp && g_.phase() == BlackjackGame::Phase::Player) { stand(a); return; }
+    if (e.g != Gesture::Tap) return;
+    switch (g_.phase()) {
+      case BlackjackGame::Phase::Done: start(a); break;
+      case BlackjackGame::Phase::Player:
+        if (kHit.hit(e.x, e.y)) {
+          g_.hit();
+          a.sfx.play("games/move");
+          if (g_.phase() == BlackjackGame::Phase::Done) finish(a);
+          else if (g_.phase() == BlackjackGame::Phase::Dealer) stepMs_ = 500;
+          else if (g_.playerValue() >= 17) a.react(Emotion::Thinking, 900);
+        } else if (kStand.hit(e.x, e.y)) stand(a);
+        break;
+      default: break;
+    }
+  }
+  bool capturesSwipes() const override { return g_.phase() == BlackjackGame::Phase::Player; }
+ private:
+  static constexpr Button kHit{kCx - 62, 366, 44}, kStand{kCx + 62, 366, 44};
+  static void label(const BlackjackGame::Card& k, char* out) {
+    static const char suits[] = "shdc";
+    const char* names[] = {"J", "Q", "K", "A"};
+    if (k.rank <= 10) snprintf(out, 6, "%d%c", k.rank, suits[k.suit]);
+    else snprintf(out, 6, "%s%c", names[k.rank - 11], suits[k.suit]);
+  }
+  template <typename F>
+  static void row(Canvas& c, float y, float w, float h, int n, F labelOf, int hidden) {
+    // Cards close up as the hand grows, so even a long hand stays inside the circle.
+    float step = n > 1 ? (w + 6 < 230.f / (n - 1) ? w + 6 : 230.f / (n - 1)) : 0;
+    float x0 = kCx - step * (n - 1) / 2;
+    char l[6];
+    for (int i = 0; i < n; i++) {
+      labelOf(i, l);
+      if (i == hidden) { c.roundRect(x0 + i * step - w / 2, y - h / 2, w, h, 8, kDim); c.ring(x0 + i * step, y, w * 0.2f, 2, kGray); }
+      else drawCard(c, x0 + i * step, y, w, h, l, true, false);
+    }
+  }
+  const char* result() const {
+    if (g_.natural() && g_.outcome() > 0) return "Двадцать одно!";
+    if (g_.playerValue() > 21) return "Перебор";
+    return g_.outcome() > 0 ? "Победа" : g_.outcome() < 0 ? "Дилер выиграл" : "Ничья";
+  }
+  void start(App& a) {
+    if (g_.chips() < BlackjackGame::kBet) g_.resetChips();
+    g_.deal(a.rng);
+    a.sfx.play("games/go");
+    a.react(Emotion::Focused, 900);
+    stepMs_ = 700;
+  }
+  void stand(App& a) {
+    g_.stand();
+    stepMs_ = 500;
+    a.sfx.play("system/click");
+    a.react(Emotion::Attentive, 1000);
+  }
+  void finish(App& a) {
+    int o = g_.outcome();
+    a.pet.event(o > 0 ? PetEvent::GameLose : o < 0 ? PetEvent::GameWin : PetEvent::Play);  // the pet plays the dealer's side
+    a.sfx.play(o > 0 ? "games/win" : o < 0 ? "games/lose" : "games/draw");
+    a.react(o > 0 ? Emotion::Amazed : o < 0 ? Emotion::Smug : Emotion::Skeptical, 2000, EmotionPriority::Strong);
+  }
+  BlackjackGame g_;
+  float stepMs_ = 0;
+};
+constexpr Button BlackjackScreen::kHit, BlackjackScreen::kStand;
+
 class ControllerScreen : public Screen {
  public:
   void enter(App&) override { sel_ = 0; pos_ = 0; held_ = false; }
@@ -584,7 +687,7 @@ class ControllerScreen : public Screen {
     if (cc.keepaliveMs <= 0) { cc.active = false; a.showScreen(ScreenId::Face); a.react(Emotion::Confused, 1500); return; }
     a.power.activity();
     a.anim.lookOffset(a.hal.ax * 40, a.hal.ay * 26, 200);
-    if (!cc.cards || cc.count <= 0) return;
+    if (!cc.cards || cc.count <= 2) return;  // one or two cards are shown whole: there is nothing to choose between
     if (sel_ >= cc.count) { sel_ = cc.count - 1; pos_ = sel_ + 0.5f; cc.selected = sel_; }
     int was = sel_;
     if (cc.count <= kDirectLimit) {
@@ -638,6 +741,10 @@ class ControllerScreen : public Screen {
   void drawHand(Canvas& c, const ControllerCfg& cc) const {
     if (cc.info[0]) c.text(kCx, 50, cc.info, FontSize::S, kSoft, Align::Center);
     if (cc.count <= 0) { c.text(kCx, kCy - 20, "Нет карт", FontSize::M, kGray, Align::Center); return; }
+    if (cc.count <= 2) {
+      for (int i = 0; i < cc.count; i++) drawCard(c, kCx + (cc.count == 2 ? (i ? 58.f : -58.f) : 0.f), kCy - 24, 104, 146, cc.labels[i], true, false);
+      return;
+    }
     int focus = sel_ < cc.count ? sel_ : cc.count - 1;
     // Neighbours sit below the focused card in fixed slots. Only a window of the hand fits; "+N" tells what is beyond.
     for (int k = -kSide; k <= kSide; k++) {
@@ -789,7 +896,7 @@ class MouseScreen : public Screen {
 Screen* partyScreen(ScreenId id) {
   static CoinScreen coin; static DiceScreen dice; static MagicBallScreen ball; static BalanceScreen balance;
   static DuelScreen duel; static ShakerScreen shaker; static SafeScreen safe; static WorkoutScreen workout;
-  static MoleScreen mole; static ControllerScreen controller; static MouseScreen mouse;
+  static MoleScreen mole; static ControllerScreen controller; static MouseScreen mouse; static BlackjackScreen blackjack;
   switch (id) {
     case ScreenId::Coin: return &coin;
     case ScreenId::Dice: return &dice;
@@ -801,6 +908,7 @@ Screen* partyScreen(ScreenId id) {
     case ScreenId::Workout: return &workout;
     case ScreenId::Mole: return &mole;
     case ScreenId::Mouse: return &mouse;
+    case ScreenId::Blackjack: return &blackjack;
     default: return &controller;
   }
 }

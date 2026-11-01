@@ -436,7 +436,7 @@ def test_notification_queue_keeps_newest(c):
 
 
 # ---- screens and games -----------------------------------------------------------------------
-SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "mouse"]
+SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "mouse"]
 
 
 @pytest.mark.parametrize("name", SCREENS)
@@ -1284,3 +1284,70 @@ def test_two_line_hint_is_fully_visible(c):
     c.run(300)
     second_line = c.render()[233 + 130 + 24:233 + 130 + 48]
     assert (second_line != a[233 + 130 + 24:233 + 130 + 48]).any()
+
+
+# ---- twenty-one on the device ------------------------------------------------------------------
+def test_blackjack_rules():
+    for seed in range(1, 6):
+        assert lib().cc_blackjack_selftest(seed) == 0
+
+
+def test_blackjack_screen_full_round(c):
+    c.handle_command({"type": "screen", "value": "blackjack"})
+    c.run(400); c.mix(32000)
+    before = c.render().copy()
+    n0 = c.play_count()
+    tap(c, 233 + 62, 366)             # stand
+    for _ in range(300):
+        c.tick(20); c.mix(320)
+    assert c.play_count() > n0, "the dealer plays and the result sounds"
+    assert (c.render() != before).any(), "the dealer's hidden card is shown"
+    settled = c.render().copy()
+    tap(c, 233, 233)                  # any tap deals again
+    c.run(300)
+    assert (c.render() != settled).any()
+
+
+def test_blackjack_hit_until_bust_then_new_round(c):
+    c.handle_command({"type": "screen", "value": "blackjack"})
+    c.run(400)
+    for _ in range(14):
+        tap(c, 233 - 62, 366)
+        c.run(100)
+    assert c.state()["screen"] == "blackjack"
+    c.render()
+    tap(c, 233, 233)
+    c.run(800)
+    c.render()
+
+
+def test_blackjack_many_rounds_refill_chips_when_broke(c):
+    c.handle_command({"type": "screen", "value": "blackjack"})
+    c.run(400)
+    for _ in range(40):
+        tap(c, 233 + 62, 366)
+        c.run(3000)
+        c.render()
+        tap(c, 233, 233)
+        c.run(100)
+    assert c.state()["screen"] == "blackjack"
+
+
+def test_blackjack_opens_from_the_games_list(c):
+    c.handle_command({"type": "screen", "value": "games"})
+    c.run(300)
+    tap(c, 233, 233 + 140)   # third row
+    c.run(300)
+    assert c.state()["screen"] == "blackjack"
+
+
+def test_two_cards_are_both_big_and_tilt_selects_nothing(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "Покер"})
+    c.run(300); drain(c)
+    fb = c.render()
+    assert (fb[233 - 24, 233 - 58] == 0xFFFF) and (fb[233 - 24, 233 + 58] == 0xFFFF), "both cards are face up and large"
+    for _ in range(50):
+        c.imu(0.6, 0, 0.8, dt=20); c.tick(20)
+    assert not [m for m in drain(c) if m.get("action") == "select"]
+    tap(c)
+    assert "tap" in [m.get("action") for m in drain(c)]

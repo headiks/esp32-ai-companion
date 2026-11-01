@@ -83,6 +83,80 @@ void MazeGame::nextCellToExit(int* outX, int* outY) const {
   }
 }
 
+int BlackjackGame::value(const Card* h, int n) {
+  int total = 0, aces = 0;
+  for (int i = 0; i < n; i++) {
+    int r = h[i].rank;
+    if (r == 14) { total += 11; aces++; }
+    else total += r > 10 ? 10 : r;
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+void BlackjackGame::deal(Rng& rng) {
+  int n = 0;
+  for (uint8_t s = 0; s < 4; s++)
+    for (uint8_t r = 2; r <= 14; r++) deck_[n++] = Card{r, s};
+  for (int i = 51; i > 0; i--) {
+    int j = rng.range(0, i);
+    Card t = deck_[i]; deck_[i] = deck_[j]; deck_[j] = t;
+  }
+  top_ = 0;
+  chips_ -= kBet;
+  playerN_ = dealerN_ = 0;
+  natural_ = false;
+  player_[playerN_++] = deck_[top_++];
+  dealer_[dealerN_++] = deck_[top_++];
+  player_[playerN_++] = deck_[top_++];
+  dealer_[dealerN_++] = deck_[top_++];
+  phase_ = Phase::Player;
+  if (playerValue() == 21) { natural_ = true; stand(); }
+}
+
+void BlackjackGame::hit() {
+  if (phase_ != Phase::Player || playerN_ >= kMaxHand) return;
+  player_[playerN_++] = deck_[top_++];
+  if (playerValue() > 21) { outcome_ = -1; phase_ = Phase::Done; }
+  else if (playerValue() == 21) stand();
+}
+
+void BlackjackGame::stand() {
+  if (phase_ == Phase::Player) phase_ = Phase::Dealer;
+}
+
+bool BlackjackGame::dealerStep() {
+  if (phase_ != Phase::Dealer) return false;
+  if (dealerValue() < 17 && dealerN_ < kMaxHand) {
+    dealer_[dealerN_++] = deck_[top_++];
+    return true;
+  }
+  settle();
+  return false;
+}
+
+void BlackjackGame::settle() {
+  int p = playerValue(), d = dealerValue();
+  phase_ = Phase::Done;
+  if (d > 21 || p > d) {
+    outcome_ = 1;
+    chips_ += natural_ ? kBet * 5 / 2 : kBet * 2;  // a natural pays 3 to 2
+  } else if (p == d) {
+    outcome_ = 0;
+    chips_ += kBet;
+  } else outcome_ = -1;
+}
+
+void BlackjackGame::setForTest(const Card* p, int pn, const Card* d, int dn) {
+  playerN_ = pn; dealerN_ = dn;
+  for (int i = 0; i < pn; i++) player_[i] = p[i];
+  for (int i = 0; i < dn; i++) dealer_[i] = d[i];
+  // A low, predictable deck for the dealer's and player's next draws.
+  for (int i = 0; i < 52; i++) deck_[i] = Card{2, 0};
+  top_ = 0;
+  phase_ = Phase::Player;
+}
+
 void SnakeGame::reset(Rng& rng) {
   len_ = 3; head_ = 2; dx_ = nextDx_ = 1; dy_ = nextDy_ = 0; alive_ = true;
   for (int i = 0; i < 3; i++) { bodyX_[i] = (uint8_t)(5 + i); bodyY_[i] = kSize / 2; }

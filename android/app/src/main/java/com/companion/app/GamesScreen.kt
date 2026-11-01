@@ -38,8 +38,7 @@ private val Dark = Color(0xFF26262B)
 private enum class BigGame(val title: String, val hint: String) {
     Race("Гонки", "Наклон — руль, удержание экрана — газ"),
     Durak("Дурак", "Наклон — выбор, нажатие — отметить, вверх — на стол, вниз — беру или бито"),
-    Poker("Покер", "Наклон — выбор карты, нажатие — оставить, удержание — сдать"),
-    Blackjack("Двадцать одно", "Нажатие — ещё карта, удержание — хватит"),
+    Poker("Покер", "Техасский холдем. Нажатие — чек или колл, вверх — рейз, вниз — пас"),
     Breakout("Арканоид", "Наклон — ракетка, нажатие — запуск"),
 }
 
@@ -80,7 +79,6 @@ fun GamesTab(client: BleClient) {
                 BigGame.Race -> RaceHost(client)
                 BigGame.Durak -> DurakHost(client)
                 BigGame.Poker -> PokerHost(client)
-                BigGame.Blackjack -> BlackjackHost(client)
                 BigGame.Breakout -> BreakoutHost(client)
             }
         }
@@ -128,6 +126,7 @@ private fun RaceHost(client: BleClient) {
     var frame by remember { mutableIntStateOf(0) }
     var gas by remember { mutableStateOf(false) }
     var touchSteer by remember { mutableFloatStateOf(0f) }
+    var touching by remember { mutableStateOf(false) }
     val tilt by client.tilt.collectAsState()
     LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран газ") }
     LaunchedEffect(round) {
@@ -140,15 +139,16 @@ private fun RaceHost(client: BleClient) {
         }
     }
     FrameLoop { dt ->
-        val steer = if (client.link.value == LinkState.Authenticated) tilt.first * 2.2f else touchSteer
+        val steer = if (touching) touchSteer else tilt.first * 2.2f
         game.step(dt, steer, gas)
         frame++
     }
     frame.hashCode() // read during composition, not only in the canvas: the score and messages must update too
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
-        .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchSteer = 0f; gas = false }) { c, _ -> gas = true; touchSteer = ((c.position.x / size.width) * 2 - 1) * 2f } }
+        .pointerInput(Unit) { detectDragGestures(onDragEnd = { touching = false; gas = false }) { c, _ -> touching = true; gas = true; touchSteer = ((c.position.x / size.width) * 2 - 1) * 2f } }
         .pointerInput(round) { detectTapGestures(onTap = { if (game.over) round++ }) }) {
         Canvas(Modifier.fillMaxSize()) {
+            frame.hashCode() // also read here: Compose skips a draw lambda whose captures did not change, freezing the picture
             val w = size.width
             val h = size.height
             val horizon = h * 0.28f
@@ -201,103 +201,125 @@ private fun PlayingCard(card: Card?, selected: Boolean, held: Boolean, modifier:
         if (card != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(card.rankName, color = if (red) Color(0xFFA8606E) else Color.Black, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                Text("♠♥♦♣"[card.suit].toString(), color = if (red) Color(0xFFA8606E) else Color.Black, fontSize = 22.sp)
+                Text("♠♥♦♣"[card.suit] + "\uFE0E", color = if (red) Color(0xFFA8606E) else Color.Black, fontSize = 22.sp)
             }
         }
         if (held) Box(Modifier.align(Alignment.TopCenter).padding(4.dp).size(8.dp).clip(RoundedCornerShape(4.dp)).background(Mint))
     }
 }
 
+/**
+ * Texas Hold'em. This screen is the table everyone sees: shared cards, pot and seats. The player's two cards live on
+ * the device and stay face down here until the showdown. Without a device they are shown here, or nobody could play.
+ */
 @Composable
 private fun PokerHost(client: BleClient) {
-    val game = remember { PokerGame() }
+    var game by remember { mutableStateOf<HoldemGame?>(null) }
+    val current = game
+    if (current == null) {
+        LaunchedEffect(Unit) { client.startPad("Покер", "выберите число игроков на телефоне") }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("За столом", color = Grey)
+            listOf("Двое" to 2, "Трое" to 3, "Четверо" to 4).forEach { (t, n) ->
+                Button(onClick = { game = HoldemGame(n) }, Modifier.fillMaxWidth()) { Text(t) }
+            }
+        }
+        return
+    }
+    PokerTable(client, current) { game = null }
+}
+
+@Composable
+private fun PokerTable(client: BleClient, game: HoldemGame, onExit: () -> Unit) {
     var version by remember { mutableIntStateOf(0) }
-    var selected by remember { mutableIntStateOf(0) }
+    val link by client.link.collectAsState()
+    val deviceHoldsCards = link == LinkState.Authenticated
+
+    fun callLabel() = if (game.whoActs() == 0 && game.toCall(0) > 0) "Колл ${game.toCall(0)}" else "Чек"
     fun sync() {
         version++
-        client.showCards("Покер", game.player, game.marks(), "наклон выбор · тап оставить\n↑ сдать", "Фишки ${game.chips}")
+        val mine = game.whoActs() == 0
+        val hint = when {
+            game.street == Street.GameOver -> "тап новая игра"
+            game.street == Street.Showdown -> "тап новая раздача"
+            mine && game.canRaise -> "тап ${callLabel().lowercase()}\n↑ рейз · ↓ пас"
+            mine -> "тап ${callLabel().lowercase()} · ↓ пас"
+            else -> "ждём соперников"
+        }
+        val state = when {
+            game.street.ordinal >= Street.Showdown.ordinal -> game.message
+            game.folded[0] -> "Вы спасовали"
+            else -> "${game.street.title} · банк ${game.pot}"
+        }
+        client.showCards("Фишки ${game.stacks[0]}", game.hole[0], "", hint, state)
     }
-    fun primary() { // tap on the device or a phone button: next step of the round
-        when (game.phase) {
-            PokerPhase.Choosing -> game.toggle(selected)
-            PokerPhase.Showdown -> game.deal()
-            PokerPhase.Broke -> {}
+    fun act(action: String) {
+        when (action) {
+            "tap" -> when (game.street) {
+                Street.GameOver -> { onExit(); return }
+                Street.Showdown -> game.newHand()
+                else -> game.call(0)
+            }
+            "swipe_up" -> game.raise(0)
+            "swipe_down" -> game.fold(0)
         }
         sync()
     }
-    LaunchedEffect(Unit) { sync() }
-    LaunchedEffect(Unit) {
-        client.actions.collect { a ->
-            when (a.action) {
-                "select" -> { selected = a.index; version++ }
-                "tap" -> { selected = a.index; primary() }
-                "long_press", "swipe_up" -> { game.draw(); sync() }
-            }
+    LaunchedEffect(game, deviceHoldsCards) { sync() }
+    LaunchedEffect(game) {
+        while (true) { // computers act one at a time, so the table can follow
+            delay(900)
+            if (game.aiAct()) sync()
         }
     }
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        key(version) {
-            Text("Соперник", color = Grey)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                game.opponent.forEach { c -> PlayingCard(if (game.phase == PokerPhase.Choosing) null else c, false, false, Modifier.weight(1f)) }
+    LaunchedEffect(game) { client.actions.collect { a -> if (a.action in listOf("tap", "swipe_up", "swipe_down")) act(a.action) } }
+
+    key(version) {
+        val open = game.street.ordinal >= Street.Showdown.ordinal
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                for (p in 1 until game.players) Seat(game, p, open, game.whoActs() == p)
             }
-            Spacer(Modifier.height(16.dp))
-            Text(game.message, fontSize = 17.sp, textAlign = TextAlign.Center)
-            Text("Фишки: ${game.chips}", color = Sand)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.weight(1f))
+            Text(game.street.title, color = Grey, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                game.player.forEachIndexed { i, c ->
-                    PlayingCard(c, i == selected, game.held[i], Modifier.weight(1f)) { selected = i; primary() }
+                for (i in 0 until 5) PlayingCard(game.board.getOrNull(i), false, false, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("Банк: ${game.pot}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Sand)
+            if (game.message.isNotEmpty()) Text(game.message, fontSize = 16.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.weight(1f))
+            Text(if (deviceHoldsCards && !open) "Ваши карты на устройстве" else "Ваши карты", color = Grey, fontSize = 13.sp)
+            Row(Modifier.width(150.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                game.hole[0].forEach { c -> PlayingCard(if (open || !deviceHoldsCards) c else null, false, false, Modifier.weight(1f)) }
+            }
+            Text("Фишки: ${game.stacks[0]}", color = Grey, fontSize = 13.sp)
+            if (!deviceHoldsCards) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (open) Button(onClick = { act("tap") }) { Text(if (game.street == Street.GameOver) "Выйти" else "Новая раздача") }
+                    else {
+                        val mine = game.whoActs() == 0
+                        Button(onClick = { act("tap") }, enabled = mine) { Text(callLabel()) }
+                        OutlinedButton(onClick = { act("swipe_up") }, enabled = mine && game.canRaise) { Text("Рейз") }
+                        OutlinedButton(onClick = { act("swipe_down") }, enabled = mine) { Text("Пас") }
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { game.draw(); sync() }, enabled = game.phase == PokerPhase.Choosing) { Text("Сдать") }
-            OutlinedButton(onClick = { game.deal(); sync() }, enabled = game.phase == PokerPhase.Showdown) { Text("Новая раздача") }
         }
     }
 }
 
 @Composable
-private fun BlackjackHost(client: BleClient) {
-    val game = remember { BlackjackGame() }
-    var version by remember { mutableIntStateOf(0) }
-    fun sync() {
-        version++
-        client.showCards("Двадцать одно", game.player, "", "тап ещё · ↑ хватит", "Очки ${BlackjackRules.value(game.player)}")
-    }
-    LaunchedEffect(Unit) { sync() }
-    LaunchedEffect(Unit) {
-        client.actions.collect { a ->
-            when (a.action) {
-                "tap" -> { if (game.phase == BlackjackPhase.Player) game.hit() else game.deal(); sync() }
-                "long_press", "swipe_up" -> { game.stand(); sync() }
+private fun Seat(game: HoldemGame, p: Int, open: Boolean, active: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Игрок ${p + 1}", color = if (active) Sky else Grey, fontSize = 13.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+        if (game.inHand(p)) {
+            Row(Modifier.width(76.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                game.hole[p].forEach { c -> PlayingCard(if (open) c else null, false, false, Modifier.weight(1f)) }
             }
-        }
-    }
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        key(version) {
-            val open = game.phase != BlackjackPhase.Player
-            Text(if (open) "Дилер: ${BlackjackRules.value(game.dealer)}" else "Дилер", color = Grey)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                game.dealer.forEachIndexed { i, c -> PlayingCard(if (open || i == 0) c else null, false, false, Modifier.width(60.dp)) }
-            }
-            Spacer(Modifier.height(18.dp))
-            Text(game.message, fontSize = 17.sp, textAlign = TextAlign.Center)
-            Text("Фишки: ${game.chips}", color = Sand)
-            Spacer(Modifier.height(18.dp))
-            Text("Вы: ${BlackjackRules.value(game.player)}")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                game.player.forEach { c -> PlayingCard(c, false, false, Modifier.width(60.dp)) }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { game.hit(); sync() }, enabled = game.phase == BlackjackPhase.Player) { Text("Ещё") }
-            OutlinedButton(onClick = { game.stand(); sync() }, enabled = game.phase == BlackjackPhase.Player) { Text("Хватит") }
-            OutlinedButton(onClick = { game.deal(); sync() }, enabled = game.phase == BlackjackPhase.Done) { Text("Заново") }
-        }
+        } else Text(if (game.hole[p].isEmpty()) "выбыл" else "пас", color = Grey, fontSize = 13.sp)
+        Text("${game.stacks[p]}", color = Sand, fontSize = 13.sp)
     }
 }
 
@@ -325,6 +347,7 @@ private fun BreakoutHost(client: BleClient) {
         .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchX = null }) { c, _ -> touchX = c.position.x / size.width } }
         .pointerInput(round) { detectTapGestures(onTap = { if (game.over || game.won) round++ else game.launch() }) }) {
         Canvas(Modifier.fillMaxSize()) {
+            frame.hashCode() // see the race: without this read the picture freezes
             val w = size.width
             val h = size.height
             val bw = w / game.cols
@@ -381,6 +404,8 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
     val marked = remember { mutableStateListOf<Card>() }
     var message by remember { mutableStateOf("") }
     val hand: List<Card> = game.hands[0]
+    val link by client.link.collectAsState()
+    val deviceHoldsCards = link == LinkState.Authenticated
 
     fun chosen(): List<Card> = marked.filter { it in hand }.ifEmpty { listOfNotNull(hand.getOrNull(focus)) }
     fun role(): String = when {
@@ -432,7 +457,7 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
         if (game.defender == 0) afterMove(game.take(), "") else afterMove(game.pass(0), "Первый ход пропустить нельзя")
     }
 
-    LaunchedEffect(game) { sync() }
+    LaunchedEffect(game, deviceHoldsCards) { sync() }
     LaunchedEffect(game) {
         // Computers move one at a time with a pause, so a person can follow what lands on the table.
         while (true) {
@@ -455,7 +480,7 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
     key(version) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text((1 until game.players).joinToString("  ") { "И${it + 1}: ${game.hands[it].size}" }, color = Grey, fontSize = 13.sp)
+                Text((0 until game.players).joinToString("  ") { "И${it + 1}: ${game.hands[it].size}" }, color = Grey, fontSize = 13.sp)
                 Text("Козырь: ${game.trumpCard.rankName} ${SUIT_NAMES[game.trump]} · колода ${game.deckLeft}", color = Sand, fontSize = 13.sp)
             }
             Spacer(Modifier.height(6.dp))
@@ -475,8 +500,10 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
             Text(role(), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             if (message.isNotEmpty()) Text(message, Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Rose, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            // Hand: cards overlap more as it grows, so any size fits one row without scrolling; chosen ones rise.
-            BoxWithConstraints(Modifier.fillMaxWidth().height(120.dp)) {
+            // Shared table: while the device holds the hand, nobody at the table sees it here. Without a device it is the only way to play.
+            if (deviceHoldsCards) {
+                Text("Ваши карты на устройстве: ${hand.size}", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Grey)
+            } else BoxWithConstraints(Modifier.fillMaxWidth().height(120.dp)) {
                 val cardW = 62.dp
                 val n = hand.size
                 val step = if (n > 1) minOf(cardW + 4.dp, (maxWidth - cardW) / (n - 1)) else 0.dp
@@ -490,9 +517,11 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
                 val mine = game.whoActs() == 0
-                Button(onClick = { play() }, enabled = mine) { Text("На стол") }
-                if (game.transferMode) OutlinedButton(onClick = { transfer() }, enabled = mine && game.defender == 0) { Text("Перевод") }
-                OutlinedButton(onClick = { passOrTake() }, enabled = mine) { Text(if (game.defender == 0) "Беру" else "Бито") }
+                if (!deviceHoldsCards) {
+                    Button(onClick = { play() }, enabled = mine) { Text("На стол") }
+                    if (game.transferMode) OutlinedButton(onClick = { transfer() }, enabled = mine && game.defender == 0) { Text("Перевод") }
+                    OutlinedButton(onClick = { passOrTake() }, enabled = mine) { Text(if (game.defender == 0) "Беру" else "Бито") }
+                }
                 if (game.finished) Button(onClick = onExit) { Text("Заново") }
             }
         }

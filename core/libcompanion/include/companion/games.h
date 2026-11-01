@@ -27,6 +27,40 @@ class MazeGame {
   bool won_ = false;
 };
 
+// Twenty-one. The dealer draws step by step, so the screen can show each card arrive.
+class BlackjackGame {
+ public:
+  struct Card { uint8_t rank, suit; };  // rank 2..14, suit 0..3
+  enum class Phase : uint8_t { Player, Dealer, Done };
+  static constexpr int kMaxHand = 12, kBet = 10;
+  void deal(Rng& rng);
+  void hit();
+  void stand();
+  bool dealerStep();          // one dealer card; false when the dealer has finished and the round is settled
+  static int value(const Card* hand, int n);
+  int playerValue() const { return value(player_, playerN_); }
+  int dealerValue() const { return value(dealer_, dealerN_); }
+  int playerCount() const { return playerN_; }
+  int dealerCount() const { return dealerN_; }
+  const Card& playerCard(int i) const { return player_[i]; }
+  const Card& dealerCard(int i) const { return dealer_[i]; }
+  Phase phase() const { return phase_; }
+  int chips() const { return chips_; }
+  bool broke() const { return chips_ < kBet && phase_ == Phase::Done; }
+  void resetChips() { chips_ = 100; }
+  int outcome() const { return outcome_; }  // 1 win, 0 push, -1 loss; valid when Done
+  bool natural() const { return natural_; }
+  void setForTest(const Card* p, int pn, const Card* d, int dn);
+ private:
+  void settle();
+  Card deck_[52];
+  int top_ = 0;
+  Card player_[kMaxHand], dealer_[kMaxHand];
+  int playerN_ = 0, dealerN_ = 0, chips_ = 100, outcome_ = 0;
+  bool natural_ = false;
+  Phase phase_ = Phase::Done;
+};
+
 class SnakeGame {
  public:
   static constexpr int kSize = 15, kMaxLen = kSize * kSize;

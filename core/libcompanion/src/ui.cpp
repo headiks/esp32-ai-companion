@@ -10,7 +10,7 @@ static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 static const char* const kScreenNames[(int)ScreenId::Count] = {
     "face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications",
     "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game",
-    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "controller", "mouse"};
+    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "controller", "mouse"};
 
 const char* screenName(ScreenId s) { return kScreenNames[(int)s]; }
 bool screenFromName(const char* n, ScreenId* out) {
@@ -818,7 +818,7 @@ class InfoScreen : public Screen {
 
 // ---- games -----------------------------------------------------------------------------------
 struct GameItem { const char* title; ScreenId id; };
-static const GameItem kGames[] = {{"Лабиринт", ScreenId::Maze}, {"Орбита", ScreenId::Orbit}, {"Монетка", ScreenId::Coin}, {"Кубики", ScreenId::Dice},
+static const GameItem kGames[] = {{"Лабиринт", ScreenId::Maze}, {"Орбита", ScreenId::Orbit}, {"Двадцать одно", ScreenId::Blackjack}, {"Монетка", ScreenId::Coin}, {"Кубики", ScreenId::Dice},
                                   {"Шар предсказаний", ScreenId::MagicBall}, {"Дуэль", ScreenId::Duel}, {"Шейкер", ScreenId::Shaker}, {"Сейф", ScreenId::Safe},
                                   {"Баланс", ScreenId::Balance}, {"Зарядка", ScreenId::Workout}, {"Кротики", ScreenId::Mole}, {"Змейка", ScreenId::Snake},
                                   {"Память", ScreenId::Simon}, {"Крестики-нолики", ScreenId::TicTacToe}, {"Реакция", ScreenId::Reaction},
@@ -1177,7 +1177,7 @@ Screen* screenInstance(ScreenId id) {
                                        gameScreen(ScreenId::Maze), gameScreen(ScreenId::Orbit), gameScreen(ScreenId::Snake), gameScreen(ScreenId::Simon),
                                        partyScreen(ScreenId::Coin), partyScreen(ScreenId::Dice), partyScreen(ScreenId::MagicBall), partyScreen(ScreenId::Balance),
                                        partyScreen(ScreenId::Duel), partyScreen(ScreenId::Shaker), partyScreen(ScreenId::Safe), partyScreen(ScreenId::Workout),
-                                       partyScreen(ScreenId::Mole), &weather, partyScreen(ScreenId::Controller), partyScreen(ScreenId::Mouse)};
+                                       partyScreen(ScreenId::Mole), partyScreen(ScreenId::Blackjack), &weather, partyScreen(ScreenId::Controller), partyScreen(ScreenId::Mouse)};
   return all[(int)id];
 }
 

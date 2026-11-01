@@ -17,7 +17,7 @@ constexpr int kProtocolVersion = 1;
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
   TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon,
-  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Weather, Controller, Mouse, Count
+  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Blackjack, Weather, Controller, Mouse, Count
 };
 const char* screenName(ScreenId s);
 bool screenFromName(const char* n, ScreenId* out);

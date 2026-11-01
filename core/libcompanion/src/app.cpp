@@ -101,7 +101,7 @@ void App::showScreen(ScreenId s) {
 
 void App::goBack() {
   ScreenId s = screenId_;
-  if (s >= ScreenId::TicTacToe && s <= ScreenId::Mole) showScreen(ScreenId::Games);
+  if (s >= ScreenId::TicTacToe && s <= ScreenId::Blackjack) showScreen(ScreenId::Games);
   else if (s == ScreenId::Face) return;
   else if (s == ScreenId::Menu || s == ScreenId::Settings || s == ScreenId::Notifications) showScreen(ScreenId::Face);
   else showScreen(ScreenId::Menu);

@@ -177,6 +177,39 @@ CC_API int cc_snake_selftest(uint32_t seed) {
   if (s.alive()) return 3;
   return 0;
 }
+// Returns 0 when all rules hold, otherwise the number of the failed check.
+CC_API int cc_blackjack_selftest(uint32_t seed) {
+  using C = BlackjackGame::Card;
+  static const C ace{14, 0}, king{13, 0}, five{5, 0}, nine{9, 1}, seven{7, 2}, ten{10, 3};
+  C aces[2] = {ace, ace}, soft[3] = {ace, five, five}, hard[3] = {ace, five, seven}, bust[3] = {king, king, king};
+  if (BlackjackGame::value(aces, 2) != 12) return 1;
+  if (BlackjackGame::value(soft, 3) != 21) return 2;
+  if (BlackjackGame::value(hard, 3) != 13) return 3;
+  if (BlackjackGame::value(bust, 3) != 30) return 4;
+  Rng rng(seed);
+  for (int round = 0; round < 500; round++) {
+    static BlackjackGame g;
+    g.resetChips();
+    g.deal(rng);
+    if (g.chips() < 90) return 5;
+    if (g.playerCount() != 2 && !g.natural()) return 6;
+    int want = round % 4;
+    while (g.phase() == BlackjackGame::Phase::Player && g.playerValue() < 12 + want * 3) g.hit();
+    g.stand();
+    int guard = 0;
+    while (g.dealerStep()) if (++guard > 12) return 7;
+    if (g.phase() != BlackjackGame::Phase::Done) { if (g.playerValue() <= 21) return 8; }
+    if (g.playerValue() <= 21 && g.dealerValue() < 17) return 9;
+    int expected = g.playerValue() > 21 || (g.dealerValue() <= 21 && g.dealerValue() > g.playerValue()) ? -1
+                 : (g.dealerValue() > 21 || g.playerValue() > g.dealerValue()) ? 1 : 0;
+    if (g.outcome() != expected) return 10;
+    int chips = g.chips();
+    if (expected == -1 && chips != 90) return 11;
+    if (expected == 0 && chips != 100) return 12;
+    if (expected == 1 && chips != (g.natural() ? 115 : 110)) return 13;
+  }
+  return 0;
+}
 CC_API int cc_poll_mouse(void* p, int* out) {
   App::MouseReport r;
   if (!((Host*)p)->app.pollMouse(&r)) return 0;

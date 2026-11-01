@@ -61,118 +61,224 @@ object Poker {
         return s.toInt()
     }
 
-    /** Which cards the computer keeps: anything paired or better, otherwise its two highest. */
-    fun aiHolds(hand: List<Card>): List<Boolean> {
-        if (category(hand) >= 4) return List(5) { true }
-        val counts = hand.groupingBy { it.rank }.eachCount()
-        if (counts.values.any { it >= 2 }) return hand.map { counts[it.rank]!! >= 2 }
-        val top = hand.map { it.rank }.sortedDescending().take(2).toMutableList()
-        return hand.map { c -> top.remove(c.rank) }
+    /** The strongest five of the hole cards and the board. */
+    fun best(cards: List<Card>): Long {
+        require(cards.size in 5..7)
+        var top = Long.MIN_VALUE
+        for (skipA in cards.indices) for (skipB in skipA until cards.size) {
+            val five = cards.filterIndexed { i, _ -> cards.size == 5 || (cards.size == 6 && i != skipA) || (cards.size == 7 && i != skipA && i != skipB && skipA != skipB) }
+            if (five.size == 5) top = max(top, score(five))
+        }
+        return top
+    }
+
+    fun categoryOf(score: Long): Int {
+        var s = score
+        repeat(5) { s /= 15 }
+        return s.toInt()
     }
 }
 
-enum class PokerPhase { Choosing, Showdown, Broke }
+enum class Street(val title: String) {
+    Preflop("Префлоп"), Flop("Флоп"), Turn("Тёрн"), River("Ривер"), Showdown("Вскрытие"), GameOver("Игра окончена")
+}
 
-class PokerGame(private val rng: Random = Random.Default, startChips: Int = 100) {
-    var chips = startChips; private set
-    var player = emptyList<Card>(); private set
-    var opponent = emptyList<Card>(); private set
-    val held = BooleanArray(5)
-    var phase = PokerPhase.Choosing; private set
+/** Fixed-limit Texas Hold'em: two private cards each, five shared on the table. Player 0 is the human. */
+class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default, startChips: Int = 200) {
+    val stacks = IntArray(players) { startChips }
+    val hole = List(players) { mutableListOf<Card>() }
+    val board = mutableListOf<Card>()
+    val folded = BooleanArray(players)
+    val streetBet = IntArray(players)
+    val total = IntArray(players)
+    var street = Street.Showdown; private set
     var message = ""; private set
+    var dealer = -1; private set
+    var current = 0; private set
     private var deck = Deck(rng)
-    private val ante = 10
+    private val needsAct = mutableSetOf<Int>()
+    private var raises = 0
+    val pot get() = total.sum()
+    val smallBlind = 5
+    private val betSize get() = if (street == Street.Turn || street == Street.River) 20 else 10
 
-    init { deal() }
+    init { newHand() }
 
-    fun deal() {
-        if (chips < ante) { phase = PokerPhase.Broke; message = "Фишки кончились"; return }
+    fun inHand(p: Int) = hole[p].isNotEmpty() && !folded[p]
+    private fun canAct(p: Int) = inHand(p) && stacks[p] > 0
+    fun toCall(p: Int) = (streetBet.maxOrNull() ?: 0) - streetBet[p]
+    fun whoActs(): Int? = if (street == Street.Showdown || street == Street.GameOver) null else current
+    val canRaise get() = raises < 3 && stacks[current] > toCall(current)
+
+    private fun pay(p: Int, amount: Int) {
+        val paid = min(amount, stacks[p])
+        stacks[p] -= paid
+        streetBet[p] += paid
+        total[p] += paid
+    }
+
+    private fun next(from: Int, pick: (Int) -> Boolean): Int {
+        var p = from
+        repeat(players) {
+            p = (p + 1) % players
+            if (pick(p)) return p
+        }
+        return from
+    }
+
+    fun newHand() {
+        if (stacks[0] <= 0 || stacks.count { it > 0 } <= 1) {
+            street = Street.GameOver
+            message = if (stacks[0] > 0) "Вы забрали все фишки!" else "Фишки кончились"
+            return
+        }
         deck = Deck(rng)
-        chips -= ante
-        player = List(5) { deck.draw() }
-        opponent = List(5) { deck.draw() }
-        held.fill(false)
-        phase = PokerPhase.Choosing
-        message = "Выберите карты, которые оставить"
+        board.clear()
+        folded.fill(false)
+        streetBet.fill(0)
+        total.fill(0)
+        hole.forEach { it.clear() }
+        (0 until players).filter { stacks[it] > 0 }.forEach { p -> hole[p].add(deck.draw()); hole[p].add(deck.draw()) }
+        dealer = next(dealer.coerceAtLeast(0)) { stacks[it] > 0 }
+        street = Street.Preflop
+        message = ""
+        raises = 0
+        // Heads-up the dealer posts the small blind, as in the standard rules.
+        val active = (0 until players).count { hole[it].isNotEmpty() }
+        val sb = if (active == 2) dealer else next(dealer) { hole[it].isNotEmpty() }
+        val bb = next(sb) { hole[it].isNotEmpty() }
+        pay(sb, smallBlind)
+        pay(bb, smallBlind * 2)
+        needsAct.clear()
+        needsAct.addAll((0 until players).filter { canAct(it) })
+        current = next(bb) { it in needsAct }
+        if (needsAct.size <= 1 && toCall(needsAct.firstOrNull() ?: 0) <= 0) runOut()
     }
 
-    fun toggle(i: Int) {
-        if (phase == PokerPhase.Choosing && i in 0..4) held[i] = !held[i]
+    /** Check when nothing is owed, otherwise call. */
+    fun call(p: Int): Boolean {
+        if (whoActs() != p) return false
+        pay(p, toCall(p))
+        needsAct.remove(p)
+        advance()
+        return true
     }
 
-    fun draw() {
-        if (phase != PokerPhase.Choosing) return
-        player = player.mapIndexed { i, c -> if (held[i]) c else deck.draw() }
-        val keep = Poker.aiHolds(opponent)
-        opponent = opponent.mapIndexed { i, c -> if (keep[i]) c else deck.draw() }
-        val a = Poker.score(player)
-        val b = Poker.score(opponent)
-        val name = Poker.NAMES[Poker.category(player)]
+    fun raise(p: Int): Boolean {
+        if (whoActs() != p || !canRaise) return false
+        pay(p, toCall(p) + betSize)
+        raises++
+        needsAct.clear()
+        needsAct.addAll((0 until players).filter { it != p && canAct(it) })
+        advance()
+        return true
+    }
+
+    fun fold(p: Int): Boolean {
+        if (whoActs() != p) return false
+        folded[p] = true
+        needsAct.remove(p)
+        advance()
+        return true
+    }
+
+    private fun advance() {
+        val left = (0 until players).filter { inHand(it) }
+        if (left.size == 1) {
+            award(left)
+            return
+        }
+        if (needsAct.isNotEmpty()) {
+            current = next(current) { it in needsAct }
+            return
+        }
+        nextStreet()
+    }
+
+    private fun nextStreet() {
+        streetBet.fill(0)
+        raises = 0
+        when (street) {
+            Street.Preflop -> { repeat(3) { board.add(deck.draw()) }; street = Street.Flop }
+            Street.Flop -> { board.add(deck.draw()); street = Street.Turn }
+            Street.Turn -> { board.add(deck.draw()); street = Street.River }
+            else -> { showdown(); return }
+        }
+        needsAct.clear()
+        needsAct.addAll((0 until players).filter { canAct(it) })
+        if (needsAct.size <= 1) runOut() // everyone else is all-in: nobody left to bet against
+        else current = next(dealer) { it in needsAct }
+    }
+
+    private fun runOut() {
+        needsAct.clear()
+        while (board.size < 5) board.add(deck.draw())
+        showdown()
+    }
+
+    private fun showdown() {
+        val scores = (0 until players).map { p -> if (inHand(p)) Poker.best(hole[p] + board) else null }
+        val won = distribute(total, scores)
+        for (p in 0 until players) stacks[p] += won[p]
+        street = Street.Showdown
+        val winners = (0 until players).filter { won[it] > total[it] || (won[it] > 0 && won[it] == total[it] && scores[it] != null) }
+        val best = scores.filterNotNull().maxOrNull()!!
         message = when {
-            a > b -> { chips += 2 * ante + Poker.category(player) * ante; "Победа: $name" }
-            a == b -> { chips += ante; "Ничья" }
-            else -> "Проигрыш: $name против ${Poker.NAMES[Poker.category(opponent)]}"
-        }
-        phase = PokerPhase.Showdown
-    }
-
-    /** Marks string for the device: '1' for held cards. */
-    fun marks(): String = held.joinToString("") { if (it) "1" else "0" }
-}
-
-object BlackjackRules {
-    fun value(hand: List<Card>): Int {
-        var total = hand.sumOf { if (it.rank == 14) 11 else min(it.rank, 10).toInt() }
-        var aces = hand.count { it.rank == 14 }
-        while (total > 21 && aces > 0) { total -= 10; aces-- }
-        return total
-    }
-}
-
-enum class BlackjackPhase { Player, Done, Broke }
-
-class BlackjackGame(private val rng: Random = Random.Default, startChips: Int = 100) {
-    var chips = startChips; private set
-    var player = emptyList<Card>(); private set
-    var dealer = emptyList<Card>(); private set
-    var phase = BlackjackPhase.Player; private set
-    var message = ""; private set
-    private var deck = Deck(rng)
-    private val bet = 10
-
-    init { deal() }
-
-    fun deal() {
-        if (chips < bet) { phase = BlackjackPhase.Broke; message = "Фишки кончились"; return }
-        deck = Deck(rng)
-        chips -= bet
-        player = listOf(deck.draw(), deck.draw())
-        dealer = listOf(deck.draw(), deck.draw())
-        phase = BlackjackPhase.Player
-        message = "Ещё или хватит?"
-        if (BlackjackRules.value(player) == 21) stand()
-    }
-
-    fun hit() {
-        if (phase != BlackjackPhase.Player) return
-        player = player + deck.draw()
-        when {
-            BlackjackRules.value(player) > 21 -> { phase = BlackjackPhase.Done; message = "Перебор" }
-            BlackjackRules.value(player) == 21 -> stand()
+            0 in winners && winners.size == 1 -> "Вы выиграли: ${Poker.NAMES[Poker.categoryOf(best)]}"
+            0 in winners -> "Банк поделён: ${Poker.NAMES[Poker.categoryOf(best)]}"
+            else -> "Игрок ${winners.firstOrNull()?.plus(1) ?: 2} выиграл: ${Poker.NAMES[Poker.categoryOf(best)]}"
         }
     }
 
-    fun stand() {
-        if (phase != BlackjackPhase.Player) return
-        while (BlackjackRules.value(dealer) < 17) dealer = dealer + deck.draw()
-        val p = BlackjackRules.value(player)
-        val d = BlackjackRules.value(dealer)
-        message = when {
-            d > 21 || p > d -> { chips += 2 * bet; "Победа: $p против $d" }
-            p == d -> { chips += bet; "Ничья: $p" }
-            else -> "Проигрыш: $p против $d"
+    private fun award(left: List<Int>) {
+        stacks[left[0]] += pot
+        street = Street.Showdown
+        message = if (left[0] == 0) "Все спасовали, банк ваш" else "Игрок ${left[0] + 1} забирает банк"
+    }
+
+    /** One decision for the current player by simple rules, with chance so it cannot be read. */
+    fun autoPlay(): Boolean {
+        val p = whoActs() ?: return false
+        val strength = if (board.isEmpty()) {
+            val (a, b) = hole[p]
+            when {
+                a.rank == b.rank -> 0.85f
+                min(a.rank, b.rank) >= 11 -> 0.7f
+                a.suit == b.suit || abs(a.rank - b.rank) == 1 -> 0.5f
+                max(a.rank, b.rank) >= 12 -> 0.4f
+                else -> 0.25f
+            }
+        } else when (Poker.categoryOf(Poker.best(hole[p] + board))) {
+            0 -> 0.25f
+            1 -> 0.6f
+            else -> 0.9f
         }
-        phase = BlackjackPhase.Done
+        val roll = rng.nextFloat()
+        return when {
+            toCall(p) > 0 && strength < 0.35f && roll < 0.7f -> fold(p)
+            strength > 0.7f && roll < 0.45f && canRaise -> raise(p)
+            else -> call(p)
+        }
+    }
+
+    fun aiAct(): Boolean = whoActs().let { it != null && it != 0 } && autoPlay()
+
+    companion object {
+        /** Shares the pot in layers, so someone all-in for less can only win what everybody matched. */
+        fun distribute(total: IntArray, scores: List<Long?>): IntArray {
+            val won = IntArray(total.size)
+            var prev = 0
+            for (level in total.filter { it > 0 }.toSortedSet()) {
+                val layer = (level - prev) * total.count { it >= level }
+                prev = level
+                var eligible = total.indices.filter { total[it] >= level && scores[it] != null }
+                if (eligible.isEmpty()) eligible = total.indices.filter { scores[it] != null } // only folded money at this height
+                val top = eligible.maxOf { scores[it]!! }
+                val winners = eligible.filter { scores[it] == top }
+                winners.forEachIndexed { i, w -> won[w] += layer / winners.size + if (i < layer % winners.size) 1 else 0 }
+            }
+            return won
+        }
     }
 }
 

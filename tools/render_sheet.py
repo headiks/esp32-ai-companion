@@ -10,7 +10,7 @@ from core.companion import Companion, SCREEN, emotion_names, rgb565_to_rgb888  #
 
 SCREENS = ["face", "menu", "pet", "weather", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info",
            "maze", "orbit", "snake", "simon", "tictactoe", "reaction", "guess", "pet_game",
-           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "mouse"]
+           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "mouse"]
 WEATHER = ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"]
 
 

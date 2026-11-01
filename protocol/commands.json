@@ -16,7 +16,7 @@
     "get_settings": {},
     "notify": {"title": "string, required", "text": "string", "icon": ["bell", "message", "mail", "phone", "calendar", "warning"], "source": "string", "time": "UTC epoch seconds"},
     "notifications": {"value": ["clear", "read_all", "omitted: counts only"], "response": ["count", "unread"]},
-    "screen": {"value": ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "controller", "mouse"]},
+    "screen": {"value": ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "controller", "mouse"]},
     "play_sound": {"value": "pack name, e.g. emotions/happy"},
     "weather": {"value": ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"], "temp": "degrees C"},
     "controller": {"value": ["start", "stop", "ping"], "mode": ["pad", "cards"], "labels": "cards: up to 36, comma separated, rank then suit letter: As,10h,Kd,2c", "marks": "cards: 1 marks a card, for example 10010", "title": "string", "info": "short state line", "hint": "controls summary shown at the bottom", "target": "card label to beat", "note": "send ping at least every 8 s, otherwise the device leaves this mode"},

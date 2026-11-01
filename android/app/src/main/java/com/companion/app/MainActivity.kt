@@ -158,7 +158,11 @@ private fun ConnectTab(c: BleClient, link: LinkState) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(host, { host = it }, label = { Text("Адрес ПК") }, singleLine = true, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { c.connectTcp(host.trim(), 7777) }, enabled = host.isNotBlank()) { Text("Эмулятор") }
+            OutlinedButton(onClick = {
+                // "адрес" or "адрес:порт"
+                val h = host.trim()
+                c.connectTcp(h.substringBefore(':'), h.substringAfter(':', "").toIntOrNull() ?: 7777)
+            }, enabled = host.isNotBlank()) { Text("Эмулятор") }
         }
         Spacer(Modifier.height(10.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -202,7 +206,7 @@ private fun PetTab(c: BleClient, s: PetState) {
                 Text("$value", Modifier.width(32.dp), color = Soft, fontSize = 13.sp)
             }
         }
-        val games = listOf("Лабиринт" to "maze", "Орбита" to "orbit", "Монетка" to "coin", "Кубики" to "dice", "Шар" to "magic_ball", "Дуэль" to "duel",
+        val games = listOf("21" to "blackjack", "Лабиринт" to "maze", "Орбита" to "orbit", "Монетка" to "coin", "Кубики" to "dice", "Шар" to "magic_ball", "Дуэль" to "duel",
             "Шейкер" to "shaker", "Сейф" to "safe", "Баланс" to "balance", "Зарядка" to "workout", "Кротики" to "mole", "Змейка" to "snake",
             "Память" to "simon", "Крестики" to "tictactoe", "Реакция" to "reaction", "Угадай" to "guess", "Светлячок" to "pet_game", "Часы" to "digital_clock", "Погода" to "weather", "Лицо" to "face")
         Text("На экран устройства", color = Color.Gray, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))

@@ -43,53 +43,97 @@ class GameLogicTest {
     private fun assertTrue(msg: String, c: Boolean) = org.junit.Assert.assertTrue(msg, c)
     private fun assertTrue(c: Boolean, msg: String) = org.junit.Assert.assertTrue(msg, c)
 
-    @Test fun aiKeepsPairsAndHighCards() {
-        assertEquals(listOf(true, true, false, false, false), Poker.aiHolds(cards("9s 9h 2d 5c Ks")))
-        assertEquals(2, Poker.aiHolds(cards("2s 5h 9d Jc Ks")).count { it })
-        assertTrue(Poker.aiHolds(cards("5s 6s 7s 8s 9s")).all { it })
+    @Test fun bestFiveOfSeven() {
+        assertEquals(5, Poker.categoryOf(Poker.best(cards("2s 5s 9s Js Ks 3h 4d"))))
+        assertEquals(6, Poker.categoryOf(Poker.best(cards("9s 9h 9d 2c 2s 7h Kd"))))
+        assertEquals(4, Poker.categoryOf(Poker.best(cards("Ah 2d 3c 4s 5h Kd Qc"))))
+        assertEquals(Poker.score(cards("Ks Kh Ad Qc Js")), Poker.best(cards("Ks Kh Ad Qc Js 2h 3d")))
     }
 
-    @Test fun pokerRoundKeepsHeldCardsAndPaysOut() {
-        val g = PokerGame(Random(3))
-        assertEquals(90, g.chips)
-        val kept = g.player[1]
-        g.toggle(1)
-        assertEquals("01000", g.marks())
-        g.draw()
-        assertEquals(kept, g.player[1])
-        assertEquals(PokerPhase.Showdown, g.phase)
-        assertTrue(g.chips >= 90)
-        assertEquals(10, (g.player + g.opponent).toSet().size)
+    @Test fun holdemDealsTwoCardsAndPostsBlinds() {
+        val g = HoldemGame(3, Random(1))
+        g.hole.forEach { assertEquals(2, it.size) }
+        assertTrue(g.board.isEmpty())
+        assertEquals(15, g.pot)
+        assertEquals(Street.Preflop, g.street)
     }
 
-    @Test fun pokerStopsWhenBroke() {
-        val g = PokerGame(Random(4), startChips = 10)
-        g.draw()
-        repeat(40) { if (g.phase != PokerPhase.Broke) { g.deal(); g.draw() } }
-        assertTrue(g.chips >= 0)
-    }
-
-    @Test fun blackjackValues() {
-        assertEquals(21, BlackjackRules.value(cards("As Kh")))
-        assertEquals(12, BlackjackRules.value(cards("As Ah")))
-        assertEquals(21, BlackjackRules.value(cards("As 5h 5d")))
-        assertEquals(13, BlackjackRules.value(cards("As 5h 7d")))
-        assertEquals(30, BlackjackRules.value(cards("Ks Qh Jd")))
-    }
-
-    @Test fun blackjackDealerDrawsToSeventeen() {
-        repeat(30) { seed ->
-            val g = BlackjackGame(Random(seed))
-            if (g.phase == BlackjackPhase.Player) g.stand()
-            assertEquals(BlackjackPhase.Done, g.phase)
-            assertTrue(BlackjackRules.value(g.dealer) >= 17)
+    @Test fun holdemStreetsDealThreeOneOne() {
+        val g = HoldemGame(2, Random(2))
+        val sizes = mutableListOf<Int>()
+        var guard = 0
+        while (g.street != Street.Showdown && guard++ < 50) {
+            g.call(g.current)
+            if (g.board.size !in sizes) sizes.add(g.board.size)
         }
+        assertEquals(listOf(0, 3, 4, 5), sizes.filter { it != 0 }.let { listOf(0) + it })
+        assertEquals(Street.Showdown, g.street)
     }
 
-    @Test fun blackjackBustEndsRound() {
-        val g = BlackjackGame(Random(5))
-        while (g.phase == BlackjackPhase.Player) g.hit()
-        assertEquals(BlackjackPhase.Done, g.phase)
+    @Test fun holeCardsNeverChange() {
+        val g = HoldemGame(2, Random(3))
+        val mine = g.hole[0].toList()
+        var guard = 0
+        while (g.street != Street.Showdown && guard++ < 50) g.call(g.current)
+        assertEquals(mine, g.hole[0])
+    }
+
+    @Test fun holdemOnlyCurrentPlayerMayAct() {
+        val g = HoldemGame(3, Random(4))
+        val other = (g.current + 1) % 3
+        val pot = g.pot
+        assertFalse(g.call(other))
+        assertFalse(g.raise(other))
+        assertFalse(g.fold(other))
+        assertEquals(pot, g.pot)
+    }
+
+    @Test fun foldingLeavesTheOtherWithThePot() {
+        val g = HoldemGame(2, Random(5))
+        val who = g.current
+        val other = 1 - who
+        val before = g.stacks[other]
+        val pot = g.pot
+        assertTrue(g.fold(who))
+        assertEquals(Street.Showdown, g.street)
+        assertEquals(before + pot, g.stacks[other])
+    }
+
+    @Test fun raisesAreCappedPerStreet() {
+        val g = HoldemGame(2, Random(6), startChips = 1000)
+        var count = 0
+        while (g.canRaise && g.raise(g.current)) count++
+        assertEquals(3, count)
+    }
+
+    @Test fun potSharedInLayers() {
+        // The best hand is all-in for 10: it wins that layer only, the rest goes to the next best.
+        assertEquals(listOf(40, 30, 0), HoldemGame.distribute(intArrayOf(30, 10, 30), listOf<Long?>(100L, 200L, 50L)).toList())
+    }
+
+    @Test fun potSplitsOnATieAndSkipsFolded() {
+        assertEquals(listOf(30, 30, 0), HoldemGame.distribute(intArrayOf(20, 20, 20), listOf(9L, 9L, null)).toList())
+        assertEquals(listOf(31, 30, 0), HoldemGame.distribute(intArrayOf(20, 20, 21), listOf(9L, 9L, null)).toList())
+    }
+
+    /** Whole matches with computers in every seat: chips are never created or lost and it always ends. */
+    @Test fun fullMatchesConserveChips() {
+        for (players in 2..4) repeat(60) { seed ->
+            val g = HoldemGame(players, Random(seed), startChips = 100)
+            var hands = 0
+            while (g.street != Street.GameOver && hands < 400) {
+                var moves = 0
+                while (g.whoActs() != null) {
+                    assertTrue(g.autoPlay())
+                    assertTrue("betting never ends", ++moves < 200)
+                    if (g.whoActs() != null) assertEquals(100 * players, g.stacks.sum() + g.pot) // once settled, the pot is already paid out
+                    assertTrue(g.stacks.all { it >= 0 })
+                }
+                assertEquals(100 * players, g.stacks.sum())
+                g.newHand()
+                hands++
+            }
+        }
     }
 
     @Test fun raceSteersAndStaysInBounds() {

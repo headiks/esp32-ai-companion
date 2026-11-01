@@ -360,3 +360,13 @@ def test_home_network_address_is_offered_before_vpn():
 def test_panel_shows_a_reachable_looking_address(emu):
     emu.set_android_server(True, 7895)
     assert "PIN" in emu.panel.net_label.text() and "Адрес для телефона" in emu.panel.net_label.text()
+
+
+def test_second_server_on_a_busy_port_refuses_instead_of_sharing():
+    from emulator.communication.tcp_server import TcpServer
+    first = TcpServer(7897)
+    try:
+        with pytest.raises(OSError):
+            TcpServer(7897)
+    finally:
+        first.close()
