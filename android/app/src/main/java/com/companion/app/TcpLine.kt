@@ -3,6 +3,7 @@ package com.companion.app
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /** JSON lines over TCP, for testing against the PC emulator. Callbacks arrive on a background thread. */
@@ -14,7 +15,8 @@ class TcpLine(
     private val onClosed: (String?) -> Unit,
 ) {
     private val socket = Socket()
-    private val writeLock = Any()
+    // One writer in order: the protocol needs auth to arrive before the commands sent right after it.
+    private val writer = Executors.newSingleThreadExecutor { r -> Thread(r, "tcp-send").apply { isDaemon = true } }
     @Volatile private var closing = false
 
     fun open() {
@@ -33,18 +35,17 @@ class TcpLine(
     }
 
     fun send(line: String) {
-        // Sockets refuse network calls on Android's main thread, and BLE callers are not on a fixed thread either.
-        thread(name = "tcp-send", isDaemon = true) {
-            synchronized(writeLock) {
-                runCatching {
-                    socket.getOutputStream().apply { write((line + "\n").toByteArray(Charsets.UTF_8)); flush() }
-                }
+        // Android forbids network calls on the main thread, where most commands originate.
+        runCatching {
+            writer.execute {
+                runCatching { socket.getOutputStream().apply { write((line + "\n").toByteArray(Charsets.UTF_8)); flush() } }
             }
         }
     }
 
     fun close() {
         closing = true
+        writer.shutdown()
         runCatching { socket.close() }
     }
 }

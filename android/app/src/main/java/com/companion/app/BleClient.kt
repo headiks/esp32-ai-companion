@@ -96,14 +96,17 @@ class BleClient private constructor(private val context: Context) {
         disconnect()
         link.value = LinkState.Connecting
         prefs.edit().putString("tcp_host", host).apply()
-        tcp = TcpLine(host, port,
+        // Assigned before opening: the connected callback sends at once, on another thread.
+        val line = TcpLine(host, port,
             onConnected = { link.value = LinkState.Connected; handshake() },
             onLine = { handleLine(it) },
             onClosed = { error ->
                 if (error != null) lastError.value = "Эмулятор недоступен: $error"
                 tcp = null
                 link.value = LinkState.Disconnected
-            }).also { it.open() }
+            })
+        tcp = line
+        line.open()
     }
 
     val savedTcpHost get() = prefs.getString("tcp_host", "10.0.2.2") ?: "10.0.2.2"

@@ -215,7 +215,7 @@ private fun PokerHost(client: BleClient) {
     var selected by remember { mutableIntStateOf(0) }
     fun sync() {
         version++
-        client.showCards("Покер", game.player, game.marks(), "наклон выбор · тап оставить · вверх сдать", "Фишки ${game.chips}")
+        client.showCards("Покер", game.player, game.marks(), "наклон выбор · тап оставить\n↑ сдать", "Фишки ${game.chips}")
     }
     fun primary() { // tap on the device or a phone button: next step of the round
         when (game.phase) {
@@ -265,7 +265,7 @@ private fun BlackjackHost(client: BleClient) {
     var version by remember { mutableIntStateOf(0) }
     fun sync() {
         version++
-        client.showCards("Двадцать одно", game.player, "", "тап ещё · вверх хватит", "Очки ${BlackjackRules.value(game.player)}")
+        client.showCards("Двадцать одно", game.player, "", "тап ещё · ↑ хватит", "Очки ${BlackjackRules.value(game.player)}")
     }
     LaunchedEffect(Unit) { sync() }
     LaunchedEffect(Unit) {
@@ -394,15 +394,15 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
     fun hint(): String = when {
         game.finished -> "тап новая игра"
         game.whoActs() != 0 -> "ждём соперника"
-        game.defender == 0 && game.transferMode -> "наклон выбор · тап отметить · вверх отбить · вправо перевод · вниз беру"
-        game.defender == 0 -> "наклон выбор · тап отметить · вверх отбить · вниз беру"
-        game.table.isEmpty() -> "наклон выбор · тап отметить · вверх на стол"
-        else -> "наклон выбор · тап отметить · вверх подкинуть · вниз бито"
+        game.defender == 0 && game.transferMode -> "наклон выбор · тап отметить\n↑ бить · → перевод · ↓ беру"
+        game.defender == 0 -> "наклон выбор · тап отметить\n↑ бить · ↓ беру"
+        game.table.isEmpty() -> "наклон выбор · тап отметить\n↑ на стол"
+        else -> "наклон выбор · тап отметить\n↑ подкинуть · ↓ бито"
     }
     fun sync() {
         version++
         if (focus >= hand.size) focus = (hand.size - 1).coerceAtLeast(0)
-        client.showCards(if (game.transferMode) "Дурак · переводной" else "Дурак · подкидной", hand,
+        client.showCards("Козырь: ${SUIT_NAMES[game.trump]} · колода ${game.deckLeft}", hand,
             hand.joinToString("") { if (it in marked) "1" else "0" }, hint(), role(),
             if (game.defender == 0) game.uncovered.firstOrNull()?.attack else null)
     }

@@ -125,9 +125,9 @@ private fun Header(link: LinkState, s: PetState) {
         Box(Modifier.size(96.dp, 52.dp).clip(RoundedCornerShape(26.dp)).background(Color.Black).padding(10.dp)) { EyesPreview(Modifier.fillMaxSize()) }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(s.emotion, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Soft)
+            Text(Protocol.EMOTION_TITLES[s.emotion] ?: s.emotion, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Soft)
             val linkText = when (link) {
-                LinkState.Authenticated -> "подключено · ${s.status}"
+                LinkState.Authenticated -> "подключено · ${Protocol.STATUS_TITLES[s.status] ?: s.status}"
                 LinkState.Connected -> "подключено, ждём PIN"
                 LinkState.Connecting -> "подключение…"
                 LinkState.Scanning -> "поиск…"
@@ -226,7 +226,7 @@ private fun EmotionTab(c: BleClient) {
         Spacer(Modifier.height(10.dp))
         LazyVerticalGrid(GridCells.Fixed(2), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(Protocol.EMOTIONS) { e ->
-                FilledTonalButton(onClick = { c.send(Protocol.command("emotion", "value" to e)) }) { Text(e, fontSize = 13.sp) }
+                FilledTonalButton(onClick = { c.send(Protocol.command("emotion", "value" to e)) }) { Text(Protocol.EMOTION_TITLES[e] ?: e, fontSize = 13.sp) }
             }
         }
     }

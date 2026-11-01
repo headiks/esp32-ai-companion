@@ -34,6 +34,20 @@ class TcpLineTest {
         server.close()
     }
 
+    @Test fun linesArriveInTheOrderSent() {
+        val server = ServerSocket(0)
+        val got = LinkedBlockingQueue<String>()
+        thread { server.accept().use { s -> s.getInputStream().bufferedReader().forEachLine { got.add(it) } } }
+        val opened = CountDownLatch(1)
+        val link = TcpLine("127.0.0.1", server.localPort, { opened.countDown() }, {}, {})
+        link.open()
+        assertTrue(opened.await(3, TimeUnit.SECONDS))
+        repeat(300) { link.send("line$it") }
+        repeat(300) { assertEquals("line$it", got.poll(3, TimeUnit.SECONDS)) }
+        link.close()
+        server.close()
+    }
+
     @Test fun refusedConnectionReportsError() {
         val free = ServerSocket(0).let { val p = it.localPort; it.close(); p }
         val closed = LinkedBlockingQueue<String>()

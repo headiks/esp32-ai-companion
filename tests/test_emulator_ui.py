@@ -333,3 +333,18 @@ def test_mouse_mode_feeds_test_pad(emu):
     QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(180, 180))
     pump(500)
     assert emu.panel.mouse_pad.lefts == 1
+
+
+def test_idle_phone_stays_connected(emu, phone):
+    """The socket timeout must not end a session: a phone is silent most of the time."""
+    phone.send(type="auth", pin=emu.companion.pin())
+    phone.read(100)
+    pump(2500)
+    phone.send(type="ping", request_id=9)
+    assert any(m.get("request_id") == 9 for m in phone.read(300))
+
+
+def test_oversized_line_without_newline_is_answered_once(emu, phone):
+    phone.sock.sendall(b"x" * 3000)
+    replies = phone.read(300)
+    assert replies and all(r["status"] == "error" for r in replies)

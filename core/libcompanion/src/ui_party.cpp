@@ -724,7 +724,7 @@ class MouseScreen : public Screen {
     c.text(kCx - 38, kCy + 54, "Л", FontSize::S, (b & 1) ? kBlack : kGray, Align::Center);
     c.text(kCx + 38, kCy + 54, "П", FontSize::S, (b & 2) ? kBlack : kGray, Align::Center);
     c.text(kCx, 48, a.hal.bleConnected ? "Подключена" : "Найди в Bluetooth", FontSize::S, a.hal.bleConnected ? kMint : kGray, Align::Center);
-    c.textWrapped(kCx, kCy + 96, 300, tiltOn_ ? "тап левая · два тапа правая · край прокрутка · тряска стоп · сверху вниз выход"
+    c.textWrapped(kCx, kCy + 96, 300, tiltOn_ ? "тап левая · два тапа правая\nкрай прокрутка · тряска стоп\n↓ от верхнего края выход"
                                               : "наклон выключен, встряхни", FontSize::S, kDim, Align::Center, 3);
   }
   void onGesture(App& a, const GestureEvent& e) override {

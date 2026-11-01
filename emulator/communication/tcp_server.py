@@ -44,19 +44,27 @@ class TcpServer:
         class Handler(socketserver.StreamRequestHandler):
             def handle(self):
                 client = Client(self.connection)
-                self.connection.settimeout(1.0)  # a stalled phone must not freeze the UI thread in send()
+                # The timeout protects send() from a stalled phone. It also wakes recv(), hence raw recv and own framing:
+                # a buffered file object would refuse to read again after the first timeout.
+                self.connection.settimeout(1.0)
                 owner.clients.append(client)
+                buf = b""
                 try:
                     while client.alive:
                         try:
-                            line = self.rfile.readline(TcpServer.MAX_LINE)
+                            chunk = self.connection.recv(4096)
                         except socket.timeout:
                             continue
-                        if not line:
+                        if not chunk:
                             break
-                        line = line.strip()
-                        if line:
-                            owner.lines.put((client, line))
+                        buf += chunk
+                        while b"\n" in buf:
+                            line, buf = buf.split(b"\n", 1)
+                            if line.strip():
+                                owner.lines.put((client, line.strip()))
+                        if len(buf) > TcpServer.MAX_LINE:  # no newline in sight: report it and start over
+                            owner.lines.put((client, buf[:TcpServer.MAX_LINE]))
+                            buf = b""
                 except OSError:
                     pass
                 finally:
