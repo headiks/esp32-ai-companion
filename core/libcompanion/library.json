@@ -1,0 +1,8 @@
+{
+  "name": "libcompanion",
+  "version": "1.0.0",
+  "description": "Hardware-independent logic and rendering shared by firmware and emulator",
+  "build": { "includeDir": "include", "srcDir": "src" },
+  "frameworks": "*",
+  "platforms": "*"
+}

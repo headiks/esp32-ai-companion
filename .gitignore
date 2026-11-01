@@ -1,0 +1,5 @@
+__pycache__/
+.pytest_cache/
+core/bin/
+emulator/.state/
+firmware/.pio/
