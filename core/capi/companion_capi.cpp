@@ -177,6 +177,13 @@ CC_API int cc_snake_selftest(uint32_t seed) {
   if (s.alive()) return 3;
   return 0;
 }
+CC_API int cc_poll_mouse(void* p, int* out) {
+  App::MouseReport r;
+  if (!((Host*)p)->app.pollMouse(&r)) return 0;
+  out[0] = r.dx; out[1] = r.dy; out[2] = r.wheel; out[3] = r.buttons;
+  return 1;
+}
+CC_API const char* cc_pin(void* p) { return ((Host*)p)->app.settings.pin; }
 CC_API int cc_poll_input(void* p, char* out, int cap) { return ((Host*)p)->app.pollInput(out, cap); }
 CC_API int cc_parse_weather(const char* body, float* temp) {
   Weather w;

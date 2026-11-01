@@ -560,7 +560,7 @@ static void suitShape(Canvas& c, char s, float x, float y, float r, uint16_t col
 }
 
 static void drawCard(Canvas& c, float x, float y, float w, float h, const char* label, bool focus, bool marked) {
-  c.roundRect(x - w / 2, y - h / 2, w, h, 8, focus ? kWhite : kDark);
+  c.roundRect(x - w / 2, y - h / 2, w, h, 8, focus ? kWhite : (marked ? kDim : kDark));
   size_t n = strlen(label);
   if (!n) return;
   char rank[6];
@@ -576,7 +576,7 @@ static void drawCard(Canvas& c, float x, float y, float w, float h, const char* 
 
 class ControllerScreen : public Screen {
  public:
-  void enter(App&) override { sel_ = 0; held_ = false; }
+  void enter(App&) override { sel_ = 0; pos_ = 0; held_ = false; }
   bool capturesSwipes() const override { return true; }
   void tick(App& a, float dt) override {
     ControllerCfg& cc = a.controller;
@@ -585,10 +585,24 @@ class ControllerScreen : public Screen {
     a.power.activity();
     a.anim.lookOffset(a.hal.ax * 40, a.hal.ay * 26, 200);
     if (!cc.cards || cc.count <= 0) return;
-    // Hysteresis: the choice changes only when the hand clearly leans further, so it never flickers between cards.
-    float pos = clampf((a.hal.ax + 0.42f) / 0.84f, 0, 0.999f) * cc.count;
-    if (pos < sel_ - 0.2f || pos > sel_ + 1.2f) {
-      sel_ = (int)pos;
+    if (sel_ >= cc.count) { sel_ = cc.count - 1; pos_ = sel_ + 0.5f; cc.selected = sel_; }
+    int was = sel_;
+    if (cc.count <= kDirectLimit) {
+      // A small hand maps directly: each card has its own lean angle. Hysteresis keeps a trembling hand from flicking.
+      float pos = clampf((a.hal.ax + 0.42f) / 0.84f, 0, 0.999f) * cc.count;
+      if (pos < sel_ - 0.2f || pos > sel_ + 1.2f) sel_ = (int)pos;
+      pos_ = sel_ + 0.5f;
+    } else {
+      // A big hand scrolls instead: the lean sets the speed, level holds still, so any card stays reachable.
+      float t = a.hal.ax, mag = fabsf(t);
+      if (mag > kDeadZone) {
+        float speed = (mag - kDeadZone) * 13;   // cards per second
+        pos_ += (t > 0 ? speed : -speed) * dt * 0.001f;
+        pos_ = clampf(pos_, 0, cc.count - 0.001f);
+        sel_ = (int)pos_;
+      } else pos_ = sel_ + 0.5f;  // settles on the card, the next lean starts from its middle
+    }
+    if (sel_ != was) {
       cc.selected = sel_;
       a.sfx.play("games/move");
       a.pushInput("select", sel_);
@@ -596,24 +610,10 @@ class ControllerScreen : public Screen {
   }
   void draw(App& a, Canvas& c) override {
     const ControllerCfg& cc = a.controller;
-    c.text(kCx, 30, cc.title, FontSize::S, kGray, Align::Center);
-    if (cc.cards) {
-      for (int i = 0; i < cc.count; i++) {
-        if (i == sel_) continue;
-        drawCard(c, slotX(cc, i), kCy + 92, 56, 70, cc.labels[i], false, cc.marks[i] == '1');
-      }
-      if (cc.count > 0 && sel_ < cc.count) drawCard(c, kCx, kCy - 52, 104, 146, cc.labels[sel_], true, cc.marks[sel_] == '1');
-      c.text(kCx, kCy + 136, "наклон · нажатие", FontSize::S, kDim, Align::Center);
-      return;
-    }
-    // Pad: a ring with a dot that follows the tilt, the disc fills while the screen is held.
-    float x = kCx + a.hal.ax * 150, y = kCy + a.hal.ay * 150;
-    c.ring(kCx, kCy, 160, 2, kDark);
-    c.line(kCx - 160, kCy, kCx + 160, kCy, 1, kDark);
-    c.line(kCx, kCy - 160, kCx, kCy + 160, 1, kDark);
-    if (held_) c.fillCircle(kCx, kCy, 60, kDim);
-    c.fillCircle(x, y, 20, kSky);
-    a.face.drawScaled(c, a.anim, kCx, kCy + 186, 0.12f, a.eyeColor());
+    c.text(kCx, 22, cc.title, FontSize::S, kGray, Align::Center);
+    if (cc.cards) drawHand(c, cc);
+    else drawPad(a, c);
+    if (cc.hint[0]) c.textWrapped(kCx, kCy + 136, 280, cc.hint, FontSize::S, kGray, Align::Center, 2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     switch (e.g) {
@@ -623,8 +623,8 @@ class ControllerScreen : public Screen {
       case Gesture::LongPress: a.pushInput("long_press", sel_); break;
       case Gesture::SwipeLeft: a.pushInput("swipe_left", sel_); break;
       case Gesture::SwipeRight: a.pushInput("swipe_right", sel_); break;
-      case Gesture::SwipeUp: a.pushInput("swipe_up", sel_); break;
-      case Gesture::SwipeDown: a.pushInput("swipe_down", sel_); break;
+      case Gesture::SwipeUp: a.sfx.play("interactions/swipe"); a.pushInput("swipe_up", sel_); break;
+      case Gesture::SwipeDown: a.sfx.play("interactions/swipe"); a.pushInput("swipe_down", sel_); break;
       default: break;
     }
   }
@@ -633,19 +633,163 @@ class ControllerScreen : public Screen {
     return m == MotionEvent::Shake || m == MotionEvent::Jerk || m == MotionEvent::Lifted || m == MotionEvent::FaceDown;
   }
  private:
-  float slotX(const ControllerCfg& cc, int i) const {
-    int others = cc.count - 1;
-    int k = i < sel_ ? i : i - 1;
-    return kCx + (k - (others - 1) / 2.f) * 62;
+  static constexpr int kDirectLimit = 6, kSide = 3;
+  static constexpr float kDeadZone = 0.12f;
+  void drawHand(Canvas& c, const ControllerCfg& cc) const {
+    if (cc.info[0]) c.text(kCx, 44, cc.info, FontSize::S, kSoft, Align::Center);
+    if (cc.count <= 0) { c.text(kCx, kCy - 20, "Нет карт", FontSize::M, kGray, Align::Center); return; }
+    int focus = sel_ < cc.count ? sel_ : cc.count - 1;
+    // Neighbours sit below the focused card in fixed slots. Only a window of the hand fits; "+N" tells what is beyond.
+    for (int k = -kSide; k <= kSide; k++) {
+      int i = focus + k;
+      if (!k || i < 0 || i >= cc.count) continue;
+      bool mark = cc.marks[i] == '1';
+      drawCard(c, kCx + k * 52.f, kCy + 82 - (mark ? 8 : 0), 46, 64, cc.labels[i], false, mark);
+    }
+    int leftHidden = focus - kSide, rightHidden = cc.count - 1 - focus - kSide;
+    char more[8];
+    if (leftHidden > 0) { snprintf(more, sizeof(more), "+%d", leftHidden); c.text(kCx - 196, kCy + 72, more, FontSize::S, kDim, Align::Center); }
+    if (rightHidden > 0) { snprintf(more, sizeof(more), "+%d", rightHidden); c.text(kCx + 196, kCy + 72, more, FontSize::S, kDim, Align::Center); }
+    drawCard(c, kCx, kCy - 54, 96, 132, cc.labels[focus], true, cc.marks[focus] == '1');
+    if (cc.target[0]) {
+      c.text(kCx - 118, kCy - 112, "бей", FontSize::S, kGray, Align::Center);
+      drawCard(c, kCx - 118, kCy - 46, 58, 82, cc.target, false, false);
+    }
+    // Position in the hand and everything chosen, at a glance on the rim.
+    int chosen = 0;
+    for (int i = 0; i < cc.count; i++) {
+      float ang = (cc.count > 1 ? 140 + 80.f * i / (cc.count - 1) : 180.f) * 0.0174533f;
+      float x = kCx + sinf(ang) * (kCx - 9), y = kCy - cosf(ang) * (kCy - 9);
+      bool mark = cc.marks[i] == '1';
+      chosen += mark;
+      c.fillCircle(x, y, i == focus ? 4.5f : 2.5f, i == focus ? kWhite : (mark ? kMint : kDim));
+    }
+    char st[24];
+    snprintf(st, sizeof(st), "%d/%d", focus + 1, cc.count);
+    c.text(kCx + 112, kCy - 86, st, FontSize::S, kGray, Align::Center);
+    if (chosen) {
+      snprintf(st, sizeof(st), "выбрано %d", chosen);
+      c.text(kCx + 118, kCy - 60, st, FontSize::S, kMint, Align::Center);
+    }
+  }
+  void drawPad(App& a, Canvas& c) const {
+    // A ring with a dot that follows the tilt; the disc fills while the screen is held.
+    float x = kCx + a.hal.ax * 130, y = kCy - 20 + a.hal.ay * 130;
+    c.ring(kCx, kCy - 20, 140, 2, kDark);
+    c.line(kCx - 140, kCy - 20, kCx + 140, kCy - 20, 1, kDark);
+    c.line(kCx, kCy - 160, kCx, kCy + 120, 1, kDark);
+    if (held_) c.fillCircle(kCx, kCy - 20, 56, kDim);
+    c.fillCircle(x, y, 18, kSky);
   }
   int sel_ = 0;
+  float pos_ = 0;
   bool held_ = false;
+};
+
+// ---- Mouse: a Bluetooth mouse. Tilt or finger moves the pointer, the rim scrolls, as on a laptop touchpad ------------
+class MouseScreen : public Screen {
+ public:
+  void enter(App& a) override {
+    zeroX_ = avgX_ = a.hal.ax; zeroY_ = avgY_ = a.hal.ay;   // however it is held now becomes "still"
+    tiltOn_ = true; rim_ = false; dragging_ = false; lastDy_ = 0;
+    a.mouseState = App::MouseState{};
+    a.react(Emotion::Focused, 1000);
+  }
+  bool wantsDoubleTap() const override { return true; }
+  bool capturesSwipes() const override { return true; }
+  void tick(App& a, float dt) override {
+    a.power.activity();
+    App::MouseState& m = a.mouseState;
+    if (m.leftReleaseMs > 0) { m.leftReleaseMs -= dt; if (m.leftReleaseMs <= 0) { m.buttons &= ~1; m.buttonsChanged = true; } }
+    if (m.rightReleaseMs > 0) { m.rightReleaseMs -= dt; if (m.rightReleaseMs <= 0) { m.buttons &= ~2; m.buttonsChanged = true; } }
+    // Slow average of the lean: a new zero point must not be taken from the peak of a shake.
+    avgX_ += (a.hal.ax - avgX_) * clampf(dt / 400.f, 0, 1);
+    avgY_ += (a.hal.ay - avgY_) * clampf(dt / 400.f, 0, 1);
+    // The finger is a clutch: while it moves the pointer, tilt does not interfere. A violent movement is not a lean at all.
+    if (tiltOn_ && !a.touch.isDown() && fabsf(a.motionMgr.lastMagnitude() - 1.f) < 0.45f) {
+      m.x += curve(a.hal.ax - zeroX_) * dt;
+      m.y += curve(a.hal.ay - zeroY_) * dt;
+    }
+    a.anim.lookOffset(clampf(a.hal.ax - zeroX_, -1, 1) * 36, clampf(a.hal.ay - zeroY_, -1, 1) * 24, 150);
+  }
+  void draw(App& a, Canvas& c) override {
+    uint8_t b = a.mouseState.buttons;
+    c.arc(kCx, kCy, kCx - 9, 10, 15, 165, kDark);   // the right rim is the scroll strip
+    for (int i = 0; i < 5; i++) { float ang = (60 + i * 15) * 0.0174533f; c.fillCircle(kCx + sinf(ang) * (kCx - 9), kCy - cosf(ang) * (kCx - 9), 2, kDim); }
+    float px = kCx + clampf(a.hal.ax - zeroX_, -1, 1) * 70, py = kCy - 44 + clampf(a.hal.ay - zeroY_, -1, 1) * 70;
+    c.ring(kCx, kCy - 44, 78, 2, kDark);
+    if (tiltOn_) c.fillCircle(px, py, 12, kSky); else c.ring(kCx, kCy - 44, 12, 2, kDim);
+    c.roundRect(kCx - 72, kCy + 50, 68, 34, 10, (b & 1) ? kWhite : kDark);
+    c.roundRect(kCx + 4, kCy + 50, 68, 34, 10, (b & 2) ? kWhite : kDark);
+    c.text(kCx - 38, kCy + 54, "Л", FontSize::S, (b & 1) ? kBlack : kGray, Align::Center);
+    c.text(kCx + 38, kCy + 54, "П", FontSize::S, (b & 2) ? kBlack : kGray, Align::Center);
+    c.text(kCx, 48, a.hal.bleConnected ? "Подключена" : "Найди в Bluetooth", FontSize::S, a.hal.bleConnected ? kMint : kGray, Align::Center);
+    c.textWrapped(kCx, kCy + 96, 300, tiltOn_ ? "тап левая · два тапа правая · край прокрутка · тряска стоп · сверху вниз выход"
+                                              : "наклон выключен, встряхни", FontSize::S, kDim, Align::Center, 3);
+  }
+  void onGesture(App& a, const GestureEvent& e) override {
+    App::MouseState& m = a.mouseState;
+    switch (e.g) {
+      case Gesture::Down:
+        rim_ = onRim(e.x, e.y);
+        downY_ = e.y;
+        lastDy_ = 0;
+        break;
+      case Gesture::Move:
+        if (rim_) m.wheel -= e.dy * 0.12f;
+        else { m.x += e.dx * 1.6f; m.y += e.dy * 1.6f; }
+        break;
+      case Gesture::Up:
+        if (dragging_) { dragging_ = false; m.buttons &= ~1; m.buttonsChanged = true; }
+        break;
+      case Gesture::Tap: click(m, 1, &m.leftReleaseMs); a.sfx.play("system/click"); break;
+      case Gesture::DoubleTap: click(m, 2, &m.rightReleaseMs); a.sfx.play("system/click"); break;
+      case Gesture::LongPress:
+        // Press and hold, then move: dragging and selecting, as with tap-and-drag on a touchpad.
+        dragging_ = true;
+        m.buttons |= 1;
+        m.buttonsChanged = true;
+        a.sfx.play("interactions/hold");
+        break;
+      case Gesture::SwipeDown:
+        if (downY_ < 60) { m.buttons = 0; m.buttonsChanged = true; a.showScreen(ScreenId::Face); }
+        break;
+      default: break;
+    }
+  }
+  bool onMotion(App& a, MotionEvent ev) override {
+    if (ev == MotionEvent::Shake) {
+      tiltOn_ = !tiltOn_;
+      zeroX_ = avgX_; zeroY_ = avgY_;
+      a.mouseState.x = a.mouseState.y = 0;
+      a.sfx.play(tiltOn_ ? "games/go" : "system/click");
+      return true;
+    }
+    return ev == MotionEvent::Jerk || ev == MotionEvent::Lifted || ev == MotionEvent::FaceDown;
+  }
+ private:
+  // Pixels per millisecond. A dead zone for a steady hand, then speed grows with the square for fine control near centre.
+  static float curve(float t) {
+    float mag = fabsf(t);
+    if (mag < 0.06f) return 0;
+    float v = (mag - 0.06f) * (mag - 0.06f) * 5.5f;
+    if (v > 1.6f) v = 1.6f;
+    return t > 0 ? v : -v;
+  }
+  static bool onRim(int x, int y) {
+    float dx = (float)(x - kCx), dy = (float)(y - kCy);
+    return dx > 40 && dx * dx + dy * dy > 175 * 175;
+  }
+  static void click(App::MouseState& m, uint8_t bit, float* release) { m.buttons |= bit; m.buttonsChanged = true; *release = 45; }
+  float zeroX_ = 0, zeroY_ = 0, avgX_ = 0, avgY_ = 0;
+  int downY_ = 0, lastDy_ = 0;
+  bool tiltOn_ = true, rim_ = false, dragging_ = false;
 };
 
 Screen* partyScreen(ScreenId id) {
   static CoinScreen coin; static DiceScreen dice; static MagicBallScreen ball; static BalanceScreen balance;
   static DuelScreen duel; static ShakerScreen shaker; static SafeScreen safe; static WorkoutScreen workout;
-  static MoleScreen mole; static ControllerScreen controller;
+  static MoleScreen mole; static ControllerScreen controller; static MouseScreen mouse;
   switch (id) {
     case ScreenId::Coin: return &coin;
     case ScreenId::Dice: return &dice;
@@ -656,6 +800,7 @@ Screen* partyScreen(ScreenId id) {
     case ScreenId::Safe: return &safe;
     case ScreenId::Workout: return &workout;
     case ScreenId::Mole: return &mole;
+    case ScreenId::Mouse: return &mouse;
     default: return &controller;
   }
 }

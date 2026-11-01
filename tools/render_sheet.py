@@ -10,7 +10,7 @@ from core.companion import Companion, SCREEN, emotion_names, rgb565_to_rgb888  #
 
 SCREENS = ["face", "menu", "pet", "weather", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info",
            "maze", "orbit", "snake", "simon", "tictactoe", "reaction", "guess", "pet_game",
-           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole"]
+           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "mouse"]
 WEATHER = ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"]
 
 
@@ -67,7 +67,16 @@ def main():
             c.handle_command({"type": "screen", "value": s})
             c.run(1000)
             items.append((s, snapshot(c)))
-        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,10h,Kd,2c,7s", "marks": "10010", "title": "Покер"})
+        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "title": "Дурак · подкидной", "info": "Вы отбиваетесь", "target": "Ks",
+                          "labels": "6s,6h,7d,8c,9s,10h,Jd,Qc,Ks,Ah,6d,7c,9h,10s", "marks": "01000000010000",
+                          "hint": "наклон выбор · тап отметить · вверх на стол · вниз беру"})
+        for _ in range(30):
+            c.imu(0.35, 0, 0.9, dt=20)
+            c.tick(20)
+        c.imu(0, 0, 1, dt=20)
+        c.run(100)
+        items.append(("durak 14 cards", snapshot(c)))
+        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,10h,Kd,2c,7s", "marks": "10010", "title": "Покер", "hint": "тап оставить · вверх сдать"})
         c.run(600)
         items.append(("controller cards", snapshot(c)))
         c.handle_command({"type": "controller", "value": "start", "mode": "pad", "title": "Гонки"})

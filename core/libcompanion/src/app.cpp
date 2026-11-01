@@ -370,6 +370,16 @@ int App::pollInput(char* out, int cap) {
   return snprintf(out, (size_t)cap, "{\"event\":\"input\",\"ax\":%.2f,\"ay\":%.2f}", (double)hal.ax, (double)hal.ay);
 }
 
+bool App::pollMouse(MouseReport* r) {
+  MouseState& m = mouseState;
+  int dx = (int)clampf(m.x, -127, 127), dy = (int)clampf(m.y, -127, 127), wheel = (int)clampf(m.wheel, -127, 127);
+  if (!dx && !dy && !wheel && !m.buttonsChanged) return false;
+  m.x -= dx; m.y -= dy; m.wheel -= wheel;
+  m.buttonsChanged = false;
+  *r = MouseReport{dx, dy, wheel, m.buttons};
+  return true;
+}
+
 void App::tickIdleLife(float dt) {
   // Slow background mix: the current face always carries a trace of how the creature really feels.
   blendIn_ -= dt;

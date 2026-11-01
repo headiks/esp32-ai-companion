@@ -17,7 +17,7 @@ constexpr int kProtocolVersion = 1;
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
   TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon,
-  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Weather, Controller, Count
+  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Weather, Controller, Mouse, Count
 };
 const char* screenName(ScreenId s);
 bool screenFromName(const char* n, ScreenId* out);
@@ -37,12 +37,16 @@ struct HalInfo {
 struct Session { bool authed; const char* source; };
 
 // The phone hosts the game and this device acts as its gamepad.
+constexpr int kMaxCards = 36;
 struct ControllerCfg {
   bool active = false, cards = false;
   int count = 0, selected = 0;
-  char labels[10][6] = {};    // card labels such as "10h": rank then suit letter s, h, d, c
-  char marks[11] = "";        // '1' marks a card, for example one held in poker
-  char title[32] = "";
+  char labels[kMaxCards][4] = {};  // card labels such as "10h": rank then suit letter s, h, d, c
+  char marks[kMaxCards + 1] = "";  // '1' marks a card: held in poker, chosen for the table in durak
+  char title[64] = "";
+  char info[64] = "";              // short state line, for example whose move it is
+  char hint[160] = "";              // controls summary at the bottom of the screen
+  char target[4] = "";             // the card to beat, shown beside the hand
   float keepaliveMs = 0;
 };
 
@@ -92,6 +96,15 @@ class App {
   WeatherState weather;
   float thunderFlashMs = 0;
   ControllerCfg controller;
+  // Mouse mode: relative motion waiting to go out as HID reports. Whole units are taken, the fraction stays.
+  struct MouseState {
+    float x = 0, y = 0, wheel = 0;
+    uint8_t buttons = 0;
+    bool buttonsChanged = false;
+    float leftReleaseMs = 0, rightReleaseMs = 0;
+  } mouseState;
+  struct MouseReport { int dx, dy, wheel; uint8_t buttons; };
+  bool pollMouse(MouseReport* out);
   void pushInput(const char* action, int index);
   // Next message for the host while the controller runs: actions first, then tilt 20 times a second.
   int pollInput(char* out, int cap);

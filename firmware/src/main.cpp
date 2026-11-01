@@ -90,6 +90,9 @@ void loop() {
   display.setBrightness(app->power.panelBrightness());
   display.present(*app);
 
+  cc::App::MouseReport mouse;
+  while (app->pollMouse(&mouse)) ble.sendMouse(mouse);
+
   static char input[160];
   while (app->pollInput(input, sizeof(input)) > 0) {
     if (Serial) Serial.println(input);

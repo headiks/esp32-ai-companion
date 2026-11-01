@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 from core.companion import Companion, emotion_names  # noqa: E402
 from emulator.audio.output import AudioOutput  # noqa: E402
 from emulator.communication.serial_link import SerialLink, list_serial_ports  # noqa: E402
+from emulator.communication.tcp_server import TcpServer, local_ip  # noqa: E402
 from emulator.rendering.screen_widget import ScreenWidget  # noqa: E402
 from emulator.simulation.demo import steps as demo_steps  # noqa: E402
 from emulator.simulation.sensors import ImuSimulator, MicSimulator  # noqa: E402
@@ -75,6 +76,8 @@ class Emulator(QMainWindow):
         self.cycle_wait = 0.0
         self.last_state = {}
         self.controller_ping = 0
+        self.server = None
+        self.broadcast_ms = 0
         self.silent = silent
 
         self.touch_queue = []
@@ -144,6 +147,11 @@ class Emulator(QMainWindow):
         while (msg := self.companion.poll_input()):
             if "action" in msg:
                 self._log(f"контроллер ← {msg['action']} {msg['index']}")
+            if self.server:
+                self.server.broadcast(msg)
+        while (report := self.companion.poll_mouse()):
+            self.panel.mouse_pad.report(*report)
+        self._pump_server(dt)
         self.frames += 1
         if now - self.fps_t >= 1:
             self.companion.set_fps(self.frames / (now - self.fps_t))
@@ -218,7 +226,35 @@ class Emulator(QMainWindow):
 
     def stop_controller(self):
         self.controller_ping = 0
+        self.server = None
+        self.broadcast_ms = 0
         self.send({"type": "controller", "value": "stop"})
+
+    def set_android_server(self, on, port=7777):
+        if self.server:
+            self.server.close()
+            self.server = None
+        self.panel.net_label.setText("")
+        if not on:
+            return
+        try:
+            self.server = TcpServer(port)
+        except OSError as e:
+            self._log(f"Порт {port} занят: {e}")
+            return
+        self.panel.net_label.setText(f"Телефон: {local_ip()}:{port}. Эмулятор Android: 10.0.2.2:{port}. PIN: {self.companion.pin()}")
+
+    def _pump_server(self, dt):
+        if not self.server:
+            return
+        # All commands run here, on the same thread as the core; the network threads only queue them.
+        for client, line in self.server.take_lines():
+            resp, client.authed = self.companion.command_raw(line, client.authed)
+            client.send(resp)
+        self.broadcast_ms -= dt
+        if self.broadcast_ms <= 0:
+            self.broadcast_ms = 2000
+            self.server.broadcast(self.companion.state_event())
 
     def set_time_scale(self, s):
         self.companion.set_time_scale(s)
@@ -284,6 +320,8 @@ class Emulator(QMainWindow):
         self.timer.stop()
         self.audio.stop()
         self.hil_close()
+        if self.server:
+            self.server.close()
         self.companion.close()
         super().closeEvent(e)
 
@@ -295,10 +333,13 @@ def main():
     ap.add_argument("--screenshot", help="save a window screenshot after --seconds and exit")
     ap.add_argument("--seconds", type=float, default=3)
     ap.add_argument("--demo", action="store_true", help="start DEMO MODE right away")
+    ap.add_argument("--android-server", action="store_true", help="listen for the Android app on port 7777")
     args = ap.parse_args()
     app = QApplication(sys.argv)
     win = Emulator(args.storage, args.silent)
     win.show()
+    if args.android_server:
+        win.panel.net_box.setChecked(True)
     if args.demo:
         win.toggle_demo()
     if args.screenshot:

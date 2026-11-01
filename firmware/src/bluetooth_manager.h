@@ -9,6 +9,7 @@ class BluetoothManager {
   void poll(cc::App& app);       // handles received commands on the logic thread
   void send(const char* line);   // adds '\n', splits into notifications
   bool connected() const;
+  void sendMouse(const cc::App::MouseReport& r);  // HID input report to a paired computer or phone
  private:
   bool started_ = false;
 };

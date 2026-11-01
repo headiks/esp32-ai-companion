@@ -1,5 +1,6 @@
 #include "bluetooth_manager.h"
 #include <NimBLEDevice.h>
+#include <NimBLEHIDDevice.h>
 #include <freertos/stream_buffer.h>
 
 static const char* kService = "6e7c0001-5a1e-4c6b-9d3f-0c0a1f2b3c4d";
@@ -7,6 +8,16 @@ static const char* kRx = "6e7c0002-5a1e-4c6b-9d3f-0c0a1f2b3c4d";
 static const char* kTx = "6e7c0003-5a1e-4c6b-9d3f-0c0a1f2b3c4d";
 
 static NimBLECharacteristic* txChar;
+static NimBLECharacteristic* mouseInput;
+static NimBLEHIDDevice* hid;
+
+// Standard mouse: five buttons, relative X and Y, wheel.
+static const uint8_t kMouseReportMap[] = {
+    0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x85, 0x01, 0x09, 0x01, 0xA1, 0x00,
+    0x05, 0x09, 0x19, 0x01, 0x29, 0x05, 0x15, 0x00, 0x25, 0x01, 0x95, 0x05, 0x75, 0x01, 0x81, 0x02,
+    0x95, 0x01, 0x75, 0x03, 0x81, 0x03,
+    0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x03, 0x81, 0x06,
+    0xC0, 0xC0};
 static NimBLEServer* server;
 static StreamBufferHandle_t rxStream;
 static cc::Session session{false, "ble"};
@@ -41,6 +52,8 @@ void BluetoothManager::setEnabled(cc::App& app, bool on) {
   if (!on) {
     NimBLEDevice::deinit(true);
     txChar = nullptr;
+    mouseInput = nullptr;
+    hid = nullptr;
     server = nullptr;
     isConnected = false;
     started_ = false;
@@ -52,8 +65,8 @@ void BluetoothManager::setEnabled(cc::App& app, bool on) {
   NimBLEDevice::init(name);
   NimBLEDevice::setPower(ESP_PWR_LVL_P3);
   NimBLEDevice::setMTU(247);
-  // LE Secure Connections encrypts the link when the phone pairs; commands still need the PIN.
-  NimBLEDevice::setSecurityAuth(false, false, true);
+  // Bonding is what makes a computer accept this as a mouse. Commands on the companion service still need the PIN.
+  NimBLEDevice::setSecurityAuth(true, false, true);
   server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   NimBLEService* svc = server->createService(kService);
@@ -61,7 +74,16 @@ void BluetoothManager::setEnabled(cc::App& app, bool on) {
   rx->setCallbacks(new RxCallbacks());
   txChar = svc->createCharacteristic(kTx, NIMBLE_PROPERTY::NOTIFY);
   svc->start();
+  hid = new NimBLEHIDDevice(server);
+  mouseInput = hid->inputReport(1);
+  hid->manufacturer()->setValue("Companion");
+  hid->pnp(0x02, 0x303A, 0x4001, 0x0100);
+  hid->hidInfo(0x00, 0x02);
+  hid->reportMap((uint8_t*)kMouseReportMap, sizeof(kMouseReportMap));
+  hid->startServices();
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  adv->setAppearance(0x03C2);  // HID mouse
+  adv->addServiceUUID(hid->hidService()->getUUID());
   adv->addServiceUUID(kService);
   adv->setScanResponse(true);
   adv->start();
@@ -91,6 +113,13 @@ void BluetoothManager::send(const char* line) {
   }
   txChar->setValue((const uint8_t*)"\n", 1);
   txChar->notify();
+}
+
+void BluetoothManager::sendMouse(const cc::App::MouseReport& r) {
+  if (!isConnected || !mouseInput) return;
+  uint8_t report[4] = {r.buttons, (uint8_t)(int8_t)r.dx, (uint8_t)(int8_t)r.dy, (uint8_t)(int8_t)r.wheel};
+  mouseInput->setValue(report, sizeof(report));
+  mouseInput->notify();
 }
 
 void BluetoothManager::poll(cc::App& app) {

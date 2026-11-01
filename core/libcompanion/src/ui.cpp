@@ -10,7 +10,7 @@ static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 static const char* const kScreenNames[(int)ScreenId::Count] = {
     "face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications",
     "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game",
-    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "controller"};
+    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "controller", "mouse"};
 
 const char* screenName(ScreenId s) { return kScreenNames[(int)s]; }
 bool screenFromName(const char* n, ScreenId* out) {
@@ -384,6 +384,7 @@ static const MenuItem kMenu[] = {
     {"Поговорить", Icon::Message, ScreenId::Count},  // not a screen: starts a voice dialog
     {"Питомец", Icon::Heart, ScreenId::Pet},
     {"Игры", Icon::Game, ScreenId::Games},
+    {"Мышь", Icon::Stopwatch, ScreenId::Mouse},
     {"Погода", Icon::Sun, ScreenId::Weather},
     {"Часы", Icon::Clock, ScreenId::DigitalClock},
     {"Циферблат", Icon::Clock, ScreenId::AnalogClock},
@@ -1176,7 +1177,7 @@ Screen* screenInstance(ScreenId id) {
                                        gameScreen(ScreenId::Maze), gameScreen(ScreenId::Orbit), gameScreen(ScreenId::Snake), gameScreen(ScreenId::Simon),
                                        partyScreen(ScreenId::Coin), partyScreen(ScreenId::Dice), partyScreen(ScreenId::MagicBall), partyScreen(ScreenId::Balance),
                                        partyScreen(ScreenId::Duel), partyScreen(ScreenId::Shaker), partyScreen(ScreenId::Safe), partyScreen(ScreenId::Workout),
-                                       partyScreen(ScreenId::Mole), &weather, partyScreen(ScreenId::Controller)};
+                                       partyScreen(ScreenId::Mole), &weather, partyScreen(ScreenId::Controller), partyScreen(ScreenId::Mouse)};
   return all[(int)id];
 }
 

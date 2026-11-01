@@ -20,6 +20,9 @@ class Storage {
 bool loadChecked(Storage* s, const char* key, void* data, uint32_t size, uint16_t version);
 bool saveChecked(Storage* s, const char* key, const void* data, uint32_t size, uint16_t version);
 
+// Copies UTF-8 text cutting only between characters, so a long string never ends in half a letter.
+void copyUtf8(char* dst, const char* src, size_t cap);
+
 // ---- ClockManager -----------------------------------------------------------------------------
 struct DateTime { int year, month, day, hour, minute, second, weekday; };
 

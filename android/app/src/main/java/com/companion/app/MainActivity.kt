@@ -153,6 +153,14 @@ private fun ConnectTab(c: BleClient, link: LinkState) {
             OutlinedButton(onClick = { c.disconnect() }, enabled = link != LinkState.Disconnected) { Text("Отключить") }
         }
         Spacer(Modifier.height(10.dp))
+        Text("Тест с эмулятором на ПК: включите в нём сервер на вкладке «Устройство»", color = Color.Gray, fontSize = 12.sp)
+        var host by remember { mutableStateOf(c.savedTcpHost) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(host, { host = it }, label = { Text("Адрес ПК") }, singleLine = true, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { c.connectTcp(host.trim(), 7777) }, enabled = host.isNotBlank()) { Text("Эмулятор") }
+        }
+        Spacer(Modifier.height(10.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(devices) { d ->
                 Card(Modifier.fillMaxWidth().clickable { c.connect(d.address) }) {

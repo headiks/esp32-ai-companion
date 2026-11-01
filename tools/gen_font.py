@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 TTF = os.path.join(matplotlib.get_data_path(), "fonts", "ttf", "DejaVuSans.ttf")
-TEXT = "".join(chr(c) for c in range(32, 127)) + "".join(chr(c) for c in range(0x410, 0x450)) + "ЁёІі№°—–…«»•"
+TEXT = "".join(chr(c) for c in range(32, 127)) + "".join(chr(c) for c in range(0x410, 0x450)) + "ЁёІі№°—–…«»•·↑↓←→"
 FONTS = [("S", 19, TEXT), ("M", 25, TEXT), ("L", 40, TEXT)]
 
 

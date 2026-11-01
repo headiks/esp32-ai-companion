@@ -436,7 +436,7 @@ def test_notification_queue_keeps_newest(c):
 
 
 # ---- screens and games -----------------------------------------------------------------------
-SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather"]
+SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "weather", "mouse"]
 
 
 @pytest.mark.parametrize("name", SCREENS)
@@ -1087,3 +1087,188 @@ def test_controller_times_out_without_host(c):
     c.run(2000)
     assert c.state()["screen"] == "face"
     assert drain(c) == []
+
+
+# ---- card controller with big hands ---------------------------------------------------------------
+def big_hand(c, n=14, marks="", **kw):
+    labels = ",".join(f"{6 + i % 9}{'shdc'[i % 4]}" for i in range(n))
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": labels, "marks": marks, "title": "Дурак", **kw})
+
+
+def test_big_hand_scrolls_by_lean_speed_and_holds_when_level(c):
+    big_hand(c)
+    c.run(100); drain(c)
+    for _ in range(100):
+        c.imu(0, 0, 1, dt=20); c.tick(20)
+    assert not [m for m in drain(c) if m.get("action") == "select"], "level hand holds the card"
+    seen = []
+    for _ in range(260):
+        c.imu(0.4, 0, 0.9, dt=20); c.tick(20)
+        seen += [m["index"] for m in drain(c) if m.get("action") == "select"]
+    assert seen == sorted(seen) and seen[-1] == 13 and len(seen) >= 8, "every card is passed, none skipped"
+    assert all(b - a == 1 for a, b in zip(seen, seen[1:]))
+    back = []
+    for _ in range(40):
+        c.imu(-0.4, 0, 0.9, dt=20); c.tick(20)
+        back += [m["index"] for m in drain(c) if m.get("action") == "select"]
+    assert back and back[-1] < 13
+
+
+def test_full_deck_fits_and_draws(c):
+    big_hand(c, n=36, marks="1" * 36, info="Ход игрока", hint="наклон выбор · тап отметить · вверх на стол", target="Ks")
+    c.run(300)
+    for i in range(600):
+        c.imu(0.6, 0, 0.8, dt=20); c.tick(20)
+        drain(c)
+        if i % 150 == 0:
+            c.handle_command({"type": "controller", "value": "ping"})
+    assert (c.render() != 0).sum() > 500
+    tap(c)
+    assert [m for m in drain(c) if m.get("action") == "tap"][-1]["index"] == 35
+
+
+def test_hand_can_shrink_under_the_selection(c):
+    big_hand(c, n=14)
+    for _ in range(100):
+        c.imu(0.5, 0, 0.8, dt=20); c.tick(20)
+    big_hand(c, n=3)
+    for _ in range(20):
+        c.imu(0, 0, 1, dt=20); c.tick(20)
+    c.render()
+    tap(c)
+    assert [m for m in drain(c) if m.get("action") == "tap"][-1]["index"] < 3
+
+
+def test_empty_hand_draws(c):
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "", "title": "x"})
+    c.run(200)
+    c.render()
+
+
+def test_hint_is_on_screen(c):
+    big_hand(c, n=5)
+    c.run(300)
+    a = c.render().copy()
+    big_hand(c, n=5, hint="наклон выбор")
+    c.run(300)
+    assert (a[233 + 136:233 + 170] != c.render()[233 + 136:233 + 170]).any()
+
+
+def test_swipes_reach_the_host_for_durak_actions(c):
+    big_hand(c, n=8)
+    c.run(100); drain(c)
+    swipe(c, 233, 350, 233, 120)
+    swipe(c, 233, 120, 233, 350)
+    swipe(c, 100, 233, 360, 233)
+    actions = [m.get("action") for m in drain(c)]
+    assert {"swipe_up", "swipe_down", "swipe_right"} <= set(actions)
+
+
+# ---- mouse --------------------------------------------------------------------------------------
+def collect_mouse(c, ticks, ax=0.0, ay=0.0):
+    x = y = wheel = 0
+    buttons = []
+    for _ in range(ticks):
+        c.imu(ax, ay, 0.9, dt=20)
+        c.tick(20)
+        while (r := c.poll_mouse()):
+            x += r[0]; y += r[1]; wheel += r[2]
+            buttons.append(r[3])
+    return x, y, wheel, buttons
+
+
+def enter_mouse(c):
+    for _ in range(5):
+        c.imu(0, 0, 1, dt=20); c.tick(20)
+    c.handle_command({"type": "screen", "value": "mouse"})
+    collect_mouse(c, 15)
+
+
+def test_mouse_only_reports_in_mouse_mode(c):
+    assert collect_mouse(c, 50, ax=0.5) == (0, 0, 0, [])
+
+
+def test_tilt_moves_pointer_with_dead_zone(c):
+    enter_mouse(c)
+    assert collect_mouse(c, 50, ax=0.03)[:2] == (0, 0), "a steady hand keeps the pointer still"
+    x, y, _, _ = collect_mouse(c, 50, ax=0.4)
+    assert x > 50 and abs(y) <= 1
+    x, y, _, _ = collect_mouse(c, 50, ay=-0.4)
+    assert y < -50 and abs(x) <= 1
+    slow = collect_mouse(c, 50, ax=0.15)[0]
+    fast = collect_mouse(c, 50, ax=0.6)[0]
+    assert 0 < slow < fast / 4, "fine control at small angles"
+
+
+def test_tap_left_double_tap_right(c):
+    enter_mouse(c)
+    c.touch(True, 180, 180); collect_mouse(c, 3); c.touch(False, 180, 180)
+    _, _, _, b = collect_mouse(c, 40)
+    assert 1 in b and b[-1] == 0 and 2 not in b, b
+    c.touch(True, 180, 180); collect_mouse(c, 3); c.touch(False, 180, 180); collect_mouse(c, 5)
+    c.touch(True, 180, 180); collect_mouse(c, 3); c.touch(False, 180, 180)
+    _, _, _, b = collect_mouse(c, 40)
+    assert 2 in b and b[-1] == 0 and 1 not in b, b
+
+
+def test_finger_moves_pointer_and_stops_tilt(c):
+    enter_mouse(c)
+    c.touch(True, 150, 200); collect_mouse(c, 3, ax=0.5)
+    x = 0
+    for i in range(10):
+        c.touch(True, 150 + i * 6, 200)
+        x += collect_mouse(c, 1, ax=0.5)[0]
+    assert 40 < x < 180, x
+    c.touch(False, 200, 200)
+    collect_mouse(c, 30)
+
+
+def test_rim_scrolls_instead_of_moving(c):
+    enter_mouse(c)
+    c.touch(True, 440, 200); collect_mouse(c, 3)
+    x = wheel = 0
+    for i in range(12):
+        c.touch(True, 440, 200 + i * 10)
+        r = collect_mouse(c, 1)
+        x += r[0]; wheel += r[2]
+    c.touch(False, 440, 320); collect_mouse(c, 10)
+    assert wheel < -5 and x == 0
+
+
+def test_long_press_drags_until_release(c):
+    enter_mouse(c)
+    c.touch(True, 180, 200)
+    _, _, _, b = collect_mouse(c, 45)
+    assert b and b[-1] == 1, "held after a long press"
+    c.touch(False, 180, 200)
+    _, _, _, b = collect_mouse(c, 10)
+    assert b[-1] == 0
+
+
+def test_shake_pauses_tilt_and_top_swipe_exits(c):
+    enter_mouse(c)
+    shake(c)
+    assert collect_mouse(c, 50, ax=0.5)[0] == 0, "shake switches tilt off"
+    assert c.state()["emotion"] not in ("surprised", "confused")
+    swipe(c, 233, 30, 233, 260)
+    assert c.state()["screen"] == "face"
+    assert collect_mouse(c, 20, ax=0.5)[0] == 0
+
+
+def test_mouse_reports_never_exceed_hid_range(c):
+    enter_mouse(c)
+    c.touch(True, 150, 200); collect_mouse(c, 3)
+    c.touch(True, 420, 440)
+    c.tick(20)
+    seen = []
+    while (r := c.poll_mouse()):
+        seen.append(r)
+    assert seen and all(abs(r[0]) <= 127 and abs(r[1]) <= 127 for r in seen)
+
+
+def test_long_cyrillic_fields_never_end_in_half_a_letter(c):
+    long_text = "щ" * 140
+    r = c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As", "title": long_text[:300], "info": long_text, "hint": long_text})
+    assert r["status"] == "success"
+    c.run(200)
+    c.render()

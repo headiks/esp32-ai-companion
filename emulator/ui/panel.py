@@ -2,7 +2,8 @@
 import datetime
 import json
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QPointF, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDateTimeEdit, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
                                QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
@@ -15,7 +16,7 @@ SCREENS = [("face", "Лицо"), ("menu", "Меню"), ("pet", "Питомец")
            ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
            ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"),
            ("coin", "Монетка"), ("dice", "Кубики"), ("magic_ball", "Шар"), ("balance", "Баланс"), ("duel", "Дуэль"), ("shaker", "Шейкер"), ("safe", "Сейф"),
-           ("workout", "Зарядка"), ("mole", "Кротики"), ("weather", "Погода")]
+           ("workout", "Зарядка"), ("mole", "Кротики"), ("weather", "Погода"), ("mouse", "Мышь")]
 
 
 def grid(buttons, cols=3):
@@ -35,6 +36,37 @@ def on_slider_set(slider, callback):
     """Fires on drag end and on a click beside the handle; sliderReleased alone misses the click."""
     slider.sliderReleased.connect(lambda: callback(slider.value()))
     slider.actionTriggered.connect(lambda action: None if action == slider.SliderAction.SliderMove else QTimer.singleShot(0, lambda: callback(slider.value())))
+
+
+class MouseTestPad(QWidget):
+    """Shows what a computer would receive from mouse mode, without pairing anything."""
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(110)
+        self.x = self.y = 0.5
+        self.buttons = 0
+        self.wheel = 0
+        self.lefts = self.rights = 0
+
+    def report(self, dx, dy, wheel, buttons):
+        self.x = min(1.0, max(0.0, self.x + dx / 1200))
+        self.y = min(1.0, max(0.0, self.y + dy / 500))
+        self.wheel += wheel
+        self.lefts += (buttons & 1) and not (self.buttons & 1)
+        self.rights += bool(buttons & 2) and not (self.buttons & 2)
+        self.buttons = buttons
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(16, 16, 20))
+        p.setPen(QColor(150, 150, 156))
+        p.drawText(8, 16, f"Левая: {self.lefts}   Правая: {self.rights}   Колесо: {self.wheel}")
+        p.setBrush(QColor(170, 198, 220) if not self.buttons else QColor(255, 255, 255))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(QPointF(self.x * self.width(), 20 + self.y * (self.height() - 24)), 6, 6)
+        p.end()
 
 
 class Panel(QWidget):
@@ -263,6 +295,16 @@ class Panel(QWidget):
         b.clicked.connect(lambda: self.ctl.send({"type": "get_state"}))
         lay.addWidget(b)
         self.hil_label = QLabel("Режим: эмуляция")
+        lay.addWidget(QLabel("Режим «Мышь» на экране: что получил бы компьютер"))
+        self.mouse_pad = MouseTestPad()
+        lay.addWidget(self.mouse_pad)
+        self.net_box = QCheckBox("Сервер для приложения Android по сети")
+        self.net_box.toggled.connect(self.ctl.set_android_server)
+        lay.addWidget(self.net_box)
+        self.net_label = QLabel("")
+        self.net_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.net_label.setWordWrap(True)
+        lay.addWidget(self.net_label)
         lay.addWidget(self.hil_label)
         self.raw = QLineEdit(placeholderText='Сырая команда: {"type":"ping"}')
         self.raw.returnPressed.connect(self._raw)

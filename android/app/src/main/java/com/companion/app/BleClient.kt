@@ -51,6 +51,7 @@ class BleClient private constructor(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private val adapter get() = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var gatt: BluetoothGatt? = null
+    private var tcp: TcpLine? = null
     private var rx: BluetoothGattCharacteristic? = null
     private val writes = ArrayDeque<ByteArray>()
     private var writing = false
@@ -90,6 +91,31 @@ class BleClient private constructor(private val context: Context) {
         if (link.value == LinkState.Scanning) link.value = LinkState.Disconnected
     }
 
+    /** Test link to the PC emulator; everything above this class works exactly as over BLE. */
+    fun connectTcp(host: String, port: Int) {
+        disconnect()
+        link.value = LinkState.Connecting
+        prefs.edit().putString("tcp_host", host).apply()
+        tcp = TcpLine(host, port,
+            onConnected = { link.value = LinkState.Connected; handshake() },
+            onLine = { handleLine(it) },
+            onClosed = { error ->
+                if (error != null) lastError.value = "Эмулятор недоступен: $error"
+                tcp = null
+                link.value = LinkState.Disconnected
+            }).also { it.open() }
+    }
+
+    val savedTcpHost get() = prefs.getString("tcp_host", "10.0.2.2") ?: "10.0.2.2"
+
+    private fun handshake() {
+        send(Protocol.command("hello"))
+        send(Protocol.command("auth", "pin" to pin))
+        send(Protocol.command("set_time", "epoch" to System.currentTimeMillis() / 1000,
+            "tz_minutes" to java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60000))
+        send(Protocol.command("get_state"))
+    }
+
     fun connect(address: String) {
         stopScan()
         targetAddress = address
@@ -111,6 +137,8 @@ class BleClient private constructor(private val context: Context) {
     fun disconnect() {
         wantConnected = false
         main.removeCallbacksAndMessages(null)
+        tcp?.close()
+        tcp = null
         gatt?.disconnect()
         gatt?.close()
         gatt = null
@@ -152,11 +180,7 @@ class BleClient private constructor(private val context: Context) {
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: android.bluetooth.BluetoothGattDescriptor, status: Int) {
             link.value = LinkState.Connected
-            send(Protocol.command("hello"))
-            send(Protocol.command("auth", "pin" to pin))
-            send(Protocol.command("set_time", "epoch" to System.currentTimeMillis() / 1000,
-                "tz_minutes" to java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60000))
-            send(Protocol.command("get_state"))
+            handshake()
         }
 
         @Deprecated("Deprecated in Java")
@@ -173,13 +197,17 @@ class BleClient private constructor(private val context: Context) {
     }
 
     private fun onData(data: ByteArray) {
-        for (line in assembler.feed(data)) {
+        for (line in assembler.feed(data)) handleLine(line)
+    }
+
+    private fun handleLine(line: String) {
+        run {
             try {
                 val o = JSONObject(line)
                 if (o.optString("event") == "input") { // 20 messages a second: never logged
                     if (o.has("action")) actions.tryEmit(InputAction(o.getString("action"), o.optInt("index")))
                     else tilt.value = o.optDouble("ax").toFloat() to o.optDouble("ay").toFloat()
-                    continue
+                    return
                 }
                 if (o.optString("error") == "auth_failed" || o.optString("error") == "auth_required") {
                     lastError.value = "Неверный PIN: посмотрите экран «Об устройстве»"
@@ -196,10 +224,15 @@ class BleClient private constructor(private val context: Context) {
     }
 
     fun send(cmd: JSONObject) {
-        if (rx == null) return // not connected: an old command must not fire on the next connection
+        val net = tcp
+        if (rx == null && net == null) return // not connected: an old command must not fire on the next connection
         cmd.put("request_id", nextId++)
         val line = cmd.toString()
         addLog("→ $line")
+        if (net != null) {
+            net.send(line)
+            return
+        }
         synchronized(writes) { Protocol.chunks(line).forEach { writes.add(it) } }
         pump()
     }

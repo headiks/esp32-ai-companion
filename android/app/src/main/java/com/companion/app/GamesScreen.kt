@@ -37,6 +37,7 @@ private val Dark = Color(0xFF26262B)
 
 private enum class BigGame(val title: String, val hint: String) {
     Race("Гонки", "Наклон — руль, удержание экрана — газ"),
+    Durak("Дурак", "Наклон — выбор, нажатие — отметить, вверх — на стол, вниз — беру или бито"),
     Poker("Покер", "Наклон — выбор карты, нажатие — оставить, удержание — сдать"),
     Blackjack("Двадцать одно", "Нажатие — ещё карта, удержание — хватит"),
     Breakout("Арканоид", "Наклон — ракетка, нажатие — запуск"),
@@ -77,6 +78,7 @@ fun GamesTab(client: BleClient) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (current) {
                 BigGame.Race -> RaceHost(client)
+                BigGame.Durak -> DurakHost(client)
                 BigGame.Poker -> PokerHost(client)
                 BigGame.Blackjack -> BlackjackHost(client)
                 BigGame.Breakout -> BreakoutHost(client)
@@ -96,12 +98,13 @@ private fun KeepControllerAlive(client: BleClient) {
     }
 }
 
-private fun BleClient.startPad(title: String) =
-    send(Protocol.command("controller", "value" to "start", "mode" to "pad", "title" to title))
+private fun BleClient.startPad(title: String, hint: String) =
+    send(Protocol.command("controller", "value" to "start", "mode" to "pad", "title" to title, "hint" to hint))
 
-private fun BleClient.showCards(title: String, cards: List<Card>, marks: String = "") =
+private fun BleClient.showCards(title: String, cards: List<Card>, marks: String = "", hint: String = "", info: String = "", target: Card? = null) =
     send(Protocol.command("controller", "value" to "start", "mode" to "cards", "title" to title,
-        "labels" to cards.joinToString(",") { it.label }, "marks" to marks))
+        "labels" to cards.joinToString(",") { it.label }, "marks" to marks, "hint" to hint, "info" to info,
+        "target" to (target?.label ?: "")))
 
 /** Runs [body] once per display frame with the elapsed seconds, capped so a pause cannot teleport anything. */
 @Composable
@@ -126,7 +129,7 @@ private fun RaceHost(client: BleClient) {
     var gas by remember { mutableStateOf(false) }
     var touchSteer by remember { mutableFloatStateOf(0f) }
     val tilt by client.tilt.collectAsState()
-    LaunchedEffect(Unit) { client.startPad("Гонки") }
+    LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран газ") }
     LaunchedEffect(round) {
         client.actions.collect { a ->
             when (a.action) {
@@ -212,7 +215,7 @@ private fun PokerHost(client: BleClient) {
     var selected by remember { mutableIntStateOf(0) }
     fun sync() {
         version++
-        client.showCards("Покер ${game.chips}", game.player, game.marks())
+        client.showCards("Покер", game.player, game.marks(), "наклон выбор · тап оставить · вверх сдать", "Фишки ${game.chips}")
     }
     fun primary() { // tap on the device or a phone button: next step of the round
         when (game.phase) {
@@ -262,7 +265,7 @@ private fun BlackjackHost(client: BleClient) {
     var version by remember { mutableIntStateOf(0) }
     fun sync() {
         version++
-        client.showCards("Очки ${BlackjackRules.value(game.player)}", game.player)
+        client.showCards("Двадцать одно", game.player, "", "тап ещё · вверх хватит", "Очки ${BlackjackRules.value(game.player)}")
     }
     LaunchedEffect(Unit) { sync() }
     LaunchedEffect(Unit) {
@@ -305,7 +308,7 @@ private fun BreakoutHost(client: BleClient) {
     var frame by remember { mutableIntStateOf(0) }
     var touchX by remember { mutableStateOf<Float?>(null) }
     val tilt by client.tilt.collectAsState()
-    LaunchedEffect(Unit) { client.startPad("Арканоид") }
+    LaunchedEffect(Unit) { client.startPad("Арканоид", "наклон ракетка · тап запуск") }
     LaunchedEffect(round) {
         client.actions.collect { a ->
             if (a.action == "tap") { if (game.over || game.won) round++ else game.launch() }
@@ -338,6 +341,160 @@ private fun BreakoutHost(client: BleClient) {
         if (game.over || game.won) {
             Text(if (game.won) "Победа: ${game.score}\nНажмите для новой игры" else "Счёт: ${game.score}\nНажмите для новой игры",
                 Modifier.align(Alignment.Center), fontSize = 20.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+// ---- Durak --------------------------------------------------------------------------------------
+private val SUIT_NAMES = listOf("пики", "черви", "бубны", "трефы")
+
+/**
+ * Device flow: lean to walk through the hand, tap marks cards, swipe up throws everything marked (or the focused card)
+ * on the table, swipe down takes or ends the bout, swipe right transfers. The phone offers the same by touch.
+ */
+@Composable
+private fun DurakHost(client: BleClient) {
+    var game by remember { mutableStateOf<DurakGame?>(null) }
+    val current = game
+    if (current == null) {
+        LaunchedEffect(Unit) { client.startPad("Дурак", "выберите режим на телефоне") }
+        var players by remember { mutableIntStateOf(2) }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Игроков", color = Grey)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (n in 2..4) {
+                    if (n == players) Button(onClick = {}) { Text("$n") } else OutlinedButton(onClick = { players = n }) { Text("$n") }
+                }
+            }
+            Button(onClick = { game = DurakGame(players, false) }, Modifier.fillMaxWidth()) { Text("Подкидной") }
+            Button(onClick = { game = DurakGame(players, true) }, Modifier.fillMaxWidth()) { Text("Переводной") }
+        }
+        return
+    }
+    DurakTable(client, current) { game = null }
+}
+
+@Composable
+private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
+    var version by remember { mutableIntStateOf(0) }
+    var focus by remember { mutableIntStateOf(0) }
+    val marked = remember { mutableStateListOf<Card>() }
+    var message by remember { mutableStateOf("") }
+    val hand: List<Card> = game.hands[0]
+
+    fun chosen(): List<Card> = marked.filter { it in hand }.ifEmpty { listOfNotNull(hand.getOrNull(focus)) }
+    fun role(): String = when {
+        game.finished -> when (game.durak) { null -> "Ничья"; 0 -> "Вы дурак!"; else -> "Вы вышли, дурак: игрок ${game.durak!! + 1}" }
+        game.whoActs() != 0 -> "Ходит игрок ${game.whoActs()!! + 1}"
+        game.defender == 0 && game.taking -> "Вы берёте"
+        game.defender == 0 -> "Отбивайтесь"
+        game.table.isEmpty() -> "Ваш ход"
+        else -> "Подкидывайте или бито"
+    }
+    fun hint(): String = when {
+        game.finished -> "тап новая игра"
+        game.whoActs() != 0 -> "ждём соперника"
+        game.defender == 0 && game.transferMode -> "наклон выбор · тап отметить · вверх отбить · вправо перевод · вниз беру"
+        game.defender == 0 -> "наклон выбор · тап отметить · вверх отбить · вниз беру"
+        game.table.isEmpty() -> "наклон выбор · тап отметить · вверх на стол"
+        else -> "наклон выбор · тап отметить · вверх подкинуть · вниз бито"
+    }
+    fun sync() {
+        version++
+        if (focus >= hand.size) focus = (hand.size - 1).coerceAtLeast(0)
+        client.showCards(if (game.transferMode) "Дурак · переводной" else "Дурак · подкидной", hand,
+            hand.joinToString("") { if (it in marked) "1" else "0" }, hint(), role(),
+            if (game.defender == 0) game.uncovered.firstOrNull()?.attack else null)
+    }
+    fun afterMove(ok: Boolean, failure: String) {
+        if (ok) { marked.clear(); message = "" } else message = failure
+        sync()
+    }
+    fun toggle(i: Int) {
+        val c = hand.getOrNull(i) ?: return
+        focus = i
+        if (c in marked) marked.remove(c) else marked.add(c)
+        sync()
+    }
+    fun play() { // swipe up: put the cards on the table, as an attack or a defence depending on the role
+        if (game.whoActs() != 0) return
+        val cards = chosen()
+        when {
+            game.defender != 0 -> afterMove(game.attack(0, cards), "Эти карты сюда не подходят")
+            game.defend(cards) -> afterMove(true, "")
+            game.transfer(cards) -> afterMove(true, "") // cannot beat but same rank: the only sensible reading is a transfer
+            else -> afterMove(false, "Этими картами не отбиться")
+        }
+    }
+    fun transfer() { if (game.whoActs() == 0) afterMove(game.transfer(chosen()), "Перевести нельзя") }
+    fun passOrTake() {
+        if (game.whoActs() != 0) return
+        if (game.defender == 0) afterMove(game.take(), "") else afterMove(game.pass(0), "Первый ход пропустить нельзя")
+    }
+
+    LaunchedEffect(game) { sync() }
+    LaunchedEffect(game) {
+        // Computers move one at a time with a pause, so a person can follow what lands on the table.
+        while (true) {
+            delay(750)
+            if (game.aiAct()) sync()
+        }
+    }
+    LaunchedEffect(game) {
+        client.actions.collect { a ->
+            when (a.action) {
+                "select" -> { focus = a.index; version++ }
+                "tap" -> if (game.finished) onExit() else toggle(a.index)
+                "swipe_up", "long_press" -> { focus = a.index; play() }
+                "swipe_down" -> passOrTake()
+                "swipe_right" -> { focus = a.index; transfer() }
+            }
+        }
+    }
+
+    key(version) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text((1 until game.players).joinToString("  ") { "И${it + 1}: ${game.hands[it].size}" }, color = Grey, fontSize = 13.sp)
+                Text("Козырь: ${game.trumpCard.rankName} ${SUIT_NAMES[game.trump]} · колода ${game.deckLeft}", color = Sand, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            // Table: pairs, up to six, in two rows. The cover sits on its attack card, shifted so both stay readable.
+            Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
+                game.table.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
+                        row.forEach { t ->
+                            Box(Modifier.size(84.dp, 96.dp)) {
+                                PlayingCard(t.attack, false, false, Modifier.width(52.dp))
+                                t.cover?.let { PlayingCard(it, false, false, Modifier.width(52.dp).offset(26.dp, 18.dp)) }
+                            }
+                        }
+                    }
+                }
+            }
+            Text(role(), Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            if (message.isNotEmpty()) Text(message, Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = Rose, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            // Hand: cards overlap more as it grows, so any size fits one row without scrolling; chosen ones rise.
+            BoxWithConstraints(Modifier.fillMaxWidth().height(120.dp)) {
+                val cardW = 62.dp
+                val n = hand.size
+                val step = if (n > 1) minOf(cardW + 4.dp, (maxWidth - cardW) / (n - 1)) else 0.dp
+                val total = cardW + step * (n - 1).coerceAtLeast(0)
+                val start = (maxWidth - total) / 2
+                hand.forEachIndexed { i, c ->
+                    val up = if (c in marked) 0.dp else 18.dp
+                    PlayingCard(c, i == focus, c in marked, Modifier.width(cardW).offset(start + step * i, up)) { toggle(i) }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+                val mine = game.whoActs() == 0
+                Button(onClick = { play() }, enabled = mine) { Text("На стол") }
+                if (game.transferMode) OutlinedButton(onClick = { transfer() }, enabled = mine && game.defender == 0) { Text("Перевод") }
+                OutlinedButton(onClick = { passOrTake() }, enabled = mine) { Text(if (game.defender == 0) "Беру" else "Бито") }
+                if (game.finished) Button(onClick = onExit) { Text("Заново") }
+            }
         }
     }
 }

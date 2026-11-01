@@ -408,19 +408,25 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
       const char* labels = j.str("labels");
       const char* marks = j.str("marks");
       const char* title = j.str("title");
+      const char* info = j.str("info");
+      const char* hint = j.str("hint");
+      const char* target = j.str("target");
       if (!mode || (strcmp(mode, "pad") && strcmp(mode, "cards"))) return errorResp(out, cap, "bad_value", "mode: pad, cards", id);
       cc.cards = !strcmp(mode, "cards");
       cc.count = 0;
       memset(cc.labels, 0, sizeof(cc.labels));
-      // "As,10h,Kd": up to ten short labels; anything malformed is ignored rather than trusted.
-      for (const char* p = labels; p && *p && cc.count < 10;) {
+      // "As,10h,Kd": up to a full deck of short labels; anything malformed is ignored rather than trusted.
+      for (const char* p = labels; p && *p && cc.count < kMaxCards;) {
         const char* e = strchr(p, ',');
         size_t n = e ? (size_t)(e - p) : strlen(p);
         if (n > 0 && n < sizeof(cc.labels[0])) { memcpy(cc.labels[cc.count], p, n); cc.count++; }
         p = e ? e + 1 : nullptr;
       }
       snprintf(cc.marks, sizeof(cc.marks), "%s", marks ? marks : "");
-      snprintf(cc.title, sizeof(cc.title), "%s", title ? title : "");
+      copyUtf8(cc.title, title ? title : "", sizeof(cc.title));
+      copyUtf8(cc.info, info ? info : "", sizeof(cc.info));
+      copyUtf8(cc.hint, hint ? hint : "", sizeof(cc.hint));
+      snprintf(cc.target, sizeof(cc.target), "%s", target ? target : "");
       cc.active = true;
       cc.keepaliveMs = 8000;
       if (cc.selected >= cc.count) cc.selected = 0;

@@ -106,7 +106,7 @@ NotifIcon notifIconFromName(const char* s) {
 }
 const char* notifIconName(NotifIcon i) { return kIconNames[(int)i]; }
 
-static void copyStr(char* dst, const char* src, size_t cap) {
+void copyUtf8(char* dst, const char* src, size_t cap) {
   // Truncate on a UTF-8 boundary so a cut-off Cyrillic letter never renders as garbage.
   size_t n = strlen(src);
   if (n >= cap) { n = cap - 1; while (n > 0 && ((uint8_t)src[n] & 0xC0) == 0x80) n--; }
@@ -116,9 +116,9 @@ static void copyStr(char* dst, const char* src, size_t cap) {
 
 void NotificationManager::add(const char* title, const char* text, const char* icon, const char* source, uint32_t time) {
   Notification& n = items_[head_];
-  copyStr(n.title, title, sizeof(n.title));
-  copyStr(n.text, text, sizeof(n.text));
-  copyStr(n.source, source, sizeof(n.source));
+  copyUtf8(n.title, title, sizeof(n.title));
+  copyUtf8(n.text, text, sizeof(n.text));
+  copyUtf8(n.source, source, sizeof(n.source));
   n.icon = (uint8_t)notifIconFromName(icon);
   n.time = time;
   n.read = false;
@@ -210,16 +210,16 @@ static char lowerRu(char* s) {  // ASCII and Cyrillic А-Я in UTF-8, enough for
 
 bool OfflineAI::submitText(const char* text) {
   char low[200];
-  copyStr(low, text, sizeof(low));
+  copyUtf8(low, text, sizeof(low));
   lowerRu(low);
   reply_ = AIReply{};
   reply_.ok = true;
   reply_.offline = true;
-  copyStr(reply_.text, "Я пока не понимаю, но внимательно слушаю.", sizeof(reply_.text));
+  copyUtf8(reply_.text, "Я пока не понимаю, но внимательно слушаю.", sizeof(reply_.text));
   reply_.emotion = Emotion::Confused;
   for (const Rule& r : kRules) {
     if (strstr(low, r.word)) {
-      copyStr(reply_.text, r.reply, sizeof(reply_.text));
+      copyUtf8(reply_.text, r.reply, sizeof(reply_.text));
       reply_.emotion = r.e;
       break;
     }
