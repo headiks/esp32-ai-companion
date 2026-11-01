@@ -1272,3 +1272,15 @@ def test_long_cyrillic_fields_never_end_in_half_a_letter(c):
     assert r["status"] == "success"
     c.run(200)
     c.render()
+
+
+def test_two_line_hint_is_fully_visible(c):
+    """The second line holds the actions, it must not be wrapped away."""
+    one = "наклон выбор · тап отметить"
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "x", "hint": one})
+    c.run(300)
+    a = c.render().copy()
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "x", "hint": one + "\\n↑ бить · → перевод · ↓ беру"})
+    c.run(300)
+    second_line = c.render()[233 + 130 + 24:233 + 130 + 48]
+    assert (second_line != a[233 + 130 + 24:233 + 130 + 48]).any()

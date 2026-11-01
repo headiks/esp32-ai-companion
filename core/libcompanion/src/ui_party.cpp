@@ -610,10 +610,10 @@ class ControllerScreen : public Screen {
   }
   void draw(App& a, Canvas& c) override {
     const ControllerCfg& cc = a.controller;
-    c.text(kCx, 22, cc.title, FontSize::S, kGray, Align::Center);
+    c.text(kCx, 28, cc.title, FontSize::S, kGray, Align::Center);
     if (cc.cards) drawHand(c, cc);
     else drawPad(a, c);
-    if (cc.hint[0]) c.textWrapped(kCx, kCy + 136, 280, cc.hint, FontSize::S, kGray, Align::Center, 2);
+    if (cc.hint[0]) c.textWrapped(kCx, kCy + 130, 350, cc.hint, FontSize::S, kGray, Align::Center, 2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     switch (e.g) {
@@ -636,7 +636,7 @@ class ControllerScreen : public Screen {
   static constexpr int kDirectLimit = 6, kSide = 3;
   static constexpr float kDeadZone = 0.12f;
   void drawHand(Canvas& c, const ControllerCfg& cc) const {
-    if (cc.info[0]) c.text(kCx, 44, cc.info, FontSize::S, kSoft, Align::Center);
+    if (cc.info[0]) c.text(kCx, 50, cc.info, FontSize::S, kSoft, Align::Center);
     if (cc.count <= 0) { c.text(kCx, kCy - 20, "Нет карт", FontSize::M, kGray, Align::Center); return; }
     int focus = sel_ < cc.count ? sel_ : cc.count - 1;
     // Neighbours sit below the focused card in fixed slots. Only a window of the hand fits; "+N" tells what is beyond.

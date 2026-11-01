@@ -174,6 +174,7 @@ def main():
     pump(1.5)
     emu.set_tilt(0, 0)
     shot("7_race")
+    check("the race score counts on screen", any(re.fullmatch(r"[1-9]\d*", t) for t in texts()), str(texts()[:14]))
     tap(r"^Назад$", 1)
 
     crash = adb("logcat", "-d", "-s", "AndroidRuntime:E")

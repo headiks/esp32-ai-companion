@@ -144,11 +144,11 @@ private fun RaceHost(client: BleClient) {
         game.step(dt, steer, gas)
         frame++
     }
+    frame.hashCode() // read during composition, not only in the canvas: the score and messages must update too
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
         .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchSteer = 0f; gas = false }) { c, _ -> gas = true; touchSteer = ((c.position.x / size.width) * 2 - 1) * 2f } }
         .pointerInput(round) { detectTapGestures(onTap = { if (game.over) round++ }) }) {
         Canvas(Modifier.fillMaxSize()) {
-            frame.hashCode() // reading the counter here redraws the canvas every frame
             val w = size.width
             val h = size.height
             val horizon = h * 0.28f
@@ -174,7 +174,7 @@ private fun RaceHost(client: BleClient) {
                 val s = half * 0.26f
                 drawRoundRect(Rose, Offset(w / 2 + (o.x - game.x * 0.35f) * half - s / 2, y - s * 0.75f), Size(s, s * 0.75f), CornerRadius(s * 0.15f))
             }
-            val carX = w / 2 + game.x * halfW(0f) * 0.65f
+            val carX = w / 2 + game.x * halfW(0f) * 0.55f
             val carY = h * 0.86f
             val cw = w * 0.2f
             drawRoundRect(if (game.crashFlash > 0) Rose else Color.White, Offset(carX - cw / 2, carY), Size(cw, h * 0.1f), CornerRadius(cw * 0.15f))
@@ -320,11 +320,11 @@ private fun BreakoutHost(client: BleClient) {
         frame++
     }
     val colors = listOf(Rose, Sand, Mint, Sky, Color.White)
+    frame.hashCode() // read during composition, not only in the canvas: the score and messages must update too
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(Color(0xFF101013))
         .pointerInput(Unit) { detectDragGestures(onDragEnd = { touchX = null }) { c, _ -> touchX = c.position.x / size.width } }
         .pointerInput(round) { detectTapGestures(onTap = { if (game.over || game.won) round++ else game.launch() }) }) {
         Canvas(Modifier.fillMaxSize()) {
-            frame.hashCode()
             val w = size.width
             val h = size.height
             val bw = w / game.cols
@@ -402,7 +402,7 @@ private fun DurakTable(client: BleClient, game: DurakGame, onExit: () -> Unit) {
     fun sync() {
         version++
         if (focus >= hand.size) focus = (hand.size - 1).coerceAtLeast(0)
-        client.showCards("Козырь: ${SUIT_NAMES[game.trump]} · колода ${game.deckLeft}", hand,
+        client.showCards("Козырь: ${SUIT_NAMES[game.trump]}", hand,
             hand.joinToString("") { if (it in marked) "1" else "0" }, hint(), role(),
             if (game.defender == 0) game.uncovered.firstOrNull()?.attack else null)
     }
