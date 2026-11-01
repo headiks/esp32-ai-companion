@@ -348,3 +348,15 @@ def test_oversized_line_without_newline_is_answered_once(emu, phone):
     phone.sock.sendall(b"x" * 3000)
     replies = phone.read(300)
     assert replies and all(r["status"] == "error" for r in replies)
+
+
+def test_home_network_address_is_offered_before_vpn():
+    from emulator.communication.tcp_server import rank_addresses
+    assert rank_addresses(["169.254.254.214", "172.18.0.1", "192.168.3.72", "127.0.0.1"]) == ["192.168.3.72", "172.18.0.1"]
+    assert rank_addresses(["172.18.0.1", "10.0.0.5"]) == ["10.0.0.5", "172.18.0.1"]
+    assert rank_addresses(["127.0.0.1"]) == []
+
+
+def test_panel_shows_a_reachable_looking_address(emu):
+    emu.set_android_server(True, 7895)
+    assert "PIN" in emu.panel.net_label.text() and "Адрес для телефона" in emu.panel.net_label.text()

@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 from core.companion import Companion, emotion_names  # noqa: E402
 from emulator.audio.output import AudioOutput  # noqa: E402
 from emulator.communication.serial_link import SerialLink, list_serial_ports  # noqa: E402
-from emulator.communication.tcp_server import TcpServer, local_ip  # noqa: E402
+from emulator.communication.tcp_server import TcpServer, local_addresses  # noqa: E402
 from emulator.rendering.screen_widget import ScreenWidget  # noqa: E402
 from emulator.simulation.demo import steps as demo_steps  # noqa: E402
 from emulator.simulation.sensors import ImuSimulator, MicSimulator  # noqa: E402
@@ -242,7 +242,9 @@ class Emulator(QMainWindow):
         except OSError as e:
             self._log(f"Порт {port} занят: {e}")
             return
-        self.panel.net_label.setText(f"Телефон: {local_ip()}:{port}. Эмулятор Android: 10.0.2.2:{port}. PIN: {self.companion.pin()}")
+        ips = local_addresses()
+        other = f" Не подключается: {', '.join(ips[1:])}." if len(ips) > 1 else ""
+        self.panel.net_label.setText(f"Адрес для телефона: {ips[0] if ips else '?'}. PIN: {self.companion.pin()}.{other} Виртуальный телефон Android: 10.0.2.2.")
 
     def _pump_server(self, dt):
         if not self.server:

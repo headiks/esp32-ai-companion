@@ -7,14 +7,19 @@ import socketserver
 import threading
 
 
-def local_ip():
-    """The address other machines on the network use for this PC. No traffic is sent by a UDP connect."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        try:
-            s.connect(("10.255.255.255", 1))
-            return s.getsockname()[0]
-        except OSError:
-            return "127.0.0.1"
+def rank_addresses(addresses):
+    """Likely home network first. A VPN tunnel often owns the default route, so routing cannot be asked which one a phone can reach."""
+    def rank(ip):
+        if ip.startswith("192.168."):
+            return 0
+        if ip.startswith("10."):
+            return 1
+        return 2
+    return sorted((a for a in addresses if not a.startswith(("127.", "169.254."))), key=rank)
+
+
+def local_addresses():
+    return rank_addresses(socket.gethostbyname_ex(socket.gethostname())[2])
 
 
 class Client:
