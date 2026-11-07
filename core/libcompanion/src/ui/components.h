@@ -23,6 +23,9 @@ void textCentered(Canvas& c, float cx, float cy, const char* s, FontSize f, uint
 
 enum class ButtonKind : uint8_t { Primary, Secondary, Pill, PillOutline };
 
+// Debug overlay: buttons outline their touch area. Set by App::render from App::debugOverlay.
+extern bool debugOverlay;
+
 struct Button {
   float cx, cy, w, h;  // round kinds use w as the diameter
   ButtonKind kind;

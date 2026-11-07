@@ -191,95 +191,7 @@ void Canvas::line(float x0, float y0, float x1, float y1, float t, uint16_t c) {
   });
 }
 
-void Canvas::heart(float cx, float cy, float s, uint16_t c) {
-  float r = s * 0.52f;
-  fillCircle(cx - r * 0.92f, cy - r * 0.45f, r, c);
-  fillCircle(cx + r * 0.92f, cy - r * 0.45f, r, c);
-  // Lower wedge as scanlines narrowing to the tip.
-  float top = cy - r * 0.1f, bottom = cy + s * 1.05f, half = r * 1.86f;
-  sdfFill(cx - half - 1, top, cx + half + 1, bottom + 1, c, [&](float x, float y) {
-    float t = (y - top) / (bottom - top);
-    float w = half * (1 - t);
-    float d = fabsf(x - cx) - w;
-    return (top - y) > d ? (top - y) : d * 0.75f;
-  });
-}
-
-// Span rasterizer with 4 vertical sub-samples and exact horizontal coverage. It is much cheaper
-// than a per-pixel distance field, which matters because eyes are redrawn on every frame.
-void Canvas::eye(const EyeShape& s, uint16_t c) {
-  constexpr int kSub = 4;
-  static int16_t delta[kScreenW + 4];  // only the render thread draws
-  int ya = (int)floorf(s.cy - s.ry), yb = (int)ceilf(s.cy + s.ry) + 1;
-  if (ya < y0_) ya = y0_;
-  if (yb > y0_ + h_) yb = y0_ + h_;
-  int xa = (int)floorf(s.cx - s.rx) - 1, xb = (int)ceilf(s.cx + s.rx) + 2;
-  if (xa < x0_) xa = x0_;
-  if (xb > x0_ + w_) xb = x0_ + w_;
-  if (xa >= xb) return;
-  const float cheekCy = s.cheekY + s.cheekRy;
-
-  auto addSpan = [&](float l, float r) {
-    if (l < xa) l = (float)xa;
-    if (r > xb) r = (float)xb;
-    if (r <= l) return;
-    int li = (int)l, ri = (int)r;
-    const int w = 256 / kSub;  // weight of one sub-scanline per pixel
-    int covL = (int)((li + 1 - l) * w), covR = (int)((r - ri) * w);
-    if (li == ri) {
-      int cov = (int)((r - l) * w);
-      delta[li - xa] += cov; delta[li - xa + 1] -= cov;
-    } else {
-      delta[li - xa] += covL; delta[li - xa + 1] += w - covL;
-      delta[ri - xa] -= w - covR; delta[ri - xa + 1] -= covR;
-    }
-  };
-
-  for (int y = ya; y < yb; y++) {
-    int n = xb - xa + 2;
-    memset(delta, 0, (size_t)n * sizeof(delta[0]));
-    bool any = false;
-    for (int k = 0; k < kSub; k++) {
-      float sy = y + (k + 0.5f) / kSub;
-      float dy = (sy - s.cy) / s.ry;
-      float q = 1 - dy * dy;
-      if (q <= 0) continue;
-      float hw = s.rx * sqrtf(q);
-      float l = s.cx - hw, r = s.cx + hw;
-      // Upper lid: sy - upY >= slope * (x - cx)
-      float e = sy - s.upY;
-      if (fabsf(s.upSlope) < 1e-4f) { if (e < 0) continue; }
-      else if (s.upSlope > 0) { float b = s.cx + e / s.upSlope; if (b < r) r = b; }
-      else { float b = s.cx + e / s.upSlope; if (b > l) l = b; }
-      // Lower lid: sy - loY <= slope * (x - cx)
-      e = sy - s.loY;
-      if (fabsf(s.loSlope) < 1e-4f) { if (e > 0) continue; }
-      else if (s.loSlope > 0) { float b = s.cx + e / s.loSlope; if (b > l) l = b; }
-      else { float b = s.cx + e / s.loSlope; if (b < r) r = b; }
-      if (r <= l) continue;
-      any = true;
-      float cd = (sy - cheekCy) / s.cheekRy;
-      float cq = 1 - cd * cd;
-      if (sy > s.cheekY && cq > 0) {
-        float chw = s.cheekRx * sqrtf(cq);
-        addSpan(l, (s.cx - chw) < r ? (s.cx - chw) : r);
-        addSpan((s.cx + chw) > l ? (s.cx + chw) : l, r);
-      } else {
-        addSpan(l, r);
-      }
-    }
-    if (!any) continue;
-    uint16_t* p = buf_ + (y - y0_) * w_ + (xa - x0_);
-    int acc = 0;
-    for (int i = 0; i < xb - xa; i++) {
-      acc += delta[i];
-      if (acc >= 255) p[i] = c;
-      else if (acc > 4) p[i] = mix565(p[i], c, (uint32_t)acc);
-    }
-  }
-}
-
-// Same coverage scheme as eye(): 4 sub-scanlines per row, exact horizontal coverage accumulated in a
+// 4 sub-scanlines per row, exact horizontal coverage accumulated in a
 // difference buffer, so a 2-pixel run costs as much as a 300-pixel one.
 void Canvas::spans(float top, float bottom, float left, float right, uint16_t c, SpanFn fn, const void* ctx) {
   constexpr int kSub = 4, kMax = 8;
@@ -386,7 +298,10 @@ int Canvas::text(int x, int y, const char* s, FontSize f, uint16_t c, Align a) {
           int sx = gx + px;
           if (sx < x0_ || sx >= x0_ + w_) continue;
           uint8_t v = (px & 1) ? (row[px / 2] & 0x0F) : (row[px / 2] >> 4);
-          if (v) blend(sx, sy, c, (uint8_t)(v * 17));
+          if (!v) continue;
+          blend(sx, sy, c, (uint8_t)(v * 17));
+          int dx = 2 * sx + 1 - kScreenW, dy = 2 * sy + 1 - kScreenH, d2 = (dx * dx + dy * dy) / 4;
+          if (v >= 8 && d2 > contentReach2) contentReach2 = d2;
         }
       }
     }

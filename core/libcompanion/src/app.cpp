@@ -551,10 +551,12 @@ void App::drawOverlays(Canvas& c) {
 }
 
 void App::render(Canvas& c) {
-  c.clear(kBlack);
+  c.clear(theme::BG);
+  ui::debugOverlay = debugOverlay;
   cur()->draw(*this, c);
   drawOverlays(c);
   if (iris_ < 1) c.maskOutsideCircle(kScreenW / 2.f, kScreenH / 2.f, lerpf(30, 340, smooth01(iris_)));
+  if (debugOverlay) c.ring(theme::CX, theme::CY, theme::SAFE_R, 1, theme::DEBUG);  // text and buttons stay inside
 }
 
 Rect App::dirtyRect() const {

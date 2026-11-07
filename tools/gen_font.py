@@ -1,21 +1,17 @@
 """Rasterizes the interface fonts into core/libcompanion/src/font_data.{h,cpp} (4 bpp, anti-aliased once, here).
-Generated and committed; rerun only to change sizes or charsets. Needs Pillow and fontTools (comes with matplotlib).
+Generated and committed; rerun only to change sizes or charsets. Needs Pillow and fontTools.
 
 Order matters: it is the order of cc::FontSize in include/companion/canvas.h, checked by a static_assert.
-- S, M, L: DejaVu Sans, the old interface; removed once every screen uses the 1a fonts.
-- The rest: design 1a. Unbounded Medium for numbers, Onest for text (assets/fonts, SIL OFL 1.1).
+Design 1a: Unbounded Medium for numbers, Onest for text (assets/fonts, SIL OFL 1.1). Nothing smaller than 22 px.
 Unbounded sizes for numbers carry only digits and signs, to keep flash small. Glyphs a font lacks
 (card suits, and dots in Onest) are skipped here and drawn with shapes by the interface."""
-import os
 from pathlib import Path
 
-import matplotlib
 from fontTools.ttLib import TTFont
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS_DIR = ROOT / "assets/fonts"
-DEJAVU = os.path.join(matplotlib.get_data_path(), "fonts", "ttf", "DejaVuSans.ttf")
 UNB = FONTS_DIR / "Unbounded-Medium.ttf"
 ONEST_R, ONEST_M, ONEST_SB = (FONTS_DIR / f"Onest-{w}.ttf" for w in ("Regular", "Medium", "SemiBold"))
 
@@ -24,7 +20,6 @@ DIGITS = "0123456789 :,.+-−–°%KM"
 
 # name in cc::FontSize, file, pixel size, characters
 FONTS = [
-    ("S", DEJAVU, 19, TEXT), ("M", DEJAVU, 25, TEXT), ("L", DEJAVU, 40, TEXT),
     ("NumXXL", UNB, 120, DIGITS), ("NumXL", UNB, 104, DIGITS), ("Num96", UNB, 96, DIGITS), ("Num92", UNB, 92, DIGITS),
     ("Num84", UNB, 84, DIGITS), ("NumL", UNB, 64, DIGITS), ("NumL56", UNB, 56, DIGITS), ("NumM", UNB, 48, DIGITS),
     ("NumM40", UNB, 40, DIGITS), ("NumS", UNB, 36, DIGITS), ("NumS30", UNB, 30, DIGITS),

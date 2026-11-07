@@ -336,10 +336,12 @@ def main():
     ap.add_argument("--seconds", type=float, default=3)
     ap.add_argument("--demo", action="store_true", help="start DEMO MODE right away")
     ap.add_argument("--android-server", action="store_true", help="listen for the Android app on port 7777")
+    ap.add_argument("--debug-overlay", action="store_true", help="draw the r210 safe circle and the buttons' touch areas")
     args = ap.parse_args()
     app = QApplication(sys.argv)
     win = Emulator(args.storage, args.silent)
     win.show()
+    win.companion.set_debug_overlay(args.debug_overlay)
     if args.android_server:
         win.panel.net_box.setChecked(True)
     if args.demo:

@@ -130,6 +130,7 @@ class App {
  public:
   bool netDirty = false;       // Wi-Fi/BLE settings changed: the platform re-applies them
   bool sleepRequested = false; // the platform may turn peripherals down
+  bool debugOverlay = false;    // design check: the r210 safe circle and every button's touch area
 
   // Shared timer/stopwatch state survives leaving their screens.
   float timerLeftMs = 0, timerSetMs = 5 * 60000.f; bool timerRunning = false;

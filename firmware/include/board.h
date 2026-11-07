@@ -32,3 +32,6 @@
 // Buttons
 #define PIN_BOOT 0
 #define PIN_SYS_OUT 3   // PWR key state, high while pressed
+
+// Design check: 1 draws the r210 circle that text and buttons stay inside, and every button's touch area.
+#define CC_DEBUG_OVERLAY 0

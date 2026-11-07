@@ -9,11 +9,7 @@ namespace cc {
 constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
-constexpr uint16_t kBlack = 0x0000, kWhite = 0xFFFF;
-// Interface palette: black, white, greys and muted pastels only.
-constexpr uint16_t kAccent = rgb565(182, 190, 214), kSoft = rgb565(220, 214, 196);
-constexpr uint16_t kRose = rgb565(218, 176, 184), kMint = rgb565(174, 208, 192), kSky = rgb565(170, 198, 220);
-constexpr uint16_t kGray = rgb565(120, 120, 120), kDark = rgb565(38, 38, 38), kDim = rgb565(70, 70, 70);
+// Colours live in src/ui/theme.h; nothing else names one.
 
 // Alpha blend, a: 0..255.
 inline uint16_t blend565(uint16_t bg, uint16_t fg, uint32_t a) {
@@ -26,9 +22,8 @@ inline uint16_t blend565(uint16_t bg, uint16_t fg, uint32_t a) {
 }
 
 enum class Align : uint8_t { Left, Center, Right };
-// Same order as tools/gen_font.py. S, M, L are the old DejaVu interface; the rest are the 1a tokens (ui/theme.h).
+// Same order as tools/gen_font.py; the roles are named in ui/theme.h.
 enum class FontSize : uint8_t {
-  S, M, L,
   NumXXL, NumXL, Num96, Num92, Num84, NumL, NumL56, NumM, NumM40, NumS, NumS30,  // Unbounded, digits and signs only
   MenuSel, Unb34, Unb28,                                                         // Unbounded, full text
   Title, Txt28, Body, Cap, Min, Btn,                                             // Onest
@@ -36,15 +31,6 @@ enum class FontSize : uint8_t {
 };
 
 struct Rect { int x, y, w, h; };
-
-// Convex eye silhouette: ellipse clipped by two lids, minus a "cheek" ellipse rising from below.
-struct EyeShape {
-  float cx, cy, rx, ry;
-  float upY, upSlope;    // inside when y >= upY + upSlope * (x - cx)
-  float loY, loSlope;    // inside when y <= loY + loSlope * (x - cx)
-  float cheekY;          // top of the cheek ellipse, absolute y; values below the eye have no effect
-  float cheekRx, cheekRy;
-};
 
 class Canvas {
  public:
@@ -60,8 +46,6 @@ class Canvas {
   void roundRect(float x, float y, float w, float h, float r, uint16_t c);
   void roundRectOutline(float x, float y, float w, float h, float r, float stroke, uint16_t c);  // stroke inside
   void diamond(float cx, float cy, float halfW, float halfH, uint16_t c);
-  void heart(float cx, float cy, float size, uint16_t c);
-  void eye(const EyeShape& s, uint16_t c);
   // Anti-aliased fill of any shape given row by row: fn(sy, xs, max, ctx) writes up to max inside intervals
   // [xs[2i], xs[2i+1]) of the sub-scanline at height sy (4 per pixel row) and returns how many it wrote.
   typedef int (*SpanFn)(float sy, float* xs, int max, const void* ctx);
@@ -79,6 +63,9 @@ class Canvas {
   static int capBottom(FontSize f);  // from the top of the line to the baseline of digits and capitals
   // Blacks out everything outside a circle: used for the iris screen transition and the bezel.
   void maskOutsideCircle(float cx, float cy, float r);
+  // Squared distance from the screen centre to the farthest half-lit text pixel or button edge since the last reset.
+  // Checks the design rule "text and buttons stay inside r210"; costs one multiply per text pixel.
+  int contentReach2 = 0;
 
  private:
   inline void blend(int x, int y, uint16_t c, uint8_t a);

@@ -1,7 +1,8 @@
 """Renders emotions, screens and weather through the real core, for visual review or for design tools.
 Usage:
     python tools/render_sheet.py out.png [emotions|screens|weather]   contact sheet of one group
-    python tools/render_sheet.py OUT_DIR --each                        every frame as its own full-size PNG, all groups"""
+    python tools/render_sheet.py OUT_DIR --each                        every frame as its own full-size PNG, all groups
+Add --debug-overlay to draw the r210 safe circle and the buttons' touch areas on every frame."""
 import sys
 from pathlib import Path
 
@@ -12,16 +13,20 @@ from core.companion import Companion, SCREEN, emotion_names, rgb565_to_rgb888  #
 
 WEATHER = ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"]
 MODES = ["screens", "emotions", "weather"]
+DEBUG_OVERLAY = "--debug-overlay" in sys.argv
 
 
 def snapshot(c, scale=0.5, transparent=False):
     """The round display as seen through the bezel: outside the circle is grey, or transparent for design tools."""
     img = Image.fromarray(rgb565_to_rgb888(c.render()))
+    reach = c.content_reach()
     mask = Image.new("L", (SCREEN, SCREEN), 0)
     ImageDraw.Draw(mask).ellipse((0, 0, SCREEN, SCREEN), fill=255)
     bg = Image.new("RGBA", (SCREEN, SCREEN), (0, 0, 0, 0)) if transparent else Image.new("RGB", (SCREEN, SCREEN), (40, 40, 44))
     bg.paste(img, (0, 0), mask)
-    return bg if scale == 1 else bg.resize((int(SCREEN * scale), int(SCREEN * scale)), Image.LANCZOS)
+    out = bg if scale == 1 else bg.resize((int(SCREEN * scale), int(SCREEN * scale)), Image.LANCZOS)
+    out.info["reach"] = reach  # farthest text or button edge from the centre: tests hold it inside r210
+    return out
 
 
 def sheet(items, cols=6):
@@ -39,6 +44,7 @@ def sheet(items, cols=6):
 def collect(mode, scale=0.5, transparent=False):
     """(name, image) pairs for one group. Names are file names: lowercase, no spaces."""
     c = Companion(seed=7)
+    c.set_debug_overlay(DEBUG_OVERLAY)
     c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
     c.handle_command({"type": "setting", "name": "blink_rate", "value": 0})  # a frame caught mid-blink says nothing
     c.handle_command({"type": "set_time", "epoch": 1767225600 + 12 * 3600 + 34 * 60 + 56, "tz_minutes": 0})
@@ -73,6 +79,7 @@ def collect(mode, scale=0.5, transparent=False):
     if mode not in ("emotions", "weather"):
         # Time not set: only a device that was never synchronised shows it.
         fresh = Companion(seed=7)
+        fresh.set_debug_overlay(DEBUG_OVERLAY)
         fresh.handle_command({"type": "screen", "value": "digital_clock"})
         fresh.run(1000)
         items.insert(12, ("13_time_not_set", snapshot(fresh, scale, transparent)))
@@ -104,6 +111,17 @@ def _tap(x, y):
     return go
 
 
+def _pulses(n, ax, on_ms, off_ms, gx=0):
+    """n jolts along x: shakes for the shaker, reps for the workout."""
+    def go(c):
+        for _ in range(n):
+            for _ in range(on_ms // 20):
+                c.imu(ax, 0, 1, gx, dt=20); c.tick(20)
+            for _ in range(off_ms // 20):
+                c.imu(0, 0, 1, dt=20); c.tick(20)
+    return go
+
+
 def _tilt(ax, ay, ms=600):
     def go(c):
         for _ in range(ms // 20):
@@ -116,7 +134,7 @@ def _tilt(ax, ay, ms=600):
 
 # The screens of the 1a design, under its numbers, so that tools/compare_design.py can pair them with the reference.
 SCENES = [
-    ("01_face", _screen("face", 1500)),
+    ("01_face", _steps(_screen("face", 300), _cmd(type="emotion", value="neutral", hold_ms=8000), lambda c: c.run(1500))),
     ("02_menu", _screen("menu")),
     # Without an AI server (always so in the emulator) the talk screen says why the voice is unavailable.
     ("03_talk", _steps(_screen("face", 300), _cmd(type="setting", name="ai_voice_consent", value=True), _cmd(type="ai_listen"),
@@ -141,7 +159,7 @@ SCENES = [
     ("18_game_result", _steps(_screen("reaction", 300), _tap(233, 372), lambda c: c.run(4600),
                               lambda c: (c.touch(True, 233, 233), c.run(60), c.touch(False, 233, 233), c.run(600)))),
     ("19_maze", _screen("maze")),
-    ("20_orbit", _steps(_screen("orbit", 300), _tap(233, 372), lambda c: c.run(1800))),
+    ("20_orbit", _steps(_screen("orbit", 300), _tap(233, 372), lambda c: c.run(900))),
     ("21_snake", _steps(_screen("snake", 300), _tap(233, 372), lambda c: c.run(1500))),
     ("22_simon", _steps(_screen("simon", 300), _tap(233, 372), lambda c: c.run(700))),
     ("23_tictactoe", _steps(_screen("tictactoe", 300), _tap(233, 272), _tap(156, 187), lambda c: c.run(1500))),
@@ -152,9 +170,9 @@ SCENES = [
     ("28_magic_ball", _steps(_screen("magic_ball", 300), _tap(233, 248), lambda c: c.run(1500))),
     ("29_balance", _steps(_screen("balance", 300), _tap(233, 372), lambda c: c.run(1200))),
     ("30_duel", _screen("duel")),
-    ("31_shaker", _steps(_screen("shaker", 300), _tap(233, 372), lambda c: c.run(6000))),
+    ("31_shaker", _steps(_screen("shaker", 300), _tap(233, 372), _pulses(47, 2.4, 40, 40, gx=300), lambda c: c.run(2240))),
     ("32_safe", _screen("safe")),
-    ("33_workout", _screen("workout")),
+    ("33_workout", _steps(_screen("workout", 300), _pulses(7, 1.6, 40, 900))),  # 7 jumps
     ("34_mole", _steps(_screen("mole", 300), _tap(233, 372), lambda c: c.run(1500))),
     ("35_blackjack", _screen("blackjack")),
     ("36_mouse", _screen("mouse")),
@@ -172,8 +190,9 @@ SCENES = [
 
 
 def main():
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "sheet.png")
-    mode = sys.argv[2] if len(sys.argv) > 2 else "emotions"
+    args = [a for a in sys.argv[1:] if a != "--debug-overlay"]
+    path = Path(args[0] if args else "sheet.png")
+    mode = args[1] if len(args) > 1 else "emotions"
     if mode != "--each":
         sheet(collect(mode)).save(path)
         return

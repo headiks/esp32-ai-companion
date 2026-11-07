@@ -4,6 +4,6 @@
 namespace cc {
 struct Glyph { uint32_t cp; uint32_t offset; uint16_t w, h; int16_t xoff; int16_t yoff; uint16_t adv; };
 struct FontInfo { const Glyph* glyphs; int count; const uint8_t* bitmap; int lineH; };
-constexpr int kFontCount = 23;
+constexpr int kFontCount = 20;
 extern const FontInfo kFonts[kFontCount];
 }  // namespace cc

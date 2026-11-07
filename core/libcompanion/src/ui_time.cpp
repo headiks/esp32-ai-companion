@@ -105,20 +105,20 @@ class StopwatchScreen : public Screen {
  public:
   void draw(App& a, Canvas& c) override {
     ui::progressRing(c, 218, 4, fmodf(a.swMs / 1000.f, 60.f) / 60);
-    ui::textCentered(c, CX, 152, "Секундомер", TXT_CAP, INK_2);
+    ui::textCentered(c, CX, 115, "Секундомер", TXT_CAP, INK_2);
     // Whole seconds big, tenths small in the accent, sitting on the same baseline.
     char main[16], tenth[8];
     mmss(main, sizeof main, a.swMs);
     snprintf(tenth, sizeof tenth, ",%d", ((int)a.swMs / 100) % 10);
     int w1 = Canvas::textWidth(main, NUM_92), w2 = Canvas::textWidth(tenth, NUM_M40), x = CX - (w1 + w2) / 2;
-    int top = 226 - Canvas::capMiddle(NUM_92), base = top + Canvas::capBottom(NUM_92);
+    int top = 185 - Canvas::capMiddle(NUM_92), base = top + Canvas::capBottom(NUM_92);
     c.text(x, top, main, NUM_92, INK);
     c.text(x + w1, base - Canvas::capBottom(NUM_M40), tenth, NUM_M40, ACCENT);
     if (a.swLaps > 0) {
       char lap[16], line[40];
       mmss(lap, sizeof lap, a.swMs - a.swLap);
       snprintf(line, sizeof line, "круг %d · %s,%d", a.swLaps + 1, lap, ((int)(a.swMs - a.swLap) / 100) % 10);
-      ui::textCentered(c, CX, 292, line, TXT_MIN, INK_2);
+      ui::textCentered(c, CX, 254, line, TXT_MIN, INK_2);
     }
     lap_.draw(c, a.swRunning || a.swMs <= 0 ? "Круг" : "Сброс", a.swRunning || a.swMs > 0);
     go_.draw(c, a.swRunning ? "Стоп" : "Старт");

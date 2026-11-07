@@ -358,8 +358,8 @@ class SettingValueScreen : public Screen {
     snprintf(b, sizeof b, "%d%s", v, sp.unit);
     line(c, CX, 214, b, NUM_92, INK, 400);
     if (sp.note[0]) line(c, CX, 282, sp.note, TXT_MIN, INK_2);
-    c.text(58, 356, "−", TXT_TITLE, INK_2, Align::Center);
-    c.text(408, 356, "+", TXT_TITLE, INK_2, Align::Center);
+    c.text(82, 330, "−", TXT_TITLE, INK_2, Align::Center);  // the spec's x58/x408, Y356 is past r210
+    c.text(384, 330, "+", TXT_TITLE, INK_2, Align::Center);
   }
   bool capturesSwipes() const override { return true; }
   void onGesture(App& a, const GestureEvent& e) override {
@@ -421,8 +421,9 @@ class DiagnosticsScreen : public Screen {
     }
     struct { const char* n; bool ok; } st[7] = {{"Сенсор", h.touchOk}, {"IMU", h.imuOk}, {"PMIC", h.pmicOk}, {"Кодек", h.codecOk},
                                                {"Микрофон", h.micOk}, {"BLE", h.bleConnected}, {"Wi-Fi", h.wifiConnected}};
-    statusRow(c, 330, st, 4);
-    statusRow(c, 362, st + 4, 3);
+    statusRow(c, 326, st, 3);  // narrowing rows: the circle narrows too
+    statusRow(c, 356, st + 3, 2);
+    statusRow(c, 386, st + 5, 2);
     // Touch calibration: a ring where the finger is (documentation/HARDWARE.md).
     if (a.touch.isDown()) c.ring((float)a.touch.x(), (float)a.touch.y(), 22, 3, ACCENT);
   }

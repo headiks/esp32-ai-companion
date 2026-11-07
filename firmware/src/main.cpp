@@ -4,6 +4,7 @@
 #include <companion/app.h>
 #include "audio_driver.h"
 #include "bluetooth_manager.h"
+#include "board.h"
 #include "board_inputs.h"
 #include "display_manager.h"
 #include "http_ai_client.h"
@@ -41,6 +42,7 @@ void setup() {
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);  // never let a missing USB host stall the animation
   app = new cc::App();
+  app->debugOverlay = CC_DEBUG_OVERLAY;
   storage.begin();
 
   uint8_t mac[6];

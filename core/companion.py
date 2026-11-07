@@ -27,7 +27,7 @@ def lib():
             "cc_imu": (None, [p, f, f, f, f, f, f, f]), "cc_mic": (None, [p, p, i]), "cc_mix": (None, [p, p, i]),
             "cc_command": (i, [p, C.c_char_p, C.c_char_p, i]), "cc_command_unauth": (i, [p, C.c_char_p, C.c_char_p, i, C.POINTER(i)]),
             "cc_state": (i, [p, C.c_char_p, i]), "cc_set_battery": (None, [p, i, i, i, i]), "cc_set_time_scale": (None, [p, f]),
-            "cc_set_fps": (None, [p, f]), "cc_emotion_count": (i, []), "cc_emotion_name": (C.c_char_p, [i]), "cc_allowed": (i, [i, i]),
+            "cc_set_fps": (None, [p, f]), "cc_set_debug_overlay": (None, [p, i]), "cc_content_reach": (f, [p]), "cc_emotion_count": (i, []), "cc_emotion_name": (C.c_char_p, [i]), "cc_allowed": (i, [i, i]),
             "cc_sound_count": (i, [p]), "cc_sound_name": (C.c_char_p, [p, i]), "cc_emotion_sound": (i, [p, i, i]), "cc_last_sound": (i, [p]),
             "cc_play_count": (C.c_uint32, [p]), "cc_blink_amount": (f, [p]), "cc_pose": (f, [p, i, i]), "cc_gaze": (f, [p, i]),
             "cc_maze_selftest": (i, [i, C.c_uint32]), "cc_maze_wall_selftest": (i, [C.c_uint32]), "cc_snake_selftest": (i, [C.c_uint32]), "cc_poll_input": (i, [p, C.c_char_p, i]), "cc_poll_mouse": (i, [p, C.POINTER(i)]), "cc_blackjack_selftest": (i, [C.c_uint32]), "cc_pin": (C.c_char_p, [p]), "cc_parse_weather": (i, [C.c_char_p, C.POINTER(f)]),
@@ -131,6 +131,14 @@ class Companion:
 
     def set_fps(self, fps):
         self.l.cc_set_fps(self.h, fps)
+
+    def set_debug_overlay(self, on):
+        """Draws the r210 safe circle and every button's touch area, to check a screen against the design."""
+        self.l.cc_set_debug_overlay(self.h, int(on))
+
+    def content_reach(self):
+        """Distance from the centre to the farthest text pixel or button edge of the last render(), in px."""
+        return self.l.cc_content_reach(self.h)
 
     def sounds(self):
         return [self.l.cc_sound_name(self.h, i).decode() for i in range(self.l.cc_sound_count(self.h))]

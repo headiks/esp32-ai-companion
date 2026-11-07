@@ -6,7 +6,7 @@ python emulator/main.py
 
 При первом запуске ядро собирается автоматически, если есть компилятор C++ или установлен `ziglang`.
 
-Параметры: `--silent` без звука, `--demo` сразу запустить демо, `--storage ПАПКА` своё место хранения состояния, `--screenshot ФАЙЛ --seconds N` снимок окна и выход.
+Параметры: `--silent` без звука, `--demo` сразу запустить демо, `--storage ПАПКА` своё место хранения состояния, `--screenshot ФАЙЛ --seconds N` снимок окна и выход, `--debug-overlay` круг r210 и зоны касания кнопок поверх экрана.
 
 ## Что он воспроизводит
 
@@ -59,6 +59,16 @@ python tools/sim_device.py
 ```bash
 python tools/render_sheet.py ПАПКА --each
 ```
+
+С `--debug-overlay` на каждом кадре виден круг r210 и зоны касания кнопок.
+
+## Сверка с макетом 1a
+
+```bash
+python tools/compare_design.py ПАПКА
+```
+
+Кладёт рядом эталон из `documentation/design/1a` и наш кадр, считает долю ярких пикселей и расхождение, пишет `ПАПКА/report.md`. Автоматические правила дизайна проверяет `tests/test_design.py`. Список отличий с причинами: [design/1a/DIFFERENCES.md](design/1a/DIFFERENCES.md).
 
 ## Состояние
 

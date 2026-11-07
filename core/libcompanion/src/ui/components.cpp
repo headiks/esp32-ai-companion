@@ -34,6 +34,8 @@ void textCentered(Canvas& c, float cx, float cy, const char* s, FontSize f, uint
 
 // ---- buttons --------------------------------------------------------------------------------------
 
+bool debugOverlay = false;
+
 bool Button::hit(int x, int y) const {
   float hw = (w > TOUCH_MIN ? w : TOUCH_MIN) / 2, hh = (h > TOUCH_MIN ? h : TOUCH_MIN) / 2;
   float dx = x - cx, dy = y - cy;
@@ -58,6 +60,13 @@ void Button::draw(Canvas& c, const char* label, bool enabled) const {
       textCentered(c, cx, cy, label, TXT_BTN, enabled ? INK : INK_3);
       break;
   }
+  float far = kind == ButtonKind::Primary || kind == ButtonKind::Secondary ? hypotf(cx - CX, cy - CY) + w / 2
+                                                                            : hypotf(fabsf(cx - CX) + w / 2 - h / 2, cy - CY) + h / 2;
+  if ((int)(far * far) > c.contentReach2) c.contentReach2 = (int)(far * far);
+  if (!debugOverlay) return;
+  float hw = (w > TOUCH_MIN ? w : TOUCH_MIN) / 2, hh = (h > TOUCH_MIN ? h : TOUCH_MIN) / 2;
+  if (kind == ButtonKind::Primary || kind == ButtonKind::Secondary) c.ring(cx, cy, hw - 1, 1, DEBUG);
+  else c.roundRectOutline(cx - hw, cy - hh, 2 * hw, 2 * hh, 0, 1, DEBUG);
 }
 
 // ---- cards ----------------------------------------------------------------------------------------

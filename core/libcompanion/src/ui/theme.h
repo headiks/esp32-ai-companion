@@ -32,6 +32,8 @@ constexpr uint16_t FOG = rgb565(0x2A, 0x2A, 0x2C), WIND = rgb565(0x4A, 0x49, 0x4
 }  // namespace sky
 constexpr uint16_t FIREFLY_HALO = rgb565(0x1D, 0x20, 0x29);
 constexpr uint16_t SNAKE_GRID = rgb565(0x2A, 0x29, 0x27), SNAKE_TAIL = rgb565(0x4D, 0x4B, 0x47);
+// Debug overlay only (CC_DEBUG_OVERLAY in firmware/include/board.h): never seen by the user.
+constexpr uint16_t DEBUG = rgb565(0xFF, 0x00, 0xFF);
 
 // The spec gives these in RGB565 too: a typo in either table stops the build.
 static_assert(INK == 0xF79D && INK_2 == 0x8C2F && INK_3 == 0x39C6 && TRACK == 0x2104 && TRACK_2 == 0x18E3, "palette");

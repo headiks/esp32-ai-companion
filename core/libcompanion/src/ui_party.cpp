@@ -592,10 +592,9 @@ class BlackjackScreen : public Screen {
     miniFace(c, a, CX, 38 + 65 * 176 / 354.f, 130);
     // Dealer above, small; the second card stays face down until the player stands.
     float right = row(c, 112, 50, 68, g_.dealerCount(), false, hide ? 1 : -1);
-    if (!hide) {
-      snprintf(b, sizeof b, "%d", g_.dealerValue());
-      c.text((int)right + 14, 112 + 34 - Canvas::capMiddle(TXT_MIN), b, TXT_MIN, INK_2);
-    }
+    // While the second card is down only the open one counts, as in the design.
+    snprintf(b, sizeof b, "%d", hide ? BlackjackGame::value(&g_.dealerCard(0), 1) : g_.dealerValue());
+    c.text((int)right + 14, 112 + 34 - Canvas::capMiddle(TXT_MIN), b, TXT_MIN, INK_2);
     right = row(c, 202, 82, 114, g_.playerCount(), true, -1);
     snprintf(b, sizeof b, "%d", g_.playerValue());
     c.text((int)right + 16, 202 + 57 - Canvas::capMiddle(NUM_M40), b, NUM_M40, g_.playerValue() > 21 ? ACCENT_2 : INK);
@@ -677,7 +676,7 @@ class BlackjackScreen : public Screen {
     a.react(o > 0 ? Emotion::Amazed : o < 0 ? Emotion::Smug : Emotion::Skeptical, 2000, EmotionPriority::Strong);
   }
   const ui::Button hit_ = ui::primary(180, 338);
-  const ui::Button stand_ = ui::secondary(290, 348);
+  const ui::Button stand_ = ui::secondary(290, 338, BTN_PRIMARY);  // ⌀92 as in the design: "Хватит" overflows ⌀72
   BlackjackGame g_;
   float stepMs_ = 0;
 };
@@ -823,7 +822,7 @@ class ControllerScreen : public Screen {
     hint(c, cc, 230);
     if (cc.buttonCount >= 1) {
       // The whole screen still reacts to a hold; the pill shows where and lights while held.
-      float x = CX - 110, y = 300, w = 220, h = 96;
+      float x = CX - 124, y = 300, w = 248, h = 96;  // spec 220: the label nearly touched the ends
       c.roundRect(x, y, w, h, h / 2, held_ ? ACCENT : SURFACE);
       if (!held_) c.roundRectOutline(x, y, w, h, h / 2, 2, INK_3);
       ui::textCentered(c, CX, y + h / 2, cc.buttons[0], TXT_BODY, held_ ? BG : INK);
@@ -864,10 +863,8 @@ class MouseScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     uint8_t b = a.mouseState.buttons;
     bool linked = a.hal.bleConnected;
-    int w1 = Canvas::textWidth("Мышь · ", TXT_MIN), w2 = Canvas::textWidth(linked ? "подключено" : "не подключено", TXT_MIN);
-    int x = CX - (w1 + w2) / 2, top = 48;
-    c.text(x, top, "Мышь · ", TXT_MIN, INK_2);
-    c.text(x + w1, top, linked ? "подключено" : "не подключено", TXT_MIN, linked ? ACCENT : INK_2);
+    // "Мышь · не подключено" of the spec does not fit r210 at the top: the status alone.
+    c.text(CX, 48, linked ? "подключено" : "не подключено", TXT_MIN, linked ? ACCENT : INK_2, Align::Center);
     // The touchpad and the cursor that follows the lean.
     c.ring(CX, 198, 99, 2, INK_3);
     float px = CX + clampf(a.hal.ax - zeroX_, -1, 1) * 70, py = 198 + clampf(a.hal.ay - zeroY_, -1, 1) * 70;
@@ -876,16 +873,16 @@ class MouseScreen : public Screen {
     for (int i = 0; i < 2; i++) {
       bool down = b & (1 << i);
       float bx = i ? 292.f - 52 : 176.f - 52;
-      c.roundRect(bx, 318, 104, 72, 36, down ? ACCENT : SURFACE);
-      if (!down) c.roundRectOutline(bx, 318, 104, 72, 36, 2, INK_3);
-      ui::textCentered(c, bx + 52, 354, i ? "П" : "Л", TXT_BTN, down ? BG : INK);
+      c.roundRect(bx, kPillTop, 104, 72, 36, down ? ACCENT : SURFACE);
+      if (!down) c.roundRectOutline(bx, kPillTop, 104, 72, 36, 2, INK_3);
+      ui::textCentered(c, bx + 52, kPillTop + 36, i ? "П" : "Л", TXT_BTN, down ? BG : INK);
     }
     // Scroll strip on the right rim: 300 px of track, the thumb shows the last scroll.
     const float sweep = 300 / 214.f * 57.29578f, thumb = 40 / 214.f * 57.29578f;
     ui::drawArc(c, CX, CY, 214, 12, -sweep / 2, sweep, TRACK);
     ui::drawArc(c, CX, CY, 214, 12, clampf(scroll_, -1, 1) * (sweep - thumb) / 2 - thumb / 2, thumb, ACCENT);
-    if (a.nowMs() - enteredMs_ < HINT_MS) c.text(CX, 404, tiltOn_ ? "край — прокрутка" : "наклон выключен, встряхни", TXT_MIN, INK_2, Align::Center);
-    else if (!tiltOn_) c.text(CX, 404, "наклон выключен, встряхни", TXT_MIN, INK_2, Align::Center);
+    // Hints in the "action — effect" form; a longer one would cross r210 this low.
+    if (a.nowMs() - enteredMs_ < HINT_MS || !tiltOn_) c.text(CX, 392, tiltOn_ ? "край — прокрутка" : "встряхни — наклон", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     App::MouseState& m = a.mouseState;
@@ -936,6 +933,7 @@ class MouseScreen : public Screen {
     return dx > 40 && dx * dx + dy * dy > 175 * 175;
   }
   static void click(App::MouseState& m, uint8_t bit, float* release) { m.buttons |= bit; m.buttonsChanged = true; *release = 45; }
+  static constexpr float kPillTop = 312;  // spec 318: leaves room for the hint inside r210
   float zeroX_ = 0, zeroY_ = 0, avgX_ = 0, avgY_ = 0, enteredMs_ = 0, scroll_ = 0;
   bool tiltOn_ = true, rim_ = false, dragging_ = false;
 };

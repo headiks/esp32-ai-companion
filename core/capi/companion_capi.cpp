@@ -100,6 +100,7 @@ CC_API void cc_tick(void* p, float dt_ms) { ((Host*)p)->app.tick(dt_ms); }
 CC_API void cc_render(void* p, uint16_t* fb) {
   Host* h = (Host*)p;
   h->canvas.setTarget(fb, 0, 0, kScreenW, kScreenH);
+  h->canvas.contentReach2 = 0;
   h->app.render(h->canvas);
 }
 // Renders in strips exactly as the firmware does; tests compare the result with a full-screen render.
@@ -131,6 +132,9 @@ CC_API int cc_state(void* p, char* out, int cap) { return ((Host*)p)->app.stateE
 CC_API void cc_set_battery(void* p, int percent, int charging, int present, int mv) { ((Host*)p)->app.power.setBattery(percent, charging != 0, present != 0, mv); }
 CC_API void cc_set_time_scale(void* p, float s) { ((Host*)p)->app.clock.setScale(s); }
 CC_API void cc_set_fps(void* p, float fps) { ((Host*)p)->app.hal.fps = fps; }
+CC_API void cc_set_debug_overlay(void* p, int on) { ((Host*)p)->app.debugOverlay = on != 0; }
+// Farthest text pixel or button edge from the centre in the last cc_render, in px: design 1a keeps both inside r210.
+CC_API float cc_content_reach(void* p) { return sqrtf((float)((Host*)p)->canvas.contentReach2); }
 // Test autopilot: steers the real maze physics by tilt only. Returns milliseconds to the exit, -1 if it never gets there.
 CC_API int cc_maze_selftest(int size, uint32_t seed) {
   static MazeGame m;

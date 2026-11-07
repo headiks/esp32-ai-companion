@@ -1,4 +1,4 @@
-// Internal: screen base class and widgets. One static instance of every screen, no heap use.
+// Internal: the screen base class and the shared pieces of design 1a. One static instance of every screen, no heap.
 #pragma once
 #include "companion/app.h"
 #include "ui/components.h"
@@ -17,54 +17,14 @@ class Screen {
   virtual bool onMotion(App&, MotionEvent) { return false; }  // true: the game used it, no pet reaction
 };
 
-enum class Icon : uint8_t { Food, Heart, Ball, Moon, Sun, Clock, Bell, Gear, Chip, Game, Info, Timer, Stopwatch, Face, Message, Mail, Phone, Calendar, Warning };
-void drawIcon(Canvas& c, Icon i, float cx, float cy, float r, uint16_t color);
+// Each file of screens hands out its own; nullptr for screens it does not have.
+Screen* systemScreen(ScreenId id);  // ui_system.cpp: face, menus, talk, notifications, settings, about
+Screen* timeScreen(ScreenId id);    // ui_time.cpp: clocks, timer, stopwatch, weather
+Screen* playScreen(ScreenId id);    // ui_play.cpp: pet, games list, firefly, tic-tac-toe, reaction, guess
+Screen* gameScreen(ScreenId id);    // ui_games.cpp: maze, orbit, snake, Simon
+Screen* partyScreen(ScreenId id);   // ui_party.cpp: the rest of the games, remotes, Bluetooth pairing
 
-// Scrolling list used by menus and settings.
-struct ListRow {
-  const char* title;
-  const char* value;       // nullptr for plain rows
-  Icon icon;
-  bool hasIcon;
-  bool adjustable;         // shows < > and reports left/right zones
-};
-
-class ListView {
- public:
-  void reset() { scroll_ = 0; vel_ = 0; dragging_ = false; }
-  void draw(Canvas& c, const char* title, int count, ListRow (*row)(App&, int, void*), App& a, void* ctx);
-  // Returns the tapped row, or -1. zone: -1 left, 0 centre, +1 right.
-  int gesture(const GestureEvent& e, int count, int* zone);
-  void tick(float dt, int count);
- private:
-  float scroll_ = 0, vel_ = 0;
-  bool dragging_ = false;
-};
-
-struct Button {
-  float x, y, r;
-  bool hit(int px, int py) const { float dx = px - x, dy = py - y; return dx * dx + dy * dy <= (r + 8) * (r + 8); }
-};
-// Numbers built from small squares. Changing a digit ripples through its cells instead of switching at once.
-class DotText {
- public:
-  void set(const char* s);      // call from tick(): draw() runs once per strip
-  void tick(float dtMs) { if (t_ < 1) t_ += dtMs / 340.f; }
-  void draw(Canvas& c, int cx, int y, int cell, int gap, uint16_t on) const;
-  static int width(const char* s, int cell, int gap);
- private:
-  char cur_[12] = "", prev_[12] = "";
-  float t_ = 1;
-};
-
-// Sixty squares along the rim: seconds, progress, score.
-void drawRimSquares(Canvas& c, float fraction, uint16_t on);
-void drawWeatherIcon(Canvas& c, Weather w, float cx, float cy, float size, float tMs);
-const char* weatherTitle(Weather w);
-
-Screen* systemScreen(ScreenId id);  // ui_system.cpp, nullptr for other screens
-Screen* timeScreen(ScreenId id);    // ui_time.cpp, likewise
-Screen* playScreen(ScreenId id);    // ui_play.cpp, likewise
+Screen* screenInstance(ScreenId id);
 
 // Design 1a templates shared by the games (spec 17 and 18).
 // Start: the game's name, a focused mini face, its rule, the record, "Старт".
@@ -72,14 +32,6 @@ void gameStart(Canvas& c, App& a, const char* name, const char* rule, const char
 // Result: a full accent ring, a face for the outcome, the number (or a word), a caption, "Выход" and "Ещё".
 void gameResult(Canvas& c, App& a, const char* value, const char* caption, Emotion face);
 extern const ui::Button kStartButton, kExitButton, kAgainButton;
-Screen* gameScreen(ScreenId id);
-Screen* partyScreen(ScreenId id);
-
-void drawButton(Canvas& c, const Button& b, const char* label, bool accent = false);
-void drawTitle(Canvas& c, const char* title);
-void formatTime(char* out, int cap, float ms, bool tenths);
-
-Screen* screenInstance(ScreenId id);
 
 // The character centred on (cx, cy), `width` wide: MiniFace of the spec, live, without overlays.
 void miniFace(Canvas& c, App& a, float cx, float cy, float width);

@@ -488,7 +488,7 @@ static void drawOverlay(Canvas& c, const AnimationEngine& a, float ox, float oy)
   switch (d.overlay) {
     case Overlay::None: break;
     case Overlay::Sparkle: {
-      const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
+      const float px[3] = {112, 233, 356}, py[3] = {114, 90, 114}, half[3] = {9, 12, 8};  // spec 96/72: under the Y44 clock
       for (int i = 0; i < 3; i++) ui::sparkle(c, X(px[i]), Y(py[i]), half[i] * (0.8f + 0.2f * sinf(ts * 3.1f + i * 2.1f)), 3.5f, INK);
       break;
     }
@@ -532,7 +532,7 @@ static void drawOverlay(Canvas& c, const AnimationEngine& a, float ox, float oy)
       }
       break;
     case Overlay::Frost: {
-      const float px[5] = {96, 160, 233, 306, 370}, py[5] = {108, 84, 72, 84, 108};
+      const float px[5] = {96, 160, 233, 306, 370}, py[5] = {118, 96, 86, 96, 118};  // spec 108/84/72: under the Y44 clock
       for (int i = 0; i < 5; i++) ui::sparkle(c, X(px[i]), Y(py[i]), 7 * (0.75f + 0.25f * sinf(ts * 2.3f + i)), 3, ACCENT);
       break;
     }
@@ -608,7 +608,7 @@ void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool over, bool fl
     for (int i = 0; i < 3; i++) ui::cloud(c, cx[i] + 6 * sinf(t * 0.0003f + i * 2.1f), cy[i], cs[i], col);
   }
   if (w == Weather::Storm) {
-    ui::bolt(c, 234, 58, 1, flash ? 8 : 5, ACCENT_2);
+    ui::bolt(c, 234, 76, 1, flash ? 8 : 5, ACCENT_2);  // spec 58: under the Y44 clock
   }
   if (w == Weather::Snow) {
     for (int i = 0; i < 40; i++) {
@@ -626,7 +626,7 @@ void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool over, bool fl
     }
   }
   if (w == Weather::Clear) {
-    const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
+    const float px[3] = {112, 233, 356}, py[3] = {114, 90, 114}, half[3] = {9, 12, 8};  // spec 96/72: under the Y44 clock
     for (int i = 0; i < 3; i++) ui::sparkle(c, px[i], py[i], half[i] * (0.8f + 0.2f * sinf(t * 0.0031f + i * 2.1f)), 3.5f, INK);
   }
 }

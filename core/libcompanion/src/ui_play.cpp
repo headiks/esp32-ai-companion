@@ -50,7 +50,7 @@ class PetScreen : public Screen {
     struct { const char* n; float v; uint16_t col; } st[6] = {
         {"Еда", 100 - s.hunger, INK}, {"Силы", s.energy, INK}, {"Игра", s.fun, INK},
         {"Друзья", s.attention, INK}, {"Любовь", s.affection, ACCENT_2}, {"Здоровье", s.health, INK}};
-    for (int i = 0; i < 6; i++) ui::statBar(c, i % 2 ? 243.f : 83.f, 172.f + (i / 2) * 50, 140, st[i].n, (int)(st[i].v + 0.5f), st[i].col);
+    for (int i = 0; i < 6; i++) ui::statBar(c, i % 2 ? 248.f : 60.f, 166.f + (i / 2) * 48, 158, st[i].n, (int)(st[i].v + 0.5f), st[i].col);
     int main = mostNeeded(a);
     for (int i = 0; i < 4; i++) {
       ui::Button b = button(i);
@@ -70,7 +70,7 @@ class PetScreen : public Screen {
 
  private:
   static constexpr const char* kLabels[4] = {"Еда", "Ласка", "Игра", "Сон"};
-  static ui::Button button(int i) { return ui::secondary(112 + i * 87.f, 340); }
+  static ui::Button button(int i) { return ui::secondary(CX - 120 + i * 80.f, 318); }  // inside r210
   // The button of the need that is lowest right now becomes the main one.
   static int mostNeeded(App& a) {
     const PetStats& s = a.pet.stats;
