@@ -10,9 +10,6 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.companion import Companion, SCREEN, emotion_names, rgb565_to_rgb888  # noqa: E402
 
-SCREENS = ["face", "menu", "pet", "weather", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info",
-           "maze", "orbit", "snake", "simon", "tictactoe", "reaction", "guess", "pet_game",
-           "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "mouse"]
 WEATHER = ["clear", "clouds", "rain", "snow", "storm", "fog", "wind"]
 MODES = ["screens", "emotions", "weather"]
 
@@ -68,33 +65,97 @@ def collect(mode, scale=0.5, transparent=False):
             c.run(700)
             shot(f"screen_{w}")
     else:
-        c.handle_command({"type": "weather", "value": "rain", "temp": 12})
-        c.handle_command({"type": "notify", "title": "Сообщение", "text": "Привет! Как дела?", "icon": "message"})
-        c.run(5000)
-        for s in SCREENS:
-            c.handle_command({"type": "screen", "value": s})
-            c.run(1000)
-            shot(s)
-        # The device as a gamepad, with what the Android app sends it in each game.
-        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "title": "Козырь: пики", "info": "Отбивайтесь", "target": "Ks",
-                          "labels": "6s,6h,7d,8c,9s,10h,Jd,Qc,Ks,Ah,6d,7c,9h,10s", "marks": "01000000010000",
-                          "hint": "наклон выбор · тап отметить\n↑ бить · ↓ беру"})
-        for _ in range(30):
-            c.imu(0.35, 0, 0.9, dt=20)
+        for name, setup in SCENES:
+            setup(c)
+            shot(name)
+    c.close()
+    if mode not in ("emotions", "weather"):
+        # Time not set: only a device that was never synchronised shows it.
+        fresh = Companion(seed=7)
+        fresh.handle_command({"type": "screen", "value": "digital_clock"})
+        fresh.run(1000)
+        items.insert(12, ("13_time_not_set", snapshot(fresh, scale, transparent)))
+        fresh.close()
+    return items
+
+
+def _screen(name, ms=1000):
+    def go(c):
+        c.handle_command({"type": "screen", "value": name})
+        c.run(ms)
+    return go
+
+
+def _steps(*fns):
+    def go(c):
+        for f in fns:
+            f(c)
+    return go
+
+
+def _cmd(**cmd):
+    return lambda c: c.handle_command(cmd)
+
+
+def _tilt(ax, ay, ms=600):
+    def go(c):
+        for _ in range(ms // 20):
+            c.imu(ax, ay, 0.9, dt=20)
             c.tick(20)
         c.imu(0, 0, 1, dt=20)
         c.run(100)
-        shot("controller_durak")
-        c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,10h", "marks": "", "title": "Фишки 190",
-                          "info": "Префлоп · банк 30", "hint": "тап чек\n↑ поднять · ↓ сбросить"})
-        c.run(600)
-        shot("controller_poker")
-        c.handle_command({"type": "controller", "value": "start", "mode": "pad", "title": "Гонки", "hint": "наклон руль · держи экран тормоз"})
-        c.imu(0.4, 0.2, 0.9, dt=20)
-        c.run(600)
-        shot("controller_race")
-    c.close()
-    return items
+    return go
+
+
+# The screens of the 1a design, under its numbers, so that tools/compare_design.py can pair them with the reference.
+SCENES = [
+    ("01_face", _screen("face", 1500)),
+    ("02_menu", _screen("menu")),
+    ("03_talk", _steps(_screen("face", 300), _cmd(type="ai_listen"), lambda c: c.run(800))),
+    ("04_notifications", _steps(*[_cmd(type="notify", title="Сообщение", text=t, icon="message") for t in
+                                   ("Встреча в 15:00", "Посылка в пути", "Привет! Ты уже дома? Купи хлеба по дороге")],
+                                _screen("notifications"))),
+    ("05_settings", _screen("settings")),
+    ("06_setting_brightness", _screen("settings")),
+    ("07_diagnostics", _screen("diagnostics")),
+    ("08_info", _screen("info")),
+    ("09_digital_clock", _steps(_cmd(type="weather", value="rain", temp=12), _screen("digital_clock"))),
+    ("10_analog_clock", _screen("analog_clock")),
+    ("11_stopwatch", _screen("stopwatch")),
+    ("12_timer", _screen("timer")),
+    ("14_pet", _screen("pet")),
+    ("15_pet_game", _screen("pet_game", 1500)),
+    ("16_games", _screen("games")),
+    ("17_game_start", _screen("reaction")),
+    ("18_game_result", _screen("reaction")),
+    ("19_maze", _screen("maze")),
+    ("20_orbit", _screen("orbit")),
+    ("21_snake", _screen("snake")),
+    ("22_simon", _screen("simon")),
+    ("23_tictactoe", _screen("tictactoe")),
+    ("24_reaction", _screen("reaction")),
+    ("25_guess", _screen("guess")),
+    ("26_coin", _screen("coin")),
+    ("27_dice", _screen("dice")),
+    ("28_magic_ball", _screen("magic_ball")),
+    ("29_balance", _screen("balance")),
+    ("30_duel", _screen("duel")),
+    ("31_shaker", _screen("shaker")),
+    ("32_safe", _screen("safe")),
+    ("33_workout", _screen("workout")),
+    ("34_mole", _screen("mole")),
+    ("35_blackjack", _screen("blackjack")),
+    ("36_mouse", _screen("mouse")),
+    # The device as a gamepad, with what the Android app sends it in each game.
+    ("37_controller_durak", _steps(_cmd(type="controller", value="start", mode="cards", title="Козырь: пики", info="Отбивайтесь", target="Ks",
+                                        labels="6s,6h,7d,8c,9s,10h,Jd,Qc,Ks,Ah,6d,7c,9h,10s", marks="01000000010000",
+                                        hint="наклон выбор · тап отметить\n↑ бить · ↓ беру"), _tilt(0.35, 0))),
+    ("38_controller_poker", _steps(_cmd(type="controller", value="start", mode="cards", labels="As,10h", marks="", title="Фишки 190",
+                                        info="Префлоп · банк 30", hint="тап чек\n↑ поднять · ↓ сбросить"), lambda c: c.run(600))),
+    ("39_controller_race", _steps(_cmd(type="controller", value="start", mode="pad", title="Гонки", hint="наклон руль · держи экран тормоз"),
+                                  _tilt(0.4, 0.2))),
+    ("40_ble_pairing", _steps(_cmd(type="controller", value="stop"), _screen("mouse"))),
+]
 
 
 def main():

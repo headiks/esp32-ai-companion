@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600&family=Onest:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#0b0b0c;color:#E8E6E1;font-family:'Onest',sans-serif}a{color:#A9B4D8}a:hover{color:#fff}</style>
+</helmet>
+
+<div style="padding:72px;display:flex;flex-direction:column;gap:88px;width:2490px;background:#0b0b0c;min-height:100vh">
+
+<div style="display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;align-items:center;gap:20px">
+<div style="font:600 20px 'IBM Plex Mono';background:#A9B4D8;color:#000;padding:6px 14px;border-radius:8px">1a</div>
+<div style="font:500 16px 'IBM Plex Mono';color:#7d7d84;letter-spacing:.08em">МЯГКИЙ · ПОЛНАЯ ПРОШИВКА · CO5300 466×466 AMOLED · ESP32-S3-Touch-AMOLED-1.75C</div>
+</div>
+<div style="font:600 64px 'Unbounded';color:#F4F1EA;letter-spacing:-1px">Компаньон</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:40px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:500 16px 'IBM Plex Mono';color:#77777e">ЦВЕТ · RGB565</div>
+<div style="display:flex;flex-direction:column;gap:8px;font:500 18px 'IBM Plex Mono';color:#a5a5ab">
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#000;box-shadow:inset 0 0 0 1px #333"></div>#000000 фон, пиксель выключен</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#F4F1EA"></div>#F4F1EA текст, глаза</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#8A867E"></div>#8A867E вторичный текст</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#3A3835"></div>#3A3835 обводки, дальние пункты</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#161615;box-shadow:inset 0 0 0 1px #333"></div>#161615 / #242322 карты, дорожки</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#A9B4D8"></div>#A9B4D8 акцент, главное действие</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="width:28px;height:28px;border-radius:50%;background:#E8A08E"></div>#E8A08E червы, любовь, ошибки</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:500 16px 'IBM Plex Mono';color:#77777e">ШРИФТ · 3 РАЗМЕРА ЦИФР + 4 ТЕКСТА</div>
+<div style="display:flex;align-items:baseline;gap:18px;color:#F4F1EA"><span style="font:500 104px/1 'Unbounded';letter-spacing:-3px">12</span><span style="font:500 56px/1 'Unbounded'">34</span><span style="font:500 40px/1 'Unbounded'">56</span></div>
+<div style="display:flex;flex-direction:column;gap:4px;color:#F4F1EA"><span style="font:500 30px 'Onest'">Заголовок 30</span><span style="font:500 26px 'Onest'">Основной 26</span><span style="font:500 24px 'Onest';color:#8A867E">Подпись 24</span><span style="font:400 22px 'Onest';color:#8A867E">Минимум 22 ≈ 2 мм</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:500 16px 'IBM Plex Mono';color:#77777e">КНОПКИ · ОТ 72 PX ≈ 7 ММ</div>
+<div style="display:flex;align-items:center;gap:16px">
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Старт</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">+1</div>
+<div style="width:132px;height:72px;border-radius:36px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Очистить</div>
+</div>
+<div style="font:400 18px/1.5 'IBM Plex Mono';color:#a5a5ab">Одно главное действие на экран, залито акцентом. Остальные кнопки только с обводкой. Не больше трёх кнопок в ряд.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:500 16px 'IBM Plex Mono';color:#77777e">ПРАВИЛА ЭКРАНА</div>
+<div style="font:400 18px/1.55 'IBM Plex Mono';color:#a5a5ab;display:flex;flex-direction:column;gap:8px">
+<div>Всё важное внутри круга 420 px. Край занимают только дуги: прогресс, прокрутка, секунды.</div>
+<div>Только плоские заливки: без градиентов и прозрачности. Полосы чётной высоты по ширине 466 px со смещением столбца 6.</div>
+<div>Яркое занимает меньше 15% площади. Через 30 с бездействия яркость падает до 20%, при заряде ниже 15% экран тоже тускнеет.</div>
+<div>Свайп вниз от верхнего края возвращает назад, свайп вверх и вниз прокручивает список.</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ ПЕРСОНАЖ ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;align-items:baseline;gap:20px"><div style="font:600 40px 'Unbounded';color:#F4F1EA">Персонаж · 50 эмоций</div><div style="font:400 20px 'IBM Plex Mono';color:#8A867E">у глаза 7 параметров: веко, наклон, щека, взгляд x/y, масштаб, зрачок; поверх добавляется символ. Переход между эмоциями плавно меняет эти числа</div></div>
+<div style="display:grid;grid-template-columns:repeat(10,220px);gap:28px 26px">
+<sc-for list="{{ emos }}" as="item" hint-placeholder-count="50">
+<div style="display:flex;flex-direction:column;gap:8px;align-items:center"><div style="width:220px;height:220px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">{{ item.el }}</div><div style="font:500 18px 'Onest';color:#F4F1EA">{{ item.name }}</div><div style="font:400 14px 'IBM Plex Mono';color:#6b6862">{{ item.key }}</div></div>
+</sc-for>
+</div>
+</div>
+
+<!-- ============ СИСТЕМА ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="font:600 40px 'Unbounded';color:#F4F1EA">Система</div>
+<div style="display:grid;grid-template-columns:repeat(5,466px);gap:48px 40px">
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">01 · Лицо (главный)</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;inset:0">{{ home }}</div>
+<div style="position:absolute;top:44px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">12:35</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">02 · Меню</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="5" stroke-linecap="round" stroke-dasharray="200 1145" transform="rotate(-38 233 233)"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="5" stroke-linecap="round" stroke-dasharray="40 1305" transform="rotate(-34 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
+<div style="font:500 24px 'Onest';color:#3a3835">Уведомления</div>
+<div style="font:500 28px 'Onest';color:#8A867E">Часы</div>
+<div style="display:flex;align-items:center;gap:14px"><div style="width:12px;height:12px;border-radius:50%;background:#A9B4D8"></div><div style="font:500 42px 'Unbounded';color:#F4F1EA">Лицо</div></div>
+<div style="font:500 28px 'Onest';color:#8A867E">Поговорить</div>
+<div style="font:500 24px 'Onest';color:#3a3835">Питомец</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">03 · Поговорить</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="6"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="6" stroke-linecap="round" stroke-dasharray="160 1185" transform="rotate(-170 233 233)"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="6" stroke-linecap="round" stroke-dasharray="160 1185" transform="rotate(-50 233 233)"></circle></svg>
+<div style="position:absolute;top:96px;left:113px;width:240px">{{ m.attentive }}</div>
+<div style="position:absolute;top:236px;left:0;right:0;text-align:center;font:500 30px 'Onest';color:#F4F1EA">Слушаю…</div>
+<div style="position:absolute;top:282px;left:83px;width:300px;text-align:center;font:400 24px/1.35 'Onest';color:#8A867E;text-wrap:pretty">«какая завтра погода»</div>
+<div style="position:absolute;top:356px;left:0;right:0;display:flex;justify-content:center"><div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Стоп</div></div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">04 · Уведомления</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:50px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">1 из 3</div>
+<div style="position:absolute;top:100px;left:58px;width:350px;box-sizing:border-box;padding:24px 26px;border-radius:32px;background:#161615;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:10px;font:500 22px 'Onest'"><div style="width:10px;height:10px;border-radius:50%;background:#A9B4D8"></div><span style="color:#A9B4D8">Сообщение</span><span style="margin-left:auto;color:#8A867E">12:30</span></div>
+<div style="font:500 26px/1.32 'Onest';color:#F4F1EA;text-wrap:pretty">Привет! Ты уже дома? Купи хлеба по дороге</div>
+</div>
+<div style="position:absolute;top:330px;left:0;right:0;display:flex;justify-content:center"><div style="width:180px;height:72px;border-radius:36px;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Очистить всё</div></div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">05 · Настройки</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="5" stroke-linecap="round" stroke-dasharray="200 1145" transform="rotate(-38 233 233)"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="5" stroke-linecap="round" stroke-dasharray="60 1285" transform="rotate(-30 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+<div style="display:flex;gap:10px;font:500 24px 'Onest';color:#3a3835"><span>Яркость</span><span>70%</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div style="font:500 24px 'Onest';color:#8A867E">Громкость</div><div style="font:500 48px 'Unbounded';color:#F4F1EA">60%</div></div>
+<div style="display:flex;gap:10px;font:500 26px 'Onest';color:#8A867E"><span>Звук</span><span style="color:#F4F1EA">Вкл</span></div>
+<div style="display:flex;gap:10px;font:500 24px 'Onest';color:#3a3835"><span>Звуки эмоций</span><span>Вкл</span></div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">06 · Настройка · яркость</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="196" fill="none" stroke="#242322" stroke-width="12" stroke-linecap="round" stroke-dasharray="410 1232" transform="rotate(150 233 233)"></circle><circle cx="233" cy="233" r="196" fill="none" stroke="#F4F1EA" stroke-width="12" stroke-linecap="round" stroke-dasharray="287 1232" transform="rotate(150 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-bottom:40px">
+<div style="font:500 28px 'Onest';color:#8A867E">Яркость</div>
+<div style="font:500 92px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-2px">70%</div>
+<div style="font:400 22px 'Onest';color:#8A867E">гаснет через 30 с</div>
+</div>
+<div style="position:absolute;top:356px;left:58px;font:500 30px 'Onest';color:#8A867E">−</div>
+<div style="position:absolute;top:356px;right:58px;font:500 30px 'Onest';color:#8A867E">+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">07 · Диагностика</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:46px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">Диагностика</div>
+<div style="position:absolute;top:92px;left:93px;width:280px;display:grid;grid-template-columns:1fr 1fr;gap:14px 24px">
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">FPS</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">34</span></div>
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">Батарея</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">84%</span></div>
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">RAM</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">212К</span></div>
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">PSRAM</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">6,1М</span></div>
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">Звук</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">−42</span></div>
+<div style="display:flex;flex-direction:column"><span style="font:400 22px 'Onest';color:#8A867E">Напряж.</span><span style="font:500 30px 'Unbounded';color:#F4F1EA">3,98</span></div>
+</div>
+<div style="position:absolute;top:330px;left:73px;width:320px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;font:500 22px 'Onest';color:#F4F1EA">
+<span>Сенсор ●</span><span>IMU ●</span><span>PMIC ●</span><span>Кодек ●</span><span style="color:#E8A08E">Wi-Fi ○</span>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">08 · Об устройстве</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:66px;left:183px;width:100px">{{ m.neutral }}</div>
+<div style="position:absolute;top:118px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="font:500 30px 'Onest';color:#F4F1EA">AI-компаньон</div>
+<div style="font:400 22px 'Onest';color:#8A867E">Прошивка 1.0.0 · протокол 1</div>
+<div style="font:400 22px 'Onest';color:#8A867E">BLE <span style="color:#F4F1EA">Companion-4F2A</span></div>
+<div style="font:400 22px 'Onest';color:#8A867E;margin-top:14px">PIN для приложений</div>
+<div style="font:500 48px 'Unbounded';color:#A9B4D8;letter-spacing:2px">892 583</div>
+<div style="font:400 22px 'Onest';color:#E8A08E;margin-top:8px">AI офлайн · IP —</div>
+</div>
+</div></div>
+
+</div>
+</div>
+
+<!-- ============ ВРЕМЯ ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="font:600 40px 'Unbounded';color:#F4F1EA">Время</div>
+<div style="display:grid;grid-template-columns:repeat(5,466px);gap:48px 40px">
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">09 · Цифровые часы</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="218" fill="none" stroke="#1c1c1b" stroke-width="4"></circle><circle cx="233" cy="233" r="218" fill="none" stroke="#A9B4D8" stroke-width="4" stroke-linecap="round" stroke-dasharray="799 1370" transform="rotate(-90 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding-bottom:30px">
+<div style="font:500 24px 'Onest';color:#8A867E">чт, 1 января</div>
+<div style="font:500 104px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-3px">12:35</div>
+<div style="font:500 24px 'Onest';color:#A9B4D8">+12° · дождь</div>
+</div>
+<div style="position:absolute;bottom:62px;left:168px;width:130px">{{ m.sleepy }}</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">10 · Аналоговые часы</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0">
+<circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="3" stroke-dasharray="2 20.4"></circle>
+<g stroke-linecap="round">
+<line x1="233" y1="18" x2="233" y2="46" stroke="#F4F1EA" stroke-width="6"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(30 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(60 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="46" stroke="#F4F1EA" stroke-width="6" transform="rotate(90 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(120 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(150 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="46" stroke="#F4F1EA" stroke-width="6" transform="rotate(180 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(210 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(240 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="46" stroke="#F4F1EA" stroke-width="6" transform="rotate(270 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(300 233 233)"></line>
+<line x1="233" y1="18" x2="233" y2="40" stroke="#8A867E" stroke-width="4" transform="rotate(330 233 233)"></line>
+<line x1="233" y1="233" x2="233" y2="128" stroke="#F4F1EA" stroke-width="12" transform="rotate(17 233 233)"></line>
+<line x1="233" y1="233" x2="233" y2="64" stroke="#F4F1EA" stroke-width="7" transform="rotate(210 233 233)"></line>
+<line x1="233" y1="262" x2="233" y2="52" stroke="#A9B4D8" stroke-width="3" transform="rotate(252 233 233)"></line>
+</g>
+<circle cx="233" cy="233" r="10" fill="#000" stroke="#A9B4D8" stroke-width="4"></circle>
+</svg>
+<div style="position:absolute;top:300px;left:0;right:0;text-align:center;font:500 24px 'Onest';color:#8A867E">чт 1</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">11 · Секундомер</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="218" fill="none" stroke="#1c1c1b" stroke-width="4"></circle><circle cx="233" cy="233" r="218" fill="none" stroke="#A9B4D8" stroke-width="4" stroke-linecap="round" stroke-dasharray="959 1370" transform="rotate(-90 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-bottom:96px">
+<div style="font:500 24px 'Onest';color:#8A867E">Секундомер</div>
+<div style="display:flex;align-items:baseline;color:#F4F1EA"><span style="font:500 92px/1.1 'Unbounded';letter-spacing:-3px">00:42</span><span style="font:500 40px 'Unbounded';color:#A9B4D8">,7</span></div>
+<div style="font:400 22px 'Onest';color:#8A867E">круг 2 · 00:19,3</div>
+</div>
+<div style="position:absolute;top:312px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:20px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Круг</div>
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Стоп</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">12 · Таймер</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#1c1c1b" stroke-width="10"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="10" stroke-linecap="round" stroke-dasharray="1129 1345" transform="rotate(-90 233 233)"></circle></svg>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-bottom:90px">
+<div style="font:500 24px 'Onest';color:#8A867E">Таймер · 5 мин</div>
+<div style="font:500 96px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-3px">04:12</div>
+</div>
+<div style="position:absolute;top:298px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:18px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">−1</div>
+<div style="width:96px;height:96px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 22px 'Onest';color:#000">Пауза</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">+1</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">13 · Время не задано</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:96px;left:143px;width:180px">{{ m.confused }}</div>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-top:70px">
+<div style="font:500 104px/1.1 'Unbounded';color:#3a3835;letter-spacing:-3px">--:--</div>
+<div style="font:500 26px 'Onest';color:#F4F1EA">Время не задано</div>
+<div style="font:400 22px/1.35 'Onest';color:#8A867E;text-align:center;width:300px;text-wrap:pretty">Подключите Wi-Fi, телефон или ПК</div>
+</div>
+</div></div>
+
+</div>
+</div>
+
+<!-- ============ ПОГОДА ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;align-items:baseline;gap:20px"><div style="font:600 40px 'Unbounded';color:#F4F1EA">Погода</div><div style="font:400 20px 'IBM Plex Mono';color:#8A867E">экран погоды и реакция лица на неё · Open-Meteo</div></div>
+<div style="display:grid;grid-template-columns:repeat(7,320px);gap:40px 30px">
+<sc-for list="{{ weather }}" as="w" hint-placeholder-count="7">
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">{{ w.label }}</div>
+<div style="width:320px;height:320px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">{{ w.face }}</div>
+<div style="width:466px;height:466px;transform:scale(.6867);transform-origin:0 0;margin-bottom:-146px">
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 3px #26262a">
+<div style="position:absolute;inset:0">{{ w.icon }}</div>
+<div style="position:absolute;top:166px;left:0;right:0;text-align:center;font:500 96px/1.05 'Unbounded';color:#F4F1EA;letter-spacing:-3px">{{ w.temp }}</div>
+<div style="position:absolute;top:272px;left:0;right:0;text-align:center;font:500 30px 'Onest';color:#F4F1EA">{{ w.label }}</div>
+<div style="position:absolute;top:314px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">{{ w.sub }}</div>
+<div style="position:absolute;top:368px;left:173px;width:120px">{{ w.mini }}</div>
+</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<!-- ============ ПИТОМЕЦ И ИГРЫ ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="font:600 40px 'Unbounded';color:#F4F1EA">Питомец и игры</div>
+<div style="display:grid;grid-template-columns:repeat(5,466px);gap:48px 40px">
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">14 · Питомец</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:44px;left:153px;width:160px">{{ m.happy }}</div>
+<div style="position:absolute;top:128px;left:0;right:0;text-align:center;font:500 24px 'Onest';color:#A9B4D8">Доволен</div>
+<div style="position:absolute;top:172px;left:83px;width:300px;display:grid;grid-template-columns:1fr 1fr;gap:12px 28px">
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Еда</span><span style="color:#F4F1EA">80</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:80%;height:6px;border-radius:3px;background:#F4F1EA"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Силы</span><span style="color:#F4F1EA">85</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:85%;height:6px;border-radius:3px;background:#F4F1EA"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Игра</span><span style="color:#F4F1EA">60</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:60%;height:6px;border-radius:3px;background:#F4F1EA"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Друзья</span><span style="color:#F4F1EA">63</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:63%;height:6px;border-radius:3px;background:#F4F1EA"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Любовь</span><span style="color:#E8A08E">45</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:45%;height:6px;border-radius:3px;background:#E8A08E"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font:500 22px 'Onest';color:#8A867E"><span>Здоровье</span><span style="color:#F4F1EA">100</span></div><div style="height:6px;border-radius:3px;background:#242322"><div style="width:100%;height:6px;border-radius:3px;background:#F4F1EA"></div></div></div>
+</div>
+<div style="position:absolute;top:340px;left:0;right:0;display:flex;justify-content:center;gap:14px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Еда</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Ласка</div>
+<div style="width:72px;height:72px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 22px 'Onest';color:#000">Игра</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Сон</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">15 · Поймай светлячка</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="218" fill="none" stroke="#1c1c1b" stroke-width="4"></circle><circle cx="233" cy="233" r="218" fill="none" stroke="#A9B4D8" stroke-width="4" stroke-linecap="round" stroke-dasharray="910 1370" transform="rotate(-90 233 233)"></circle><circle cx="336" cy="128" r="26" fill="#1d2029"></circle><circle cx="336" cy="128" r="11" fill="#A9B4D8"></circle><circle cx="120" cy="330" r="6" fill="#3a3835"></circle><circle cx="356" cy="320" r="4" fill="#3a3835"></circle></svg>
+<div style="position:absolute;top:46px;left:0;right:0;text-align:center;font:500 40px 'Unbounded';color:#F4F1EA">3</div>
+<div style="position:absolute;top:190px;left:123px;width:220px">{{ m.thinking }}</div>
+<div style="position:absolute;top:320px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">тапни по огоньку</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">16 · Игры</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="5" stroke-linecap="round" stroke-dasharray="200 1145" transform="rotate(-38 233 233)"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="5" stroke-linecap="round" stroke-dasharray="20 1325" transform="rotate(-22 233 233)"></circle></svg>
+<div style="position:absolute;top:50px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">3 из 19</div>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
+<div style="font:500 24px 'Onest';color:#3a3835">Двадцать одно</div>
+<div style="font:500 28px 'Onest';color:#8A867E">Монетка</div>
+<div style="font:500 42px 'Unbounded';color:#F4F1EA">Лабиринт</div>
+<div style="font:500 28px 'Onest';color:#8A867E">Орбита</div>
+<div style="font:500 24px 'Onest';color:#3a3835">Змейка</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">17 · Шаблон: старт игры</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:50px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">Реакция</div>
+<div style="position:absolute;top:92px;left:148px;width:170px">{{ m.focused }}</div>
+<div style="position:absolute;top:186px;left:83px;width:300px;text-align:center;font:500 28px/1.3 'Onest';color:#F4F1EA;text-wrap:pretty">Нажми, когда загорится кольцо</div>
+<div style="position:absolute;top:276px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">рекорд 212 мс</div>
+<div style="position:absolute;top:326px;left:0;right:0;display:flex;justify-content:center"><div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Старт</div></div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">18 · Шаблон: результат</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="218" fill="none" stroke="#A9B4D8" stroke-width="4"></circle></svg>
+<div style="position:absolute;top:62px;left:148px;width:170px">{{ m.very_happy }}</div>
+<div style="position:absolute;top:150px;left:0;right:0;text-align:center;font:500 84px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-2px">184</div>
+<div style="position:absolute;top:250px;left:0;right:0;text-align:center;font:500 24px 'Onest';color:#A9B4D8">мс · новый рекорд</div>
+<div style="position:absolute;top:312px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:20px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Выход</div>
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Ещё</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">19 · Лабиринт</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><g stroke="#8A867E" stroke-width="5" stroke-linecap="round" fill="none"><rect x="83" y="83" width="300" height="300" rx="6"></rect><line x1="143" y1="83" x2="143" y2="203"></line><line x1="143" y1="203" x2="263" y2="203"></line><line x1="203" y1="143" x2="323" y2="143"></line><line x1="323" y1="143" x2="323" y2="323"></line><line x1="203" y1="203" x2="203" y2="323"></line><line x1="83" y1="263" x2="143" y2="263"></line><line x1="263" y1="263" x2="323" y2="263"></line><line x1="143" y1="323" x2="323" y2="323"></line></g><circle cx="353" cy="353" r="16" fill="none" stroke="#A9B4D8" stroke-width="5"></circle><circle cx="113" cy="113" r="17" fill="#F4F1EA"></circle></svg>
+<div style="position:absolute;top:36px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">уровень 1</div>
+<div style="position:absolute;top:388px;left:193px;width:80px">{{ m.focused }}</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">20 · Орбита</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="160" fill="none" stroke="#242322" stroke-width="4"></circle><g fill="#F4F1EA"><rect x="383" y="225" width="22" height="16" rx="4" transform="rotate(60 233 233)"></rect><rect x="383" y="225" width="22" height="16" rx="4" transform="rotate(150 233 233)"></rect><rect x="383" y="225" width="22" height="16" rx="4" transform="rotate(235 233 233)"></rect></g><circle cx="371" cy="153" r="16" fill="#A9B4D8"></circle></svg>
+<div style="position:absolute;top:146px;left:173px;width:120px">{{ m.attentive }}</div>
+<div style="position:absolute;top:212px;left:0;right:0;text-align:center;font:500 56px 'Unbounded';color:#F4F1EA">14</div>
+<div style="position:absolute;top:292px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">тап — прыжок</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">21 · Змейка</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><defs><pattern id="sg" width="22" height="22" patternUnits="userSpaceOnUse" x="2" y="2"><circle cx="11" cy="11" r="1.6" fill="#2a2927"></circle></pattern></defs><circle cx="233" cy="233" r="200" fill="url(#sg)"></circle>
+<rect x="268" y="202" width="20" height="20" rx="4" fill="#F4F1EA"></rect><rect x="272" y="207" width="4" height="6" fill="#000"></rect><rect x="281" y="207" width="4" height="6" fill="#000"></rect>
+<rect x="246" y="202" width="20" height="20" rx="4" fill="#F4F1EA"></rect><rect x="224" y="202" width="20" height="20" rx="4" fill="#D6D2CA"></rect><rect x="202" y="202" width="20" height="20" rx="4" fill="#B5B1A9"></rect><rect x="202" y="224" width="20" height="20" rx="4" fill="#8A867E"></rect><rect x="202" y="246" width="20" height="20" rx="4" fill="#6b6862"></rect><rect x="180" y="246" width="20" height="20" rx="4" fill="#4d4b47"></rect>
+<rect x="312" y="158" width="20" height="20" rx="10" fill="#A9B4D8"></rect></svg>
+<div style="position:absolute;top:38px;left:0;right:0;text-align:center;font:500 32px 'Unbounded';color:#F4F1EA">7</div>
+<div style="position:absolute;top:360px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">свайп — поворот</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">22 · Повтори (Саймон)</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><g fill="none" stroke-width="72"><circle cx="233" cy="233" r="176" stroke="#262a36" stroke-dasharray="258 848" transform="rotate(184 233 233)"></circle><circle cx="233" cy="233" r="176" stroke="#E8A08E" stroke-dasharray="258 848" transform="rotate(274 233 233)"></circle><circle cx="233" cy="233" r="176" stroke="#222c1e" stroke-dasharray="258 848" transform="rotate(4 233 233)"></circle><circle cx="233" cy="233" r="176" stroke="#34301c" stroke-dasharray="258 848" transform="rotate(94 233 233)"></circle></g></svg>
+<div style="position:absolute;top:168px;left:168px;width:130px">{{ m.attentive }}</div>
+<div style="position:absolute;top:244px;left:0;right:0;text-align:center;font:500 24px 'Onest';color:#F4F1EA">Запоминай</div>
+<div style="position:absolute;top:280px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">раунд 4</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">23 · Крестики-нолики</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><g stroke="#3a3835" stroke-width="4" stroke-linecap="round"><line x1="193" y1="148" x2="193" y2="380"></line><line x1="273" y1="148" x2="273" y2="380"></line><line x1="117" y1="225" x2="349" y2="225"></line><line x1="117" y1="303" x2="349" y2="303"></line></g>
+<g stroke="#F4F1EA" stroke-width="8" stroke-linecap="round"><line x1="137" y1="170" x2="169" y2="202"></line><line x1="169" y1="170" x2="137" y2="202"></line><line x1="297" y1="248" x2="329" y2="280"></line><line x1="329" y1="248" x2="297" y2="280"></line></g>
+<g fill="none" stroke="#A9B4D8" stroke-width="8"><circle cx="233" cy="264" r="19"></circle><circle cx="153" cy="342" r="19"></circle></g></svg>
+<div style="position:absolute;top:40px;left:178px;width:110px">{{ m.thinking }}</div>
+<div style="position:absolute;top:98px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">ходит Питомец</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">24 · Реакция · ожидание</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="212" fill="none" stroke="#1c1c1b" stroke-width="16"></circle></svg>
+<div style="position:absolute;top:112px;left:133px;width:200px">{{ m.focused }}</div>
+<div style="position:absolute;top:232px;left:0;right:0;text-align:center;font:500 44px 'Unbounded';color:#F4F1EA">Жди…</div>
+<div style="position:absolute;top:300px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">кольцо загорится</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">25 · Угадай число</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:58px;left:183px;width:100px">{{ m.skeptical }}</div>
+<div style="position:absolute;top:118px;left:133px;width:200px;text-align:center;font:500 96px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-3px">50</div>
+<div style="position:absolute;top:140px;left:48px;width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">−10</div>
+<div style="position:absolute;top:140px;right:48px;width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">+10</div>
+<div style="position:absolute;top:232px;left:0;right:0;text-align:center;font:500 26px 'Onest';color:#A9B4D8">Больше!</div>
+<div style="position:absolute;top:270px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">от 1 до 100 · попытка 3</div>
+<div style="position:absolute;top:320px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:16px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">−1</div>
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 22px 'Onest';color:#000">Ответ</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">+1</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">26 · Монетка</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:40px;left:173px;width:120px">{{ m.curious }}</div>
+<div style="position:absolute;top:110px;left:143px;width:180px;height:180px;border-radius:50%;background:#161615;box-shadow:inset 0 0 0 5px #F4F1EA,inset 0 0 0 16px #161615,inset 0 0 0 18px #3a3835;display:flex;align-items:center;justify-content:center;font:500 34px 'Unbounded';color:#F4F1EA">Орёл</div>
+<div style="position:absolute;top:304px;left:0;right:0;text-align:center;font:500 36px 'Unbounded';color:#F4F1EA">2 : 1</div>
+<div style="position:absolute;top:360px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">встряхни или нажми</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">27 · Кубики</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:48px;left:173px;width:120px">{{ m.excited }}</div>
+<div style="position:absolute;top:132px;left:101px;width:116px;height:116px;border-radius:26px;background:#161615;box-shadow:inset 0 0 0 3px #F4F1EA">
+<div style="position:absolute;left:23px;top:23px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:23px;top:49px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:23px;top:75px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:75px;top:23px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:75px;top:49px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:75px;top:75px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div>
+</div>
+<div style="position:absolute;top:132px;left:249px;width:116px;height:116px;border-radius:26px;background:#161615;box-shadow:inset 0 0 0 3px #F4F1EA">
+<div style="position:absolute;left:23px;top:23px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:75px;top:23px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:49px;top:49px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:23px;top:75px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div><div style="position:absolute;left:75px;top:75px;width:18px;height:18px;border-radius:50%;background:#F4F1EA"></div>
+</div>
+<div style="position:absolute;top:276px;left:0;right:0;text-align:center;font:500 64px 'Unbounded';color:#F4F1EA">11</div>
+<div style="position:absolute;top:370px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">встряхни</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">28 · Шар судьбы</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:62px;left:188px;width:90px">{{ m.dreamy }}</div>
+<div style="position:absolute;top:118px;left:103px;width:260px;height:260px;border-radius:50%;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+<div style="font:500 22px 'Onest';color:#8A867E">шар говорит</div>
+<div style="font:500 34px/1.2 'Unbounded';color:#F4F1EA;text-align:center">Скорее<br>да</div>
+</div>
+<div style="position:absolute;top:394px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">спроси и встряхни</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">29 · Баланс</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="190" fill="none" stroke="#3a3835" stroke-width="3"></circle><circle cx="233" cy="233" r="42" fill="none" stroke="#A9B4D8" stroke-width="4"></circle><circle cx="258" cy="216" r="22" fill="#F4F1EA"></circle></svg>
+<div style="position:absolute;top:72px;left:0;right:0;text-align:center;font:500 40px 'Unbounded';color:#F4F1EA">12,4<span style="font:500 22px 'Onest';color:#8A867E"> с</span></div>
+<div style="position:absolute;top:300px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">держи шар в круге</div>
+<div style="position:absolute;top:350px;left:183px;width:100px">{{ m.focused }}</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">30 · Дуэль</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:70px;left:93px;width:280px">{{ m.determined }}</div>
+<div style="position:absolute;top:224px;left:0;right:0;text-align:center;font:500 40px 'Unbounded';color:#F4F1EA">Дуэль</div>
+<div style="position:absolute;top:282px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">возьми в руку, жди сигнал</div>
+<div style="position:absolute;top:330px;left:0;right:0;display:flex;justify-content:center"><div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 22px 'Onest';color:#000">Готов</div></div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">31 · Тряска</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#1c1c1b" stroke-width="10"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="10" stroke-linecap="round" stroke-dasharray="807 1345" transform="rotate(-90 233 233)"></circle></svg>
+<div style="position:absolute;top:62px;left:158px;width:150px">{{ m.excited }}</div>
+<div style="position:absolute;top:140px;left:0;right:0;text-align:center;font:500 120px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-3px">47</div>
+<div style="position:absolute;top:290px;left:0;right:0;text-align:center;font:500 26px 'Onest';color:#A9B4D8">Тряси! 4 с</div>
+<div style="position:absolute;top:330px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">рекорд 62</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">32 · Сейф</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><g transform="rotate(-24 233 233)"><circle cx="233" cy="233" r="200" fill="none" stroke="#3a3835" stroke-width="14" stroke-dasharray="2 18.94"></circle><circle cx="233" cy="233" r="203" fill="none" stroke="#8A867E" stroke-width="22" stroke-dasharray="4 102.3" transform="rotate(-0.5 233 233)"></circle></g><rect x="229" y="6" width="8" height="34" rx="4" fill="#A9B4D8"></rect></svg>
+<div style="position:absolute;top:130px;left:158px;width:150px">{{ m.focused }}</div>
+<div style="position:absolute;top:228px;left:0;right:0;display:flex;justify-content:center;gap:16px"><div style="width:26px;height:26px;border-radius:50%;background:#F4F1EA"></div><div style="width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 3px #3a3835"></div><div style="width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 3px #3a3835"></div></div>
+<div style="position:absolute;top:278px;left:113px;width:240px;text-align:center;font:400 22px/1.35 'Onest';color:#8A867E">крути и жди щелчка</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">33 · Тренировка</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#1c1c1b" stroke-width="10"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="10" stroke-linecap="round" stroke-dasharray="941 1345" transform="rotate(-90 233 233)"></circle></svg>
+<div style="position:absolute;top:84px;left:0;right:0;text-align:center;font:500 30px 'Onest';color:#F4F1EA">Прыжки</div>
+<div style="position:absolute;top:122px;left:0;right:0;text-align:center;font:500 120px/1.1 'Unbounded';color:#F4F1EA">7</div>
+<div style="position:absolute;top:270px;left:0;right:0;text-align:center;font:500 24px 'Onest';color:#8A867E">из 10 · упражнение 1 из 4</div>
+<div style="position:absolute;top:330px;left:0;right:0;display:flex;justify-content:center"><div style="width:180px;height:72px;border-radius:36px;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Пропустить</div></div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">34 · Крот</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;left:195px;top:45px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:301px;top:89px;width:76px;height:76px;border-radius:50%;background:#161615;box-shadow:inset 0 0 0 3px #A9B4D8;display:flex;align-items:center;justify-content:center"><div style="width:58px">{{ m.mischievous }}</div></div>
+<div style="position:absolute;left:345px;top:195px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:301px;top:301px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:195px;top:345px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:89px;top:301px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:45px;top:195px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;left:89px;top:89px;width:76px;height:76px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"></div>
+<div style="position:absolute;top:186px;left:0;right:0;text-align:center;font:500 56px 'Unbounded';color:#F4F1EA">12</div>
+<div style="position:absolute;top:258px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">0:18</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">35 · Двадцать одно</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:38px;left:168px;width:130px">{{ m.suspicious }}</div>
+<div style="position:absolute;top:112px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:10px">
+<div style="width:50px;height:68px;border-radius:10px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 22px 'Unbounded';color:#F4F1EA">Q<span style="font-size:20px">♠</span></div>
+<div style="width:50px;height:68px;border-radius:10px;background:#242322"></div>
+<div style="font:500 22px 'Onest';color:#8A867E;margin-left:8px">10</div>
+</div>
+<div style="position:absolute;top:202px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:12px">
+<div style="width:82px;height:114px;border-radius:14px;background:#161615;box-shadow:inset 0 0 0 2px #F4F1EA;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:500 36px 'Unbounded';color:#F4F1EA">7<span style="font-size:30px">♠</span></div>
+<div style="width:82px;height:114px;border-radius:14px;background:#161615;box-shadow:inset 0 0 0 2px #E8A08E;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:500 36px 'Unbounded';color:#E8A08E">4<span style="font-size:30px">♥</span></div>
+<div style="font:600 40px 'Unbounded';color:#F4F1EA;margin-left:10px">11</div>
+</div>
+<div style="position:absolute;top:338px;left:0;right:0;display:flex;justify-content:center;gap:20px">
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Ещё</div>
+<div style="width:92px;height:92px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Хватит</div>
+</div>
+</div></div>
+
+</div>
+</div>
+
+<!-- ============ КОНТРОЛЛЕРЫ ============ -->
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;align-items:baseline;gap:20px"><div style="font:600 40px 'Unbounded';color:#F4F1EA">Пульты</div><div style="font:400 20px 'IBM Plex Mono';color:#8A867E">BLE: HID-мышь и пульты для игр на телефоне. Подсказки по жестам видны первые 3 с</div></div>
+<div style="display:grid;grid-template-columns:repeat(5,466px);gap:48px 40px">
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">36 · Мышь</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="12" stroke-linecap="round" stroke-dasharray="300 1045" transform="rotate(-40 233 233)"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="12" stroke-linecap="round" stroke-dasharray="50 1295" transform="rotate(-8 233 233)"></circle></svg>
+<div style="position:absolute;top:48px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">Мышь · <span style="color:#A9B4D8">подключено</span></div>
+<div style="position:absolute;top:98px;left:133px;width:200px;height:200px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835"><div style="position:absolute;left:112px;top:78px;width:26px;height:26px;border-radius:50%;background:#A9B4D8"></div></div>
+<div style="position:absolute;top:318px;left:0;right:0;display:flex;justify-content:center;gap:12px">
+<div style="width:104px;height:72px;border-radius:36px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">Л</div>
+<div style="width:104px;height:72px;border-radius:36px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 24px 'Onest';color:#F4F1EA">П</div>
+</div>
+<div style="position:absolute;top:404px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">край — прокрутка</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">37 · Пульт · Дурак</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:44px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">козырь ♠ · 14 карт</div>
+<div style="position:absolute;top:76px;left:0;right:0;text-align:center;font:500 28px 'Onest';color:#F4F1EA">Отбивайся</div>
+<div style="position:absolute;top:130px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:18px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:62px;height:86px;border-radius:12px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 26px 'Unbounded';color:#8A867E">K<span style="font-size:22px">♠</span></div><span style="font:400 22px 'Onest';color:#8A867E">бьют</span></div>
+<div style="width:100px;height:136px;border-radius:16px;background:#161615;box-shadow:inset 0 0 0 3px #E8A08E;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 42px 'Unbounded';color:#E8A08E">6<span style="font-size:34px">♥</span></div>
+<div style="width:62px"></div>
+</div>
+<div style="position:absolute;top:286px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:8px">
+<div style="width:46px;height:62px;border-radius:9px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 20px 'Unbounded';color:#F4F1EA">7<span style="color:#E8A08E">♦</span></div>
+<div style="width:46px;height:62px;border-radius:9px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 20px 'Unbounded';color:#F4F1EA">8<span>♣</span></div>
+<div style="width:46px;height:62px;border-radius:9px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 20px 'Unbounded';color:#F4F1EA">9<span>♠</span></div>
+<div style="font:500 22px 'Onest';color:#8A867E;margin-left:6px">+9</div>
+</div>
+<div style="position:absolute;top:366px;left:0;right:0;text-align:center;font:400 22px/1.35 'Onest';color:#8A867E">наклон — выбор<br>↑ бить · ↓ беру</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">38 · Пульт · Покер</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<div style="position:absolute;top:46px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">фишки 190 · банк 30</div>
+<div style="position:absolute;top:78px;left:0;right:0;text-align:center;font:500 28px 'Onest';color:#F4F1EA">Префлоп</div>
+<div style="position:absolute;top:130px;left:0;right:0;display:flex;justify-content:center;gap:14px">
+<div style="width:96px;height:136px;border-radius:16px;background:#161615;box-shadow:inset 0 0 0 3px #F4F1EA;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 42px 'Unbounded';color:#F4F1EA">A<span style="font-size:34px">♠</span></div>
+<div style="width:96px;height:136px;border-radius:16px;background:#161615;box-shadow:inset 0 0 0 3px #E8A08E;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 40px 'Unbounded';color:#E8A08E;letter-spacing:-2px">10<span style="font-size:34px;letter-spacing:0">♥</span></div>
+</div>
+<div style="position:absolute;top:300px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:16px">
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Пас</div>
+<div style="width:92px;height:92px;border-radius:50%;background:#A9B4D8;display:flex;align-items:center;justify-content:center;font:600 24px 'Onest';color:#000">Чек</div>
+<div style="width:72px;height:72px;border-radius:50%;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 22px 'Onest';color:#F4F1EA">Рейз</div>
+</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">39 · Пульт · Гонки</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="196" fill="none" stroke="#242322" stroke-width="12" stroke-linecap="round" stroke-dasharray="410 1232" transform="rotate(-150 233 233)"></circle><line x1="233" y1="28" x2="233" y2="50" stroke="#3a3835" stroke-width="4" stroke-linecap="round"></line><circle cx="300" cy="49" r="16" fill="#A9B4D8"></circle></svg>
+<div style="position:absolute;top:84px;left:0;right:0;text-align:center;font:500 22px 'Onest';color:#8A867E">Гонки · вправо 20°</div>
+<div style="position:absolute;top:122px;left:0;right:0;text-align:center;font:500 104px/1.1 'Unbounded';color:#F4F1EA;letter-spacing:-3px">86</div>
+<div style="position:absolute;top:240px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">км/ч · наклон — руль</div>
+<div style="position:absolute;top:300px;left:123px;width:220px;height:96px;border-radius:48px;background:#161615;box-shadow:inset 0 0 0 2px #3a3835;display:flex;align-items:center;justify-content:center;font:500 26px 'Onest';color:#F4F1EA">Держи — тормоз</div>
+</div></div>
+
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:500 16px 'IBM Plex Mono';color:#77777e">40 · Поиск по Bluetooth</div>
+<div style="position:relative;width:466px;height:466px;border-radius:50%;background:#000;overflow:hidden;box-shadow:0 0 0 2px #26262a">
+<svg width="466" height="466" viewBox="0 0 466 466" style="position:absolute;inset:0"><circle cx="233" cy="233" r="214" fill="none" stroke="#242322" stroke-width="4"></circle><circle cx="233" cy="233" r="214" fill="none" stroke="#A9B4D8" stroke-width="4" stroke-linecap="round" stroke-dasharray="220 1125" transform="rotate(-120 233 233)"></circle></svg>
+<div style="position:absolute;top:96px;left:143px;width:180px">{{ m.curious }}</div>
+<div style="position:absolute;top:200px;left:0;right:0;text-align:center;font:500 30px 'Onest';color:#F4F1EA">Найди меня</div>
+<div style="position:absolute;top:244px;left:0;right:0;text-align:center;font:400 22px 'Onest';color:#8A867E">в настройках Bluetooth</div>
+<div style="position:absolute;top:290px;left:0;right:0;text-align:center;font:500 28px 'Unbounded';color:#A9B4D8">Companion-4F2A</div>
+</div></div>
+
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;faceEmotion&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;neutral&quot;,&quot;happy&quot;,&quot;very_happy&quot;,&quot;sad&quot;,&quot;angry&quot;,&quot;annoyed&quot;,&quot;surprised&quot;,&quot;curious&quot;,&quot;thinking&quot;,&quot;sleepy&quot;,&quot;sleeping&quot;,&quot;waking_up&quot;,&quot;scared&quot;,&quot;affection&quot;,&quot;bored&quot;,&quot;attentive&quot;,&quot;confused&quot;,&quot;excited&quot;,&quot;mischievous&quot;,&quot;shy&quot;,&quot;proud&quot;,&quot;dizzy&quot;,&quot;yawning&quot;,&quot;cold&quot;,&quot;hot&quot;,&quot;dreamy&quot;,&quot;focused&quot;,&quot;winking&quot;,&quot;smug&quot;,&quot;skeptical&quot;,&quot;guilty&quot;,&quot;embarrassed&quot;,&quot;hopeful&quot;,&quot;lonely&quot;,&quot;grateful&quot;,&quot;jealous&quot;,&quot;determined&quot;,&quot;terrified&quot;,&quot;disgusted&quot;,&quot;hungry&quot;,&quot;starstruck&quot;,&quot;laughing&quot;,&quot;crying&quot;,&quot;relieved&quot;,&quot;sneaky&quot;,&quot;nostalgic&quot;,&quot;playful&quot;,&quot;amazed&quot;,&quot;exhausted&quot;,&quot;suspicious&quot;],&quot;default&quot;:&quot;neutral&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const R=React.createElement;
+const W='#F4F1EA',ACC='#A9B4D8',PE='#E8A08E',DIM='#8A867E';
+const D={t:0,a:0,b:0,px:0,py:0,s:1,pr:.17,pu:null};
+const EM=[
+['neutral','Спокоен',{t:.14}],
+['happy','Рад',{b:.42,py:-.2}],
+['very_happy','Очень рад',{b:.78,pr:0},null,['sparkle']],
+['sad','Грустит',{t:.36,a:-16,py:.35},null,['tear']],
+['angry','Злится',{t:.42,a:24,b:.06,py:.25}],
+['annoyed','Раздражён',{t:.5,a:6,py:.3}],
+['surprised','Удивлён',{s:1.14,pr:.11}],
+['curious','Любопытно',{s:1.06,py:-.2,px:.3},{s:1,t:.4,a:-6,px:.3},['q']],
+['thinking','Думает',{t:.2,a:-4,px:.45,py:-.5},{t:.42,px:.45,py:-.5},['dots']],
+['sleepy','Сонный',{t:.62,a:-3,py:.45}],
+['sleeping','Спит',{t:.86,pr:0},null,['zzz']],
+['waking_up','Просыпается',{t:.5,b:.12,py:.25}],
+['scared','Испуган',{s:1.1,pr:.09,t:.06,a:-10}],
+['affection','Нежность',{b:.3,pu:'heart',pr:.2},null,['hearts']],
+['bored','Скучает',{t:.55,a:-4,px:.3,py:.4}],
+['attentive','Внимателен',{s:1.05,t:.06,py:-.1}],
+['confused','Растерян',{s:1.05,t:.05,a:6},{s:1,t:.4,a:-14},['q']],
+['excited','Воодушевлён',{s:1.08,b:.25,pr:.24},null,['sparkle']],
+['mischievous','Хитрый',{t:.34,a:22,b:.22,px:-.2}],
+['shy','Стесняется',{t:.2,b:.28,py:.35,px:.25},null,['blush']],
+['proud','Гордится',{t:.4,a:-8,b:.25,py:-.1},null,['sparkle']],
+['dizzy','Кружится голова',{s:1.08,pu:'spiral',pr:.16}],
+['yawning','Зевает',{t:.8,b:.06,pr:0}],
+['cold','Мёрзнет',{t:.3,b:.3,py:-.1},null,['frost']],
+['hot','Жарко',{t:.5,py:.3},null,['sweat']],
+['dreamy','Мечтает',{t:.4,a:-10,b:.3,px:.2,py:-.6}],
+['focused','Сосредоточен',{t:.42,a:10,b:.2,pr:.15}],
+['winking','Подмигивает',{t:.1,b:.2},{t:.86,b:0,pr:0}],
+['smug','Доволен собой',{t:.52,a:-6,b:.12,px:.2}],
+['skeptical','Сомневается',{s:1.05,t:.1,a:4},{s:1,t:.5,a:-6}],
+['guilty','Виноват',{t:.2,a:-18,px:-.3,py:.5}],
+['embarrassed','Смущён',{t:.14,b:.35,py:.1},null,['blush']],
+['hopeful','Надеется',{a:-12,b:.1,py:-.6,pr:.2}],
+['lonely','Одиноко',{t:.34,a:-14,px:-.4,py:.4},null,['tear']],
+['grateful','Благодарен',{b:.75,pr:0},null,['hearts']],
+['jealous','Ревнует',{t:.55,a:8,px:.6,py:.1}],
+['determined','Решителен',{t:.38,a:26,py:.1,pr:.2}],
+['terrified','В ужасе',{s:1.14,pr:.06,a:-8},null,['sweat']],
+['disgusted','Брезгует',{t:.55,a:10,b:.32},{t:.62}],
+['hungry','Голоден',{t:.1,py:.5},null,['drool']],
+['starstruck','Восхищён',{s:1.08,pu:'star',pr:.22},null,['sparkle']],
+['laughing','Смеётся',{b:.82,pr:0},null,['joy']],
+['crying','Плачет',{t:.78,a:-14,pr:0},null,['streams']],
+['relieved','Облегчение',{t:.45,b:.18,pr:.15}],
+['sneaky','Крадётся',{t:.55,a:4,b:.1,px:.7}],
+['nostalgic','Ностальгия',{t:.3,a:-8,b:.3,px:-.3,py:-.5}],
+['playful','Игривый',{t:.2,b:.25},{t:.45,a:-10,b:.2}],
+['amazed','Изумлён',{s:1.12,pr:.24}],
+['exhausted','Вымотан',{t:.66,a:-8,py:.4},{t:.72},['sweat']],
+['suspicious','Подозревает',{t:.44,a:-4,b:.26,px:.6}],
+];
+const BY={};EM.forEach(e=>BY[e[0]]=e);
+function geo(p,dir){
+ const sc=p.s,Wd=132*sc,H=116*sc,cx=233-dir*85,cy=224;
+ const x0=cx-Wd/2,x1=cx+Wd/2,y0=cy-H/2,y1=cy+H/2;
+ return {Wd,H,cx,cy,x0,x1,y0,y1,XL:x0-10,XR:x1+10,sl:Math.tan(p.a*Math.PI/180)*dir,yl:y0+p.t*H,yc:y1-p.b*H,ye:y1-p.b*H+p.b*H*.6,pr:H*p.pr,pcx:cx+p.px*Wd*.27,pcy:cy+p.py*H*.27};
+}
+function heart(x,y,r,fill,key){return R('g',{key,fill},R('circle',{cx:x-r*.354,cy:y-r*.2,r:r*.5}),R('circle',{cx:x+r*.354,cy:y-r*.2,r:r*.5}),R('rect',{x:x-r*.5,y:y+r*.15-r*.5,width:r,height:r,transform:`rotate(45 ${x} ${y+r*.15})`}));}
+function eye(p,dir,k){
+ const g=geo(p,dir),o=[];
+ o.push(R('rect',{key:k+'w',x:g.x0,y:g.y0,width:g.Wd,height:g.H,rx:46*p.s,fill:W}));
+ if(g.pr>0){
+  if(p.pu==='heart')o.push(heart(g.pcx,g.pcy,g.pr*1.5,'#000',k+'h'));
+  else if(p.pu==='spiral')o.push(R('g',{key:k+'s',fill:'none',stroke:'#000',strokeWidth:5},R('circle',{cx:g.pcx,cy:g.pcy,r:g.pr*1.5}),R('circle',{cx:g.pcx,cy:g.pcy,r:g.pr*.8}),R('circle',{cx:g.pcx,cy:g.pcy,r:3,fill:'#000'})));
+  else if(p.pu==='star'){const A=g.pr*1.5,b=g.pr*.42,x=g.pcx,y=g.pcy;o.push(R('polygon',{key:k+'st',fill:'#000',points:`${x},${y-A} ${x+b},${y-b} ${x+A},${y} ${x+b},${y+b} ${x},${y+A} ${x-b},${y+b} ${x-A},${y} ${x-b},${y-b}`}));}
+  else o.push(R('circle',{key:k+'p',cx:g.pcx,cy:g.pcy,r:g.pr,fill:'#000'}));
+ }
+ if(p.t>0||p.a!==0){const Y=x=>g.yl+g.sl*(x-g.cx);o.push(R('polygon',{key:k+'l',points:`${g.XL},${Y(g.XL)} ${g.XR},${Y(g.XR)} ${g.XR},${g.y0-300} ${g.XL},${g.y0-300}`,fill:'#000'}));}
+ if(p.b>0)o.push(R('path',{key:k+'c',d:`M${g.XL} ${g.y1+60}L${g.XL} ${g.ye}Q${g.cx} ${2*g.yc-g.ye} ${g.XR} ${g.ye}L${g.XR} ${g.y1+60}Z`,fill:'#000'}));
+ return o;
+}
+function plus(x,y,s,c,k){return R('g',{key:k,fill:c},R('rect',{x:x-s,y:y-1.75,width:2*s,height:3.5,rx:1.5}),R('rect',{x:x-1.75,y:y-s,width:3.5,height:2*s,rx:1.5}));}
+function drop(x,y,r,c,k){return R('g',{key:k,fill:c},R('circle',{cx:x,cy:y,r}),R('polygon',{points:`${x},${y-r*2} ${x-r*.9},${y-r*.4} ${x+r*.9},${y-r*.4}`}));}
+function extras(list){
+ const o=[];
+ (list||[]).forEach((x,i)=>{const k='x'+i;
+  if(x==='sparkle'){o.push(plus(112,96,9,W,k+'a'),plus(233,72,12,W,k+'b'),plus(356,96,8,W,k+'c'));}
+  if(x==='hearts'){o.push(heart(116,108,22,ACC,k+'a'),heart(352,92,15,ACC,k+'b'));}
+  if(x==='q')o.push(R('text',{key:k,x:296,y:124,fill:ACC,style:{font:"500 44px Unbounded"}},'?'));
+  if(x==='dots')[212,233,254].forEach((cx,j)=>o.push(R('circle',{key:k+j,cx,cy:128,r:5,fill:DIM})));
+  if(x==='zzz'){o.push(R('text',{key:k+'a',x:316,y:178,fill:DIM,style:{font:"500 24px Unbounded"}},'z'),R('text',{key:k+'b',x:344,y:144,fill:ACC,style:{font:"500 32px Unbounded"}},'z'),R('text',{key:k+'c',x:378,y:104,fill:ACC,style:{font:"500 42px Unbounded"}},'Z'));}
+  if(x==='tear')o.push(drop(118,326,8,ACC,k));
+  if(x==='streams')[134,332].forEach((cx,j)=>[262,294,326,358].forEach((cy,q)=>o.push(R('circle',{key:k+j+q,cx,cy,r:7-q,fill:ACC}))));
+  if(x==='blush')[148,318].forEach((cx,j)=>[0,1,2].forEach(q=>o.push(R('line',{key:k+j+q,x1:cx-30+q*18,y1:320,x2:cx-22+q*18,y2:302,stroke:PE,strokeWidth:5,strokeLinecap:'round'}))));
+  if(x==='frost')[[96,108],[160,84],[233,72],[306,84],[370,108]].forEach(([a,b],j)=>o.push(plus(a,b,7,ACC,k+j)));
+  if(x==='sweat')o.push(drop(394,158,9,ACC,k));
+  if(x==='drool')o.push(R('line',{key:k+'l',x1:150,y1:276,x2:150,y2:330,stroke:DIM,strokeWidth:3}),R('circle',{key:k+'c',cx:150,cy:334,r:6,fill:DIM}));
+  if(x==='joy')o.push(drop(70,262,8,ACC,k+'a'),drop(396,262,8,ACC,k+'b'));
+ });
+ return o;
+}
+function params(key){const e=BY[key];const L={...D,...e[2]};const Rr={...L,...(e[3]||{})};return [L,Rr,e[4]];}
+function svg(kids,mini,key){return R('svg',{key,viewBox:mini?'56 136 354 176':'0 0 466 466',width:'100%',style:{display:'block'}},kids);}
+function face(key,mini,overlay){
+ const [L,Rr,ex]=params(key);
+ const kids=[...eye(L,1,'l'),...eye(Rr,-1,'r')];
+ if(!mini)kids.push(...extras(ex));
+ if(overlay)kids.push(...overlay);
+ return svg(kids,mini);
+}
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+function cloud(cx,cy,s,fill,k){return R('g',{key:k,fill},R('circle',{cx:cx-28*s,cy:cy+4*s,r:22*s}),R('circle',{cx,cy:cy-10*s,r:30*s}),R('circle',{cx:cx+30*s,cy:cy+6*s,r:20*s}),R('rect',{x:cx-50*s,y:cy+4*s,width:100*s,height:22*s,rx:11*s}));}
+function rain(n,c,k){seed=11;const o=[];for(let i=0;i<n;i++){const x=20+rnd()*426,y=40+rnd()*400;o.push(R('line',{key:k+i,x1:x,y1:y,x2:x-6,y2:y+22,stroke:c,strokeWidth:3,strokeLinecap:'round'}));}return o;}
+function snow(n,k){seed=23;const o=[];for(let i=0;i<n;i++)o.push(R('circle',{key:k+i,cx:20+rnd()*426,cy:30+rnd()*410,r:2+rnd()*3.5,fill:i%4?'#5f5c56':DIM}));return o;}
+const clouds=(f,k)=>[cloud(96,92,1.25,f,k+'a'),cloud(240,64,1.1,f,k+'b'),cloud(384,100,1.2,f,k+'c')];
+const bolt=(x,y,s,c,k)=>R('polygon',{key:k,fill:c,points:`${x+6*s},${y} ${x-14*s},${y+34*s} ${x},${y+34*s} ${x-8*s},${y+62*s} ${x+16*s},${y+24*s} ${x+2*s},${y+24*s}`});
+const WOV={
+ clear:()=>extras(['sparkle']),
+ clouds:()=>clouds('#262729','c'),
+ rain:()=>[...clouds('#262729','c'),...rain(26,'#3d4254','r')],
+ snow:()=>snow(40,'s'),
+ storm:()=>[...rain(30,'#3d4254','r'),...clouds('#1f2022','c'),bolt(250,96,1.4,PE,'b')],
+ fog:()=>[90,150,210,270,330,390].map((y,i)=>R('line',{key:'f'+i,x1:30+(i%2)*30,y1:y,x2:436-(i%3)*24,y2:y,stroke:'#2a2a2c',strokeWidth:9,strokeLinecap:'round'})),
+ wind:()=>{seed=5;const o=[];for(let i=0;i<10;i++){const x=20+rnd()*360,y=60+rnd()*360;o.push(R('line',{key:'w'+i,x1:x,y1:y,x2:x+50+rnd()*40,y2:y-3,stroke:'#4a4945',strokeWidth:3,strokeLinecap:'round'}));}return o;}
+};
+const ICON={
+ clear:()=>[R('circle',{key:'s',cx:233,cy:104,r:30,fill:W}),...[0,45,90,135,180,225,270,315].map(a=>R('line',{key:'r'+a,x1:233,y1:62,x2:233,y2:50,stroke:ACC,strokeWidth:5,strokeLinecap:'round',transform:`rotate(${a} 233 104)`}))],
+ clouds:()=>[cloud(233,106,1,W,'c')],
+ rain:()=>[cloud(233,96,1,W,'c'),...[200,224,248,272].map((x,i)=>R('line',{key:'r'+i,x1:x,y1:138+(i%2)*6,x2:x-5,y2:154+(i%2)*6,stroke:ACC,strokeWidth:4,strokeLinecap:'round'}))],
+ snow:()=>[cloud(233,96,1,W,'c'),...[[200,146],[222,158],[246,146],[270,158],[234,170]].map(([x,y],i)=>R('circle',{key:'s'+i,cx:x,cy:y,r:4.5,fill:W}))],
+ storm:()=>[cloud(233,96,1,DIM,'c'),bolt(236,116,.85,PE,'b')],
+ fog:()=>[[78,200,266],[96,180,286],[114,196,270],[132,206,260]].map(([y,a,b],i)=>R('line',{key:'f'+i,x1:a,y1:y,x2:b,y2:y,stroke:DIM,strokeWidth:6,strokeLinecap:'round'})),
+ wind:()=>[[80,180,280],[104,196,296],[128,170,262]].map(([y,a,b],i)=>R('line',{key:'w'+i,x1:a,y1:y,x2:b,y2:y,stroke:W,strokeWidth:6,strokeLinecap:'round'}))
+};
+const WX=[
+ ['clear','Ясно','+18°','ветер 2 м/с','happy'],
+ ['clouds','Облачно','+14°','ощущается +12°','curious'],
+ ['rain','Дождь','+12°','ощущается +9°','sad'],
+ ['snow','Снег','−3°','ощущается −7°','excited'],
+ ['storm','Гроза','+16°','порывы 14 м/с','scared'],
+ ['fog','Туман','+6°','видимость 200 м','confused'],
+ ['wind','Ветер','+9°','порывы 11 м/с','skeptical']
+];
+const C={};
+function build(){
+ if(C.done)return C;
+ C.f={};C.m={};
+ EM.forEach(e=>{C.f[e[0]]=face(e[0],false);C.m[e[0]]=face(e[0],true);});
+ C.emos=EM.map(e=>({key:e[0],name:e[1],el:C.f[e[0]]}));
+ C.weather=WX.map(([k,label,temp,sub,emo])=>({label,temp,sub,mini:C.m[emo],face:face(emo,false,WOV[k]()),icon:svg(ICON[k](),false)}));
+ C.done=true;return C;
+}
+class Component extends DCLogic {
+ renderVals(){
+  const c=build();const fe=this.props.faceEmotion??'neutral';
+  return {f:c.f,m:c.m,emos:c.emos,weather:c.weather,home:c.f[fe]||c.f.neutral};
+ }
+}
+</script>
+</body>
+</html>
