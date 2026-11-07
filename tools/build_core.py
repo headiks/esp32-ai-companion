@@ -28,7 +28,7 @@ def compiler():
 
 
 def build():
-    sources = sorted(CORE.glob("src/*.cpp")) + [ROOT / "core/capi/companion_capi.cpp"]
+    sources = sorted(CORE.glob("src/**/*.cpp"))  # src/ui holds the 1a design system + [ROOT / "core/capi/companion_capi.cpp"]
     OUT_DIR.mkdir(exist_ok=True)
     newest = max(p.stat().st_mtime for p in list(CORE.rglob("*.cpp")) + list(CORE.rglob("*.h")) + sources)
     if LIB.exists() and LIB.stat().st_mtime > newest:
@@ -41,7 +41,7 @@ def build():
         shutil.copytree(CORE / "include", tmp / "include")
         shutil.copy(ROOT / "core/capi/companion_capi.cpp", tmp / "capi.cpp")
         out = tmp / LIB.name
-        srcs = [str(p) for p in sorted((tmp / "src").glob("*.cpp"))] + [str(tmp / "capi.cpp")]
+        srcs = [str(p) for p in sorted((tmp / "src").glob("**/*.cpp"))] + [str(tmp / "capi.cpp")]
         cmd = compiler() + ["-std=c++17", "-O2", "-shared", "-fPIC", "-I", str(tmp / "include"), "-include", "memory",
                             "-w", "-o", str(out)] + srcs
         if platform.system() == "Windows" and "ziglang" in cmd:

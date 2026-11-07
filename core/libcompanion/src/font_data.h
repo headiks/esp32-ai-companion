@@ -2,7 +2,8 @@
 #pragma once
 #include <stdint.h>
 namespace cc {
-struct Glyph { uint32_t cp; uint32_t offset; uint8_t w, h; int8_t xoff; int8_t yoff; uint8_t adv; };
+struct Glyph { uint32_t cp; uint32_t offset; uint16_t w, h; int16_t xoff; int16_t yoff; uint16_t adv; };
 struct FontInfo { const Glyph* glyphs; int count; const uint8_t* bitmap; int lineH; };
-extern const FontInfo kFonts[3];
+constexpr int kFontCount = 23;
+extern const FontInfo kFonts[kFontCount];
 }  // namespace cc

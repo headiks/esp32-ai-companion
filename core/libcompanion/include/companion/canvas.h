@@ -26,7 +26,14 @@ inline uint16_t blend565(uint16_t bg, uint16_t fg, uint32_t a) {
 }
 
 enum class Align : uint8_t { Left, Center, Right };
-enum class FontSize : uint8_t { S, M, L };
+// Same order as tools/gen_font.py. S, M, L are the old DejaVu interface; the rest are the 1a tokens (ui/theme.h).
+enum class FontSize : uint8_t {
+  S, M, L,
+  NumXXL, NumXL, Num96, Num92, Num84, NumL, NumL56, NumM, NumM40, NumS, NumS30,  // Unbounded, digits and signs only
+  MenuSel, Unb34, Unb28,                                                         // Unbounded, full text
+  Title, Txt28, Body, Cap, Min, Btn,                                             // Onest
+  Count
+};
 
 struct Rect { int x, y, w, h; };
 

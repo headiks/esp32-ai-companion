@@ -196,6 +196,7 @@ void Canvas::eye(const EyeShape& s, uint16_t c) {
 
 // ---- text ------------------------------------------------------------------------------------
 
+static_assert((int)FontSize::Count == kFontCount, "FontSize must list the fonts of tools/gen_font.py, in order");
 static const FontInfo& fontOf(FontSize f) { return kFonts[(int)f]; }
 
 static uint32_t nextCodepoint(const char*& s) {
