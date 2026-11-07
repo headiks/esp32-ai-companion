@@ -118,8 +118,9 @@ class FaceEngine {
   void drawMini(Canvas& c, Emotion e, float left, float top, float width, uint16_t color) const;
   // Pixel bounds the face can touch this frame. Firmware pushes only this region to save power.
   Rect bounds(const AnimationEngine& a) const;
-  // Weather behind the eyes: rain, snow, drifting clouds, night stars. Pure functions of time.
-  void drawWeather(Canvas& c, Weather w, float tMs, bool night) const;
+  // Weather of design 1a: clouds, rain, snow, wind and sparkles behind the eyes (over = false), fog in front of
+  // them (over = true). Pure functions of time. `flash`: the lightning of a storm strikes.
+  void drawWeather(Canvas& c, Weather w, float tMs, bool over, bool flash) const;
 };
 
 }  // namespace cc

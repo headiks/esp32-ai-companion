@@ -582,55 +582,67 @@ void FaceEngine::drawMini(Canvas& c, Emotion e, float left, float top, float wid
   drawEyes(c, pose, zero, zero, d.pupil, left, top, width / 354.f, color);
 }
 
-void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool night) const {
-  const float t = tMs;
-  auto hash = [](int i, float k) { return fmodf(sinf(i * 12.9898f + k) * 43758.5f, 1.f); };
-  auto frac01 = [](float v) { v = fmodf(v, 1.f); return v < 0 ? v + 1 : v; };
-  if (w == Weather::Clear && night) {
-    for (int i = 0; i < 26; i++) {
-      float x = frac01(hash(i, 1.f)) * kScreenW, y = frac01(hash(i, 2.f)) * kScreenH;
-      float tw = 0.5f + 0.5f * sinf(t * 0.0016f * (0.5f + frac01(hash(i, 3.f))) + i);
-      c.fillRect((int)x, (int)y, tw > 0.8f ? 3 : 2, tw > 0.8f ? 3 : 2, tw > 0.5f ? kGray : kDim);
+// A cloud of the spec at scale s: three circles on a rounded base.
+static void cloud(Canvas& c, float x, float y, float s, uint16_t col) {
+  c.fillCircle(x - 28 * s, y + 4 * s, 22 * s, col);
+  c.fillCircle(x, y - 10 * s, 30 * s, col);
+  c.fillCircle(x + 30 * s, y + 6 * s, 20 * s, col);
+  c.roundRect(x - 50 * s, y + 4 * s, 100 * s, 22 * s, 11 * s, col);
+}
+
+static float hash01(int i, float k) {
+  float v = sinf(i * 12.9898f + k * 78.233f) * 43758.5453f;
+  return v - floorf(v);
+}
+
+static float frac01(float v) { return v - floorf(v); }
+
+void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool over, bool flash) const {
+  // Particles move 12 times a second, as the spec asks; their places come from fixed hashes.
+  float t = floorf(tMs / 83.f) * 83.f;
+  if (over) {
+    if (w != Weather::Fog) return;
+    for (int i = 0; i < 6; i++) {  // fog lies over the eyes
+      float y = 90 + i * 60 + 6 * sinf(t * 0.0006f + i), drift = 30 * sinf(t * 0.0004f + i * 1.7f);
+      c.line(40 + drift + (i % 2) * 30, y, 426 + drift - ((i + 1) % 2) * 30, y, 9, sky::FOG);
     }
+    return;
   }
-  if (w == Weather::Clouds || w == Weather::Storm || w == Weather::Rain) {
-    for (int i = 0; i < 4; i++) {
-      float x = frac01(i * 0.27f + t * 0.000012f * (1 + i)) * 620 - 80, y = 54.f + i * 15;
-      c.fillCircle(x, y, 34.f + i * 5, kDark);
-      c.fillCircle(x + 42, y + 6, 26.f + i * 4, kDark);
-      c.fillCircle(x - 38, y + 8, 22, kDark);
-    }
-  }
+  bool clouds = w == Weather::Clouds || w == Weather::Rain || w == Weather::Storm;
   if (w == Weather::Rain || w == Weather::Storm) {
-    int n = w == Weather::Storm ? 34 : 22;
-    float slant = w == Weather::Storm ? 8.f : 3.f;
-    for (int i = 0; i < n; i++) {
-      float sp = 0.42f + 0.25f * frac01(hash(i, 5.f));
-      float y = frac01(t * sp / 520.f + frac01(hash(i, 6.f))) * 520 - 30;
-      float x = frac01(hash(i, 7.f)) * kScreenW - slant * y / 40;
-      c.line(x, y, x + slant, y + 15, 1.6f, kDim);
+    for (int i = 0; i < 26; i++) {  // strokes 22 long, leaning 6 px
+      float y = frac01(hash01(i, 1) + t * 0.0006f * (0.8f + 0.4f * hash01(i, 2))) * 520 - 40;
+      float x = hash01(i, 3) * 500 - 6.f / 22 * y;
+      c.line(x, y, x - 6, y + 22, 2, sky::DROP);
     }
+  }
+  if (clouds) {
+    uint16_t col = w == Weather::Storm ? sky::STORM_CLOUD : sky::CLOUD;
+    const float cx[3] = {96, 240, 384}, cy[3] = {92, 64, 100}, cs[3] = {1.25f, 1.1f, 1.2f};
+    for (int i = 0; i < 3; i++) cloud(c, cx[i] + 6 * sinf(t * 0.0003f + i * 2.1f), cy[i], cs[i], col);
+  }
+  if (w == Weather::Storm) {
+    const float bx[4] = {246, 226, 242, 222}, by[4] = {58, 98, 98, 142};
+    for (int i = 0; i < 3; i++) c.line(bx[i], by[i], bx[i + 1], by[i + 1], flash ? 8 : 5, ACCENT_2);
   }
   if (w == Weather::Snow) {
-    for (int i = 0; i < 26; i++) {
-      float sp = 0.03f + 0.05f * frac01(hash(i, 8.f));
-      float y = frac01(t * sp / 500.f + frac01(hash(i, 9.f))) * 500 - 16;
-      float x = frac01(hash(i, 10.f)) * kScreenW + 16 * sinf(t * 0.001f + i);
-      c.fillCircle(x, y, 1.6f + 1.8f * frac01(hash(i, 11.f)), kGray);
-    }
-  }
-  if (w == Weather::Fog) {
-    for (int i = 0; i < 5; i++) {
-      float y = 90.f + i * 72 + 8 * sinf(t * 0.0006f + i);
-      c.line(30 + 40 * sinf(t * 0.0004f + i), y, 436 - 40 * sinf(t * 0.0005f + i * 2), y, 9, kDark);
+    for (int i = 0; i < 40; i++) {
+      float y = frac01(hash01(i, 4) + t * 0.00004f * (0.6f + hash01(i, 5))) * 500 - 20;
+      float x = hash01(i, 6) * 466 + 12 * sinf(t * 0.001f + i);
+      c.fillCircle(x, y, 2 + 3.5f * hash01(i, 7), i % 3 ? sky::SNOW_DIM : INK_2);
     }
   }
   if (w == Weather::Wind) {
-    for (int i = 0; i < 8; i++) {
-      float x = frac01(t * 0.0004f * (1 + 0.3f * i) + i * 0.23f) * 640 - 90;
-      float y = 60.f + i * 48 + 10 * sinf(t * 0.002f + i);
-      c.line(x, y, x + 60, y - 3, 2, kDim);
+    for (int i = 0; i < 10; i++) {  // strokes 50..90 long fly to the left
+      float len = 50 + 40 * hash01(i, 8);
+      float x = 520 - frac01(hash01(i, 9) + t * 0.0005f * (1 + 0.5f * hash01(i, 10))) * 680;
+      float y = 70 + i * 34 + 6 * sinf(t * 0.002f + i);
+      c.line(x, y, x + len, y - 2, 3, sky::WIND);
     }
+  }
+  if (w == Weather::Clear) {
+    const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
+    for (int i = 0; i < 3; i++) plus(c, px[i], py[i], half[i] * (0.8f + 0.2f * sinf(t * 0.0031f + i * 2.1f)), 3.5f, INK);
   }
 }
 

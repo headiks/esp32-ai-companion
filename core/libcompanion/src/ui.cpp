@@ -335,9 +335,11 @@ int ListView::gesture(const GestureEvent& e, int count, int* zone) {
 class FaceScreen : public Screen {
  public:
   void draw(App& a, Canvas& c) override {
-    if (a.thunderFlashMs > 0) c.clear(kDim);
-    if (a.weather.known) a.face.drawWeather(c, a.weather.cond, a.nowMs(), a.alertness() < 0.3f);
+    // Thunder no longer flashes the whole screen: the bolt thickens instead, big bright fields are out.
+    bool sky = a.weather.known, flash = a.thunderFlashMs > 0;
+    if (sky) a.face.drawWeather(c, a.weather.cond, a.nowMs(), false, flash);
     a.face.draw(c, a.anim, a.eyeColor());
+    if (sky) a.face.drawWeather(c, a.weather.cond, a.nowMs(), true, flash);
   }
   bool wantsDoubleTap() const override { return true; }
   void onGesture(App& a, const GestureEvent& e) override {

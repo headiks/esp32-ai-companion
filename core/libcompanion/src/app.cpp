@@ -283,7 +283,8 @@ void App::setWeather(Weather w, float tempC) {
     case Weather::Storm: react(Emotion::Scared, 2400); break;
     case Weather::Clear: react(Emotion::Happy, 2400); break;
     case Weather::Fog: react(Emotion::Confused, 2200); break;
-    default: react(Emotion::Curious, 2000); break;
+    case Weather::Wind: react(Emotion::Skeptical, 2200); break;
+    default: react(Emotion::Curious, 2000); break;  // clouds
   }
 }
 
