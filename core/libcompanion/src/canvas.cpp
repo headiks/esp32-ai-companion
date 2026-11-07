@@ -52,37 +52,132 @@ void Canvas::sdfFill(float bx0, float by0, float bx1, float by1, uint16_t c, F d
   }
 }
 
+// Row-wise fill of a shape mirrored around x = cx. For each row, span(|dy|, outer, core) gives half-widths:
+// pixels farther than outer are outside, nearer than core are fully inside (filled at once, or skipped when
+// hollow, as in a ring). Only the thin band between evaluates dist() for the anti-aliased edge, so a ring
+// around the whole screen costs its circumference, not the 466x466 square around it.
+template <typename S, typename D>
+void Canvas::bandFill(float cx, float cy, float halfH, uint16_t c, bool hollow, S span, D dist) {
+  int ya = (int)floorf(cy - halfH - 1), yb = (int)ceilf(cy + halfH + 1);
+  if (ya < y0_) ya = y0_;
+  if (yb > y0_ + h_) yb = y0_ + h_;
+  for (int y = ya; y < yb; y++) {
+    float py = y + 0.5f, outer = 0, core = 0;
+    span(fabsf(py - cy), outer, core);
+    if (outer <= 0) continue;
+    int xa = (int)floorf(cx - outer), xb = (int)ceilf(cx + outer);
+    if (xa < x0_) xa = x0_;
+    if (xb > x0_ + w_) xb = x0_ + w_;
+    if (xa >= xb) continue;
+    int ca = xb, cb = xb;  // pixels whose centre lies within core
+    if (core > 0) { ca = (int)floorf(cx - core - 0.5f) + 1; cb = (int)ceilf(cx + core - 0.5f); }
+    if (ca < xa) ca = xa;
+    if (cb > xb) cb = xb;
+    if (cb < ca) cb = ca;
+    uint16_t* row = buf_ + (y - y0_) * w_ - x0_;
+    auto edge = [&](int from, int to) {
+      for (int x = from; x < to; x++) {
+        float d = dist(x + 0.5f, py);
+        if (d >= 0.5f) continue;
+        row[x] = d <= -0.5f ? c : mix565(row[x], c, (uint32_t)((0.5f - d) * 255.0f));
+      }
+    };
+    edge(xa, ca);
+    if (!hollow) for (int x = ca; x < cb; x++) row[x] = c;
+    edge(cb, xb);
+  }
+}
+
+static inline float halfChord(float r, float dy) { return r > 0 && r * r > dy * dy ? sqrtf(r * r - dy * dy) : 0; }
+
 void Canvas::fillCircle(float cx, float cy, float r, uint16_t c) {
   if (r <= 0) return;
-  sdfFill(cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1, c, [&](float x, float y) {
-    return sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r;
-  });
+  bandFill(cx, cy, r, c, false,
+           [&](float dy, float& outer, float& core) { outer = halfChord(r + 1, dy); core = halfChord(r - 1, dy); },
+           [&](float x, float y) { return sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r; });
 }
 
 void Canvas::ring(float cx, float cy, float r, float t, uint16_t c) {
-  float o = r + t / 2 + 1;
-  sdfFill(cx - o, cy - o, cx + o, cy + o, c, [&](float x, float y) {
-    return fabsf(sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r) - t / 2;
-  });
+  float ro = r + t / 2, ri = r - t / 2;
+  bandFill(cx, cy, ro, c, true,
+           [&](float dy, float& outer, float& core) { outer = halfChord(ro + 1, dy); core = halfChord(ri - 1, dy); },
+           [&](float x, float y) { return fabsf(sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r) - t / 2; });
 }
 
-void Canvas::arc(float cx, float cy, float r, float t, float a0, float a1, uint16_t c) {
+void Canvas::arc(float cx, float cy, float r, float t, float a0, float a1, uint16_t c, bool roundCaps) {
   if (a1 <= a0) return;
   const float kDeg = 3.14159265f / 180.0f;
-  float o = r + t / 2 + 1, mid = (a0 + a1) / 2 * kDeg, half = (a1 - a0) / 2 * kDeg;
-  float mx = sinf(mid), my = -cosf(mid), ch = cosf(half), sh = sinf(half);
+  float ro = r + t / 2, ri = r - t / 2, mid = (a0 + a1) / 2 * kDeg, half = (a1 - a0) / 2 * kDeg;
+  float mx = sinf(mid), my = -cosf(mid), ch = cosf(half);
   float ex0 = cx + r * sinf(a0 * kDeg), ey0 = cy - r * cosf(a0 * kDeg);
   float ex1 = cx + r * sinf(a1 * kDeg), ey1 = cy - r * cosf(a1 * kDeg);
-  sdfFill(cx - o, cy - o, cx + o, cy + o, c, [&](float x, float y) {
-    float dx = x - cx, dy = y - cy, len = sqrtf(dx * dx + dy * dy);
-    bool inside = len > 0.001f && (dx * mx + dy * my) >= ch * len;
-    if (half >= 3.14159f) inside = true;
-    (void)sh;
-    if (inside) return fabsf(len - r) - t / 2;
-    float d0 = sqrtf((x - ex0) * (x - ex0) + (y - ey0) * (y - ey0));
-    float d1 = sqrtf((x - ex1) * (x - ex1) + (y - ey1) * (y - ey1));
-    return (d0 < d1 ? d0 : d1) - t / 2;  // round caps
-  });
+  bool full = half >= 3.14159f;
+  bandFill(cx, cy, ro, c, true,
+           [&](float dy, float& outer, float& core) { outer = halfChord(ro + 1, dy); core = halfChord(ri - 1, dy); },
+           [&](float x, float y) {
+             float dx = x - cx, dy = y - cy, len = sqrtf(dx * dx + dy * dy);
+             if (full || (len > 0.001f && (dx * mx + dy * my) >= ch * len)) return fabsf(len - r) - t / 2;
+             if (!roundCaps) return 1.0f;
+             float d0 = sqrtf((x - ex0) * (x - ex0) + (y - ey0) * (y - ey0));
+             float d1 = sqrtf((x - ex1) * (x - ex1) + (y - ey1) * (y - ey1));
+             return (d0 < d1 ? d0 : d1) - t / 2;
+           });
+}
+
+// Distance to a rounded rectangle centred at (cx, cy) with half straight parts hx, hy and corner radius r.
+static inline float roundRectDist(float px, float py, float cx, float cy, float hx, float hy, float r) {
+  float qx = fabsf(px - cx) - hx, qy = fabsf(py - cy) - hy;
+  float ax = qx > 0 ? qx : 0, ay = qy > 0 ? qy : 0;
+  float inner = qx > qy ? qx : qy;
+  return sqrtf(ax * ax + ay * ay) + (inner < 0 ? inner : 0) - r;
+}
+
+static inline float roundRectHalf(float dy, float hx, float hy, float r) {
+  if (dy <= hy) return hx + r;
+  return hx + halfChord(r, dy - hy);
+}
+
+void Canvas::roundRect(float x, float y, float w, float h, float r, uint16_t c) {
+  if (w <= 0 || h <= 0) return;
+  if (r > w / 2) r = w / 2;
+  if (r > h / 2) r = h / 2;
+  float cx = x + w / 2, cy = y + h / 2, hx = w / 2 - r, hy = h / 2 - r;
+  bandFill(cx, cy, h / 2, c, false,
+           [&](float dy, float& outer, float& core) {
+             outer = roundRectHalf(dy - 1 < 0 ? 0 : dy - 1, hx, hy, r) + 1;
+             core = dy + 1 <= hy + r ? roundRectHalf(dy + 1, hx, hy, r) - 1 : 0;
+           },
+           [&](float px, float py) { return roundRectDist(px, py, cx, cy, hx, hy, r); });
+}
+
+void Canvas::roundRectOutline(float x, float y, float w, float h, float r, float stroke, uint16_t c) {
+  if (w <= 0 || h <= 0) return;
+  if (r > w / 2) r = w / 2;
+  if (r > h / 2) r = h / 2;
+  float cx = x + w / 2, cy = y + h / 2, hx = w / 2 - r, hy = h / 2 - r;
+  float ri = r - stroke > 0 ? r - stroke : 0, ihx = w / 2 - stroke - ri, ihy = h / 2 - stroke - ri;
+  bandFill(cx, cy, h / 2, c, true,
+           [&](float dy, float& outer, float& core) {
+             outer = roundRectHalf(dy - 1 < 0 ? 0 : dy - 1, hx, hy, r) + 1;
+             core = ihx >= 0 && dy + 1 <= ihy + ri ? roundRectHalf(dy + 1, ihx, ihy, ri) - 1 : 0;
+           },
+           [&](float px, float py) {
+             float d = roundRectDist(px, py, cx, cy, hx, hy, r);
+             float e = -d - stroke;
+             return d > e ? d : e;
+           });
+}
+
+void Canvas::diamond(float cx, float cy, float hw, float hh, uint16_t c) {
+  if (hw <= 0 || hh <= 0) return;
+  float k = hw * hh / sqrtf(hw * hw + hh * hh);
+  bandFill(cx, cy, hh, c, false,
+           [&](float dy, float& outer, float& core) {
+             float w = hw * (1 - dy / hh);
+             outer = w + 2;
+             core = w - 2;
+           },
+           [&](float x, float y) { return (fabsf(x - cx) / hw + fabsf(y - cy) / hh - 1) * k; });
 }
 
 void Canvas::line(float x0, float y0, float x1, float y1, float t, uint16_t c) {
@@ -93,16 +188,6 @@ void Canvas::line(float x0, float y0, float x1, float y1, float t, uint16_t c) {
     float u = l2 > 0 ? clampf(((x - x0) * dx + (y - y0) * dy) / l2, 0, 1) : 0;
     float ex = x - (x0 + dx * u), ey = y - (y0 + dy * u);
     return sqrtf(ex * ex + ey * ey) - r;
-  });
-}
-
-void Canvas::roundRect(float x, float y, float w, float h, float r, uint16_t c) {
-  float cx = x + w / 2, cy = y + h / 2, hx = w / 2 - r, hy = h / 2 - r;
-  sdfFill(x - 1, y - 1, x + w + 1, y + h + 1, c, [&](float px, float py) {
-    float qx = fabsf(px - cx) - hx, qy = fabsf(py - cy) - hy;
-    float ax = qx > 0 ? qx : 0, ay = qy > 0 ? qy : 0;
-    float inner = qx > qy ? qx : qy;
-    return sqrtf(ax * ax + ay * ay) + (inner < 0 ? inner : 0) - r;
   });
 }
 
@@ -263,11 +348,22 @@ int Canvas::text(int x, int y, const char* s, FontSize f, uint16_t c, Align a) {
   return total;
 }
 
-int Canvas::textWrapped(int x, int y, int maxW, const char* s, FontSize f, uint16_t c, Align a, int maxLines) {
+int Canvas::capMiddle(FontSize f) {
   const FontInfo& fi = fontOf(f);
-  char line[160];
+  const Glyph* g = findGlyph(fi, '0');
+  if (!g || !g->h) g = findGlyph(fi, 0x41D);  // Cyrillic En: fonts without digits are text fonts
+  return g && g->h ? g->yoff + g->h / 2 : fi.lineH / 2;
+}
+
+int Canvas::textWrapped(int x, int y, int maxW, const char* s, FontSize f, uint16_t c, Align a, int maxLines, int lineH, bool ellipsis) {
+  const FontInfo& fi = fontOf(f);
+  if (lineH <= 0) lineH = fi.lineH;
+  const Glyph* dots = findGlyph(fi, 0x2026);
+  int dotsW = dots ? dots->adv : 0;
+  char line[200];
   int lines = 0;
   while (*s && lines < maxLines) {
+    bool last = lines == maxLines - 1;
     int w = 0, n = 0, lastBreak = -1;
     const char* p = s;
     while (*p && *p != '\n') {
@@ -275,18 +371,30 @@ int Canvas::textWrapped(int x, int y, int maxW, const char* s, FontSize f, uint1
       uint32_t cp = nextCodepoint(q);
       const Glyph* g = findGlyph(fi, cp);
       int adv = g ? g->adv : fi.lineH / 3;
-      if (w + adv > maxW || n + (q - p) >= (int)sizeof(line) - 1) break;
+      if (w + adv > maxW || n + (q - p) >= (int)sizeof(line) - 4) break;
       if (cp == ' ') lastBreak = n;
       memcpy(line + n, p, (size_t)(q - p));
       n += (int)(q - p);
       w += adv;
       p = q;
     }
-    if (*p && *p != '\n' && lastBreak > 0) { n = lastBreak; p = s + lastBreak + 1; }
-    if (n == 0 && *p && *p != '\n') { const char* q = p; nextCodepoint(q); memcpy(line, p, (size_t)(q - p)); n = (int)(q - p); p = q; }
+    bool cut = *p && *p != '\n';
+    if (cut && last && ellipsis && dots) {
+      // Room for the ellipsis: drop whole UTF-8 characters from the end until it fits.
+      for (line[n] = 0; n > 0 && textWidth(line, f) + dotsW > maxW; line[n] = 0) {
+        do { n--; } while (n > 0 && (line[n] & 0xC0) == 0x80);
+      }
+      while (n > 0 && line[n - 1] == ' ') n--;
+      memcpy(line + n, "\xE2\x80\xA6", 3);
+      n += 3;
+      p = "";
+    } else {
+      if (cut && lastBreak > 0) { n = lastBreak; p = s + lastBreak + 1; }
+      if (n == 0 && cut) { const char* q = p; nextCodepoint(q); memcpy(line, p, (size_t)(q - p)); n = (int)(q - p); p = q; }
+    }
     line[n] = 0;
     text(x, y, line, f, c, a);
-    y += fi.lineH;
+    y += lineH;
     lines++;
     s = *p == '\n' ? p + 1 : p;
   }

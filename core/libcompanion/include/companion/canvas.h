@@ -55,23 +55,30 @@ class Canvas {
   void fillCircle(float cx, float cy, float r, uint16_t c);
   void ring(float cx, float cy, float r, float thick, uint16_t c);
   // Angles in degrees, 0 = up, clockwise.
-  void arc(float cx, float cy, float r, float thick, float a0, float a1, uint16_t c);
+  void arc(float cx, float cy, float r, float thick, float a0, float a1, uint16_t c, bool roundCaps = true);
   void line(float x0, float y0, float x1, float y1, float thick, uint16_t c);
   void roundRect(float x, float y, float w, float h, float r, uint16_t c);
+  void roundRectOutline(float x, float y, float w, float h, float r, float stroke, uint16_t c);  // stroke inside
+  void diamond(float cx, float cy, float halfW, float halfH, uint16_t c);
   void heart(float cx, float cy, float size, uint16_t c);
   void eye(const EyeShape& s, uint16_t c);
   // UTF-8 text. Returns the drawn width in pixels.
   int text(int x, int y, const char* utf8, FontSize f, uint16_t c, Align a = Align::Left);
   // Word-wrapped text, returns the y after the last line.
-  int textWrapped(int x, int y, int maxW, const char* utf8, FontSize f, uint16_t c, Align a = Align::Left, int maxLines = 16);
+  // lineH 0 uses the font's own; with ellipsis, text cut at maxLines ends in "…".
+  int textWrapped(int x, int y, int maxW, const char* utf8, FontSize f, uint16_t c, Align a = Align::Left, int maxLines = 16,
+                  int lineH = 0, bool ellipsis = false);
   static int textWidth(const char* utf8, FontSize f);
   static int lineHeight(FontSize f);
+  // Distance from the top of the line to the middle of a digit or capital: centres text by what the eye sees.
+  static int capMiddle(FontSize f);
   // Blacks out everything outside a circle: used for the iris screen transition and the bezel.
   void maskOutsideCircle(float cx, float cy, float r);
 
  private:
   inline void blend(int x, int y, uint16_t c, uint8_t a);
   template <typename F> void sdfFill(float x0, float y0, float x1, float y1, uint16_t c, F dist);
+  template <typename S, typename D> void bandFill(float cx, float cy, float halfH, uint16_t c, bool hollow, S span, D dist);
   uint16_t* buf_ = nullptr;
   int x0_ = 0, y0_ = 0, w_ = 0, h_ = 0;
 };
