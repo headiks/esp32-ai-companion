@@ -98,6 +98,12 @@ def _cmd(**cmd):
     return lambda c: c.handle_command(cmd)
 
 
+def _tap(x, y):
+    def go(c):
+        c.touch(True, x, y); c.run(60); c.touch(False, x, y); c.run(60)
+    return go
+
+
 def _tilt(ax, ay, ms=600):
     def go(c):
         for _ in range(ms // 20):
@@ -112,12 +118,14 @@ def _tilt(ax, ay, ms=600):
 SCENES = [
     ("01_face", _screen("face", 1500)),
     ("02_menu", _screen("menu")),
-    ("03_talk", _steps(_screen("face", 300), _cmd(type="ai_listen"), lambda c: c.run(800))),
+    # Without an AI server (always so in the emulator) the talk screen says why the voice is unavailable.
+    ("03_talk", _steps(_screen("face", 300), _cmd(type="setting", name="ai_voice_consent", value=True), _cmd(type="ai_listen"),
+                       lambda c: c.run(800))),
     ("04_notifications", _steps(*[_cmd(type="notify", title="Сообщение", text=t, icon="message") for t in
                                    ("Встреча в 15:00", "Посылка в пути", "Привет! Ты уже дома? Купи хлеба по дороге")],
-                                _screen("notifications"))),
-    ("05_settings", _screen("settings")),
-    ("06_setting_brightness", _screen("settings")),
+                                lambda c: c.run(12000), _screen("notifications"))),  # arrival pills have gone by
+    ("05_settings", _steps(_screen("settings"), _tap(233, 233 + 78), lambda c: c.run(600))),  # volume to the centre
+    ("06_setting_brightness", _screen("setting_value")),
     ("07_diagnostics", _screen("diagnostics")),
     ("08_info", _screen("info")),
     ("09_digital_clock", _steps(_cmd(type="weather", value="rain", temp=12), _screen("digital_clock"))),
@@ -155,7 +163,7 @@ SCENES = [
                                         info="Префлоп · банк 30", hint="тап чек\n↑ поднять · ↓ сбросить"), lambda c: c.run(600))),
     ("39_controller_race", _steps(_cmd(type="controller", value="start", mode="pad", title="Гонки", hint="наклон руль · держи экран тормоз"),
                                   _tilt(0.4, 0.2))),
-    ("40_ble_pairing", _steps(_cmd(type="controller", value="stop"), _screen("mouse"))),
+    ("40_ble_pairing", _steps(_cmd(type="controller", value="stop"), _screen("ble_pairing"))),
 ]
 
 

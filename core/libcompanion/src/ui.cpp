@@ -10,7 +10,8 @@ static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 static const char* const kScreenNames[(int)ScreenId::Count] = {
     "face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications",
     "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game",
-    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "controller", "mouse"};
+    "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "controller", "mouse",
+    "talk", "setting_value", "clocks", "remotes", "ble_pairing"};
 
 const char* screenName(ScreenId s) { return kScreenNames[(int)s]; }
 bool screenFromName(const char* n, ScreenId* out) {
@@ -331,97 +332,6 @@ int ListView::gesture(const GestureEvent& e, int count, int* zone) {
   return -1;
 }
 
-// ---- face ------------------------------------------------------------------------------------
-class FaceScreen : public Screen {
- public:
-  void draw(App& a, Canvas& c) override {
-    // Thunder no longer flashes the whole screen: the bolt thickens instead, big bright fields are out.
-    bool sky = a.weather.known, flash = a.thunderFlashMs > 0;
-    if (sky) a.face.drawWeather(c, a.weather.cond, a.nowMs(), false, flash);
-    a.face.draw(c, a.anim, a.eyeColor());
-    if (sky) a.face.drawWeather(c, a.weather.cond, a.nowMs(), true, flash);
-  }
-  bool wantsDoubleTap() const override { return true; }
-  void onGesture(App& a, const GestureEvent& e) override {
-    switch (e.g) {
-      case Gesture::Down:
-        path_ = 0;
-        a.anim.lookAt((float)e.x, (float)e.y, 900);
-        if (a.pet.asleep()) a.wakeNow();
-        break;
-      case Gesture::Move:
-        a.anim.lookAt((float)e.x, (float)e.y, 900);
-        path_ += abs(e.dx) + abs(e.dy);
-        if (path_ > 260) {
-          // Rubbing back and forth without travelling far reads as petting.
-          path_ = 0;
-          a.pet.event(PetEvent::Stroke);
-          a.sfx.play("interactions/pet");
-          a.react(Emotion::Affection, 2200);
-        }
-        break;
-      case Gesture::Tap:
-        a.pet.event(PetEvent::Tap);
-        a.anim.kick(-0.16f);
-        a.sfx.play("interactions/tap");
-        if (a.pet.irritatedByRepeats()) a.react(a.pet.stats.stress > 60 ? Emotion::Angry : Emotion::Annoyed, 2200);
-        else a.react(a.pet.stats.curiosity > 50 ? Emotion::Curious : Emotion::Attentive, 1400);
-        break;
-      case Gesture::DoubleTap:
-        a.pet.event(PetEvent::DoubleTap);
-        a.anim.kick(-0.3f);
-        a.sfx.play("interactions/double_tap");
-        if (a.pet.irritatedByRepeats()) a.react(Emotion::Annoyed, 2000);
-        else a.react(a.pet.stats.fun > 75 ? Emotion::Laughing : (a.pet.stats.happiness > 55 ? Emotion::Happy : Emotion::Surprised), 1800);
-        break;
-      case Gesture::LongPress: a.sfx.play("interactions/hold"); a.showScreen(ScreenId::Menu); break;
-      case Gesture::SwipeUp: a.sfx.play("interactions/swipe"); a.showScreen(ScreenId::Settings); break;
-      case Gesture::SwipeDown: a.sfx.play("interactions/swipe"); a.showScreen(ScreenId::Notifications); break;
-      default: break;
-    }
-  }
- private:
-  int path_ = 0;
-};
-
-// ---- main menu -------------------------------------------------------------------------------
-struct MenuItem { const char* title; Icon icon; ScreenId target; };
-static const MenuItem kMenu[] = {
-    {"Лицо", Icon::Face, ScreenId::Face},
-    {"Поговорить", Icon::Message, ScreenId::Count},  // not a screen: starts a voice dialog
-    {"Питомец", Icon::Heart, ScreenId::Pet},
-    {"Игры", Icon::Game, ScreenId::Games},
-    {"Мышь", Icon::Stopwatch, ScreenId::Mouse},
-    {"Погода", Icon::Sun, ScreenId::Weather},
-    {"Часы", Icon::Clock, ScreenId::DigitalClock},
-    {"Циферблат", Icon::Clock, ScreenId::AnalogClock},
-    {"Таймер", Icon::Timer, ScreenId::Timer},
-    {"Секундомер", Icon::Stopwatch, ScreenId::Stopwatch},
-    {"Уведомления", Icon::Bell, ScreenId::Notifications},
-    {"Настройки", Icon::Gear, ScreenId::Settings},
-    {"Диагностика", Icon::Chip, ScreenId::Diagnostics},
-    {"Об устройстве", Icon::Info, ScreenId::Info},
-};
-static constexpr int kMenuCount = sizeof(kMenu) / sizeof(kMenu[0]);
-
-class MenuScreen : public Screen {
- public:
-  void enter(App&) override { list_.reset(); }
-  void tick(App&, float dt) override { list_.tick(dt, kMenuCount); }
-  void draw(App& a, Canvas& c) override {
-    list_.draw(c, "", kMenuCount, [](App&, int i, void*) { return ListRow{kMenu[i].title, nullptr, kMenu[i].icon, true, false}; }, a, nullptr);
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    int row = list_.gesture(e, kMenuCount, nullptr);
-    if (row < 0) return;
-    a.sfx.play("system/click");
-    if (kMenu[row].target == ScreenId::Count) a.listen();
-    else a.showScreen(kMenu[row].target);
-  }
- private:
-  ListView list_;
-};
-
 // ---- virtual pet -----------------------------------------------------------------------------
 static const char* petStatusTitle(PetStatus s) {
   static const char* const t[] = {"Доволен", "Голоден", "Устал", "Скучает", "Радуется", "Спит", "Раздражён"};
@@ -640,188 +550,6 @@ class StopwatchScreen : public Screen {
   static constexpr Button kGo{kCx - 56, kCy + 124, 48}, kLap{kCx + 56, kCy + 124, 48};
 };
 constexpr Button StopwatchScreen::kGo, StopwatchScreen::kLap;
-
-// ---- notifications ---------------------------------------------------------------------------
-static Icon iconOf(uint8_t i) {
-  static const Icon m[] = {Icon::Bell, Icon::Message, Icon::Mail, Icon::Phone, Icon::Calendar, Icon::Warning};
-  return i < 6 ? m[i] : Icon::Bell;
-}
-
-class NotificationsScreen : public Screen {
- public:
-  void enter(App&) override { open_ = -1; list_.reset(); }
-  void tick(App& a, float dt) override { list_.tick(dt, rows(a)); }
-  void draw(App& a, Canvas& c) override {
-    int n = a.notifications.count();
-    if (open_ >= 0 && open_ < n) {
-      const Notification& m = a.notifications.at(open_);
-      drawTitle(c, "Уведомление");
-      drawIcon(c, iconOf(m.icon), kCx, 76, 22, kAccent);
-      int y = c.textWrapped(kCx, 108, 340, m.title, FontSize::M, kWhite, Align::Center, 2);
-      c.textWrapped(kCx, y + 8, 370, m.text, FontSize::S, kWhite, Align::Center, 7);
-      DateTime d = civilFromEpoch(m.time + a.clock.tzMinutes() * 60);
-      char t[40];
-      snprintf(t, sizeof(t), "%02d:%02d  %s", d.hour, d.minute, m.source);
-      c.text(kCx, kScreenH - 64, t, FontSize::S, kGray, Align::Center);
-      return;
-    }
-    if (n == 0) {
-      drawTitle(c, "Уведомления");
-      drawIcon(c, Icon::Bell, kCx, kCy - 30, 36, kDim);
-      c.text(kCx, kCy + 20, "Пока ничего нет", FontSize::M, kGray, Align::Center);
-      return;
-    }
-    list_.draw(c, "", n + 1, [](App& ap, int i, void*) {
-      if (i >= ap.notifications.count()) return ListRow{"Очистить всё", nullptr, Icon::Warning, true, false};
-      const Notification& m = ap.notifications.at(i);
-      static char buf[60];
-      snprintf(buf, sizeof(buf), "%s%s", m.read ? "" : "• ", m.title);
-      return ListRow{buf, nullptr, iconOf(m.icon), true, false};
-    }, a, nullptr);
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    if (open_ >= 0) {
-      if (e.g == Gesture::Tap) { open_ = -1; a.sfx.play("system/click"); }
-      return;
-    }
-    int row = list_.gesture(e, rows(a), nullptr);
-    if (row < 0) return;
-    a.sfx.play("system/click");
-    if (row >= a.notifications.count()) { a.notifications.clear(); list_.reset(); }
-    else { open_ = row; a.notifications.markRead(row); }
-  }
- private:
-  static int rows(App& a) { return a.notifications.count() ? a.notifications.count() + 1 : 0; }
-  ListView list_;
-  int open_ = -1;
-};
-
-// ---- settings --------------------------------------------------------------------------------
-enum SettingRow {
-  kBright, kVolume, kSound, kCatEmo, kCatInt, kCatSys, kCatGame, kMic, kMicSens, kTouchSens, kAnim, kBlink,
-  kSleep, kSave, kPersona, kWifi, kBle, kAiConsent, kReset, kSettingRows
-};
-
-class SettingsScreen : public Screen {
- public:
-  void enter(App&) override { list_.reset(); confirm_ = false; }
-  void tick(App&, float dt) override { list_.tick(dt, kSettingRows); }
-  void draw(App& a, Canvas& c) override {
-    list_.draw(c, "", kSettingRows, [](App& ap, int i, void* ctx) {
-      static char v[28];
-      const Settings& s = ap.settings;
-      auto onoff = [](bool b) { return b ? "Вкл" : "Выкл"; };
-      switch (i) {
-        case kBright: snprintf(v, sizeof(v), "%d%%", s.brightness); return ListRow{"Яркость", v, Icon::Sun, false, true};
-        case kVolume: snprintf(v, sizeof(v), "%d%%", s.volume); return ListRow{"Громкость", v, Icon::Bell, false, true};
-        case kSound: return ListRow{"Звук", onoff(s.soundOn), Icon::Bell, false, true};
-        case kCatEmo: return ListRow{"Звуки эмоций", onoff(s.catEmotion), Icon::Bell, false, true};
-        case kCatInt: return ListRow{"Звуки касаний", onoff(s.catInteraction), Icon::Bell, false, true};
-        case kCatSys: return ListRow{"Системные звуки", onoff(s.catSystem), Icon::Bell, false, true};
-        case kCatGame: return ListRow{"Звуки игр", onoff(s.catGame), Icon::Bell, false, true};
-        case kMic: return ListRow{"Микрофоны", onoff(s.micOn), Icon::Bell, false, true};
-        case kMicSens: snprintf(v, sizeof(v), "%d%%", s.micSensitivity); return ListRow{"Чувств. микрофонов", v, Icon::Bell, false, true};
-        case kTouchSens: snprintf(v, sizeof(v), "%d%%", s.touchSensitivity); return ListRow{"Чувств. касаний", v, Icon::Bell, false, true};
-        case kAnim: snprintf(v, sizeof(v), "%d%%", s.animSpeed); return ListRow{"Скорость анимации", v, Icon::Bell, false, true};
-        case kBlink: snprintf(v, sizeof(v), "%d%%", s.blinkRate); return ListRow{"Частота моргания", v, Icon::Bell, false, true};
-        case kSleep: snprintf(v, sizeof(v), "%d мин", s.sleepAfterS / 60); return ListRow{"Переход в сон", v, Icon::Moon, false, true};
-        case kSave: return ListRow{"Энергосбережение", onoff(s.powerSave), Icon::Bell, false, true};
-        case kPersona: return ListRow{"Характер", personalityTitle((Personality)s.personality), Icon::Heart, false, true};
-        case kWifi: snprintf(v, sizeof(v), "%s", s.wifiOn ? (s.wifiSsid[0] ? s.wifiSsid : "Вкл, нет сети") : "Выкл"); return ListRow{"Wi-Fi", v, Icon::Bell, false, true};
-        case kBle: return ListRow{"Bluetooth", onoff(s.bleOn), Icon::Bell, false, true};
-        case kAiConsent: return ListRow{"Голос на AI-сервер", s.aiVoiceConsent ? "Разрешён" : "Запрещён", Icon::Bell, false, true};
-        default: return ListRow{"Сбросить всё", *(bool*)ctx ? "Точно? Нажми ещё раз" : "Настройки и питомец", Icon::Warning, false, false};
-      }
-    }, a, &confirm_);
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    int zone = 0;
-    int row = list_.gesture(e, kSettingRows, &zone);
-    if (row < 0) return;
-    int dir = zone < 0 ? -1 : 1;
-    Settings& s = a.settings;
-    auto step = [&](uint8_t& v, int d, int lo, int hi) { v = (uint8_t)clampi(v + d * dir, lo, hi); };
-    switch (row) {
-      case kBright: step(s.brightness, 10, 10, 100); break;
-      case kVolume: step(s.volume, 10, 0, 100); break;
-      case kSound: s.soundOn = !s.soundOn; break;
-      case kCatEmo: s.catEmotion = !s.catEmotion; break;
-      case kCatInt: s.catInteraction = !s.catInteraction; break;
-      case kCatSys: s.catSystem = !s.catSystem; break;
-      case kCatGame: s.catGame = !s.catGame; break;
-      case kMic: s.micOn = !s.micOn; break;
-      case kMicSens: step(s.micSensitivity, 10, 10, 100); break;
-      case kTouchSens: step(s.touchSensitivity, 10, 10, 100); break;
-      case kAnim: step(s.animSpeed, 10, 50, 200); break;
-      case kBlink: step(s.blinkRate, 20, 0, 200); break;
-      case kSleep: s.sleepAfterS = (uint16_t)clampi(s.sleepAfterS + dir * 60, 60, 3600); break;
-      case kSave: s.powerSave = !s.powerSave; break;
-      case kPersona: s.personality = (uint8_t)((s.personality + (int)Personality::Count + dir) % (int)Personality::Count); break;
-      case kWifi: s.wifiOn = !s.wifiOn; a.netDirty = true; break;
-      case kBle: s.bleOn = !s.bleOn; a.netDirty = true; break;
-      case kAiConsent: s.aiVoiceConsent = !s.aiVoiceConsent; break;
-      case kReset:
-        if (confirm_) { confirm_ = false; a.factoryReset(); a.showScreen(ScreenId::Face); return; }
-        confirm_ = true;
-        break;
-    }
-    if (row != kReset) confirm_ = false;
-    a.applySettings();
-    a.saveSettings();
-    a.sfx.play(row == kVolume ? "system/volume" : "system/click");
-  }
- private:
-  ListView list_;
-  bool confirm_ = false;
-};
-
-// ---- diagnostics / info ----------------------------------------------------------------------
-class DiagnosticsScreen : public Screen {
- public:
-  void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Диагностика");
-    const HalInfo& h = a.hal;
-    char b[64];
-    int y = 52;
-    auto row = [&](const char* s, uint16_t col = kWhite) { c.text(kCx, y, s, FontSize::S, col, Align::Center); y += 25; };
-    snprintf(b, sizeof(b), "%.0f FPS   %s", (double)h.fps, h.platform); row(b, kSoft);
-    snprintf(b, sizeof(b), "RAM %u  PSRAM %u KB", (unsigned)(h.freeHeap / 1024), (unsigned)(h.freePsram / 1024)); row(b);
-    snprintf(b, sizeof(b), "Сенсор:%s  IMU:%s  PMIC:%s", h.touchOk ? "OK" : "НЕТ", h.imuOk ? "OK" : "НЕТ", h.pmicOk ? "OK" : "НЕТ"); row(b);
-    snprintf(b, sizeof(b), "Кодек:%s  Микрофон:%s", h.codecOk ? "OK" : "НЕТ", h.micOk ? "OK" : "НЕТ"); row(b);
-    snprintf(b, sizeof(b), "Акб: %d%% %d мВ%s", a.power.batteryPercent(), a.power.batteryMv(), a.power.charging() ? " заряд" : ""); row(b);
-    snprintf(b, sizeof(b), "Уск: %.2f %.2f %.2f", (double)h.ax, (double)h.ay, (double)h.az); row(b);
-    snprintf(b, sizeof(b), "Звук: %.0f дБ%s", (double)a.mic.levelDb(), a.mic.voiceActive() ? "  голос" : ""); row(b);
-    float m = clampf((a.mic.levelDb() + 70) / 70, 0, 1);
-    c.roundRect(kCx - 110, y + 2, 220, 8, 4, kDark);
-    if (m > 0.04f) c.roundRect(kCx - 110, y + 2, 220 * m, 8, 4, kAccent);
-    y += 20;
-    snprintf(b, sizeof(b), "BLE:%s  Wi-Fi:%s", h.bleConnected ? "связь" : "нет", h.wifiConnected ? h.ip : "нет"); row(b);
-    snprintf(b, sizeof(b), "Эмоция: %s", emotionName(a.emotion.current())); row(b, kSoft);
-    snprintf(b, sizeof(b), "Касание: %d, %d", a.touch.x(), a.touch.y()); row(b, kGray);
-    if (a.touch.isDown()) { c.ring((float)a.touch.x(), (float)a.touch.y(), 22, 3, kAccent); }
-  }
-};
-
-class InfoScreen : public Screen {
- public:
-  void draw(App& a, Canvas& c) override {
-    drawTitle(c, "Об устройстве");
-    drawIcon(c, Icon::Face, kCx, 76, 30, kWhite);
-    const HalInfo& h = a.hal;
-    char b[64];
-    int y = 104;
-    auto row = [&](const char* s, uint16_t col = kWhite) { c.text(kCx, y, s, FontSize::S, col, Align::Center); y += 27; };
-    row("AI-компаньон", kSoft);
-    row("ESP32-S3-Touch-AMOLED-1.75C");
-    snprintf(b, sizeof(b), "Прошивка %s, протокол %d", kFirmwareVersion, kProtocolVersion); row(b);
-    snprintf(b, sizeof(b), "Flash %u МБ  PSRAM %u МБ", (unsigned)h.flashMb, (unsigned)h.psramMb); row(b);
-    snprintf(b, sizeof(b), "MAC %s", h.mac); row(b, kGray);
-    snprintf(b, sizeof(b), "IP %s", h.ip); row(b, kGray);
-    snprintf(b, sizeof(b), "BLE: Companion-%s", h.mac[0] && strlen(h.mac) >= 17 ? h.mac + 12 : "?"); row(b);
-    snprintf(b, sizeof(b), "PIN для приложений: %s", a.settings.pin); row(b, kAccent);
-    snprintf(b, sizeof(b), "AI: %s", a.aiClient().name()); row(b, kGray);
-  }
-};
 
 // ---- games -----------------------------------------------------------------------------------
 struct GameItem { const char* title; ScreenId id; };
@@ -1175,17 +903,26 @@ class PetGameScreen : public Screen {
 };
 
 Screen* screenInstance(ScreenId id) {
-  static FaceScreen face; static MenuScreen menu; static PetScreen pet; static AnalogClockScreen analog;
-  static DigitalClockScreen digital; static TimerScreen timer; static StopwatchScreen sw;
-  static NotificationsScreen notes; static SettingsScreen settings; static DiagnosticsScreen diag;
-  static GamesScreen games; static InfoScreen info; static TicTacToeScreen ttt; static ReactionScreen react;
-  static GuessScreen guess; static PetGameScreen pg; static WeatherScreen weather;
-  Screen* all[(int)ScreenId::Count] = {&face, &menu, &pet, &analog, &digital, &timer, &sw, &notes, &settings, &diag, &games, &info, &ttt, &react, &guess, &pg,
-                                       gameScreen(ScreenId::Maze), gameScreen(ScreenId::Orbit), gameScreen(ScreenId::Snake), gameScreen(ScreenId::Simon),
-                                       partyScreen(ScreenId::Coin), partyScreen(ScreenId::Dice), partyScreen(ScreenId::MagicBall), partyScreen(ScreenId::Balance),
-                                       partyScreen(ScreenId::Duel), partyScreen(ScreenId::Shaker), partyScreen(ScreenId::Safe), partyScreen(ScreenId::Workout),
-                                       partyScreen(ScreenId::Mole), partyScreen(ScreenId::Blackjack), &weather, partyScreen(ScreenId::Controller), partyScreen(ScreenId::Mouse)};
-  return all[(int)id];
+  if (Screen* sys = systemScreen(id)) return sys;
+  static PetScreen pet; static AnalogClockScreen analog; static DigitalClockScreen digital; static TimerScreen timer; static StopwatchScreen sw;
+  static GamesScreen games; static TicTacToeScreen ttt; static ReactionScreen react; static GuessScreen guess; static PetGameScreen pg;
+  static WeatherScreen weather;
+  switch (id) {
+    case ScreenId::Pet: return &pet;
+    case ScreenId::AnalogClock: return &analog;
+    case ScreenId::DigitalClock: return &digital;
+    case ScreenId::Timer: return &timer;
+    case ScreenId::Stopwatch: return &sw;
+    case ScreenId::Games: return &games;
+    case ScreenId::TicTacToe: return &ttt;
+    case ScreenId::Reaction: return &react;
+    case ScreenId::Guess: return &guess;
+    case ScreenId::PetGame: return &pg;
+    case ScreenId::Weather: return &weather;
+    case ScreenId::Maze: case ScreenId::Orbit: case ScreenId::Snake: case ScreenId::Simon: return gameScreen(id);
+    case ScreenId::BlePairing: return partyScreen(ScreenId::Mouse);  // shared until the pairing screen of stage 8
+    default: return partyScreen(id);
+  }
 }
 
 }  // namespace cc

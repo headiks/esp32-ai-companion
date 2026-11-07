@@ -157,14 +157,15 @@ def mouse_point(x, y):
     return QPoint(x + BEZEL, y + BEZEL)
 
 
-def test_mouse_hold_opens_menu_and_click_selects(emu):
-    QTest.mousePress(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233))
-    pump(800)
-    QTest.mouseRelease(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233))
-    pump(350)
+def test_mouse_click_opens_menu_and_click_selects(emu):
+    """Design 1a: a tap on the face opens the menu, a tap brings a row to the centre, a tap there opens it."""
+    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233))
+    pump(700)  # the face waits for a possible double tap first
     assert state(emu)["screen"] == "menu"
+    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233 + 128))
+    pump(400)
     # An instant click, shorter than one frame, must still count.
-    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233 + 140))
+    QTest.mouseClick(emu.screen, Qt.LeftButton, Qt.NoModifier, mouse_point(233, 233))
     pump(400)
     assert state(emu)["screen"] == "pet"
 

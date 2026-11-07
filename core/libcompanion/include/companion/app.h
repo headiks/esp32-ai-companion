@@ -17,7 +17,9 @@ constexpr int kProtocolVersion = 1;
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
   TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon,
-  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Blackjack, Weather, Controller, Mouse, Count
+  Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Blackjack, Weather, Controller, Mouse,
+  Talk, SettingValue, ClockMenu, Remotes, BlePairing,  // design 1a
+  Count
 };
 const char* screenName(ScreenId s);
 bool screenFromName(const char* n, ScreenId* out);
@@ -75,6 +77,7 @@ class App {
   void showScreen(ScreenId s);
   void goBack();
   ScreenId screen() const { return screenId_; }
+  ScreenId previous() const { return prevId_; }
   void react(Emotion e, float holdMs, EmotionPriority p = EmotionPriority::Reaction) { emotion.request(e, p, holdMs); }
   void petAction(PetEvent e);
   void sleepNow();
@@ -89,10 +92,16 @@ class App {
   void toast(const char* title, const char* text, const char* soundName);
   void caption(const char* text, float ms = 5000);
   void chat(const char* text);
-  void listen();   // voice dialog, needs settings.aiVoiceConsent
+  void listen();   // voice dialog on the talk screen, needs settings.aiVoiceConsent
+  enum class Talk : uint8_t { Off, Listening, Thinking, Answer, Unavailable };
+  Talk talk = Talk::Off;
+  float talkMs = 0;
+  char talkText[200] = "";       // the answer, shown on the talk screen
+  const char* talkProblem = "";  // why the voice cannot start
+  uint8_t editSetting = 0;        // the row of the settings list shown on the value screen
   void setWeather(Weather w, float tempC);
   float alertness() const;     // 0 deep night .. 1 midday, from the clock
-  uint16_t eyeColor() const;   // warmer at night, like a real light source
+  uint16_t eyeColor() const;   // INK: the night is quieter through brightness
   WeatherState weather;
   float thunderFlashMs = 0;
   ControllerCfg controller;

@@ -102,10 +102,18 @@ void App::showScreen(ScreenId s) {
 
 void App::goBack() {
   ScreenId s = screenId_;
-  if (s >= ScreenId::TicTacToe && s <= ScreenId::Blackjack) showScreen(ScreenId::Games);
-  else if (s == ScreenId::Face) return;
-  else if (s == ScreenId::Menu || s == ScreenId::Settings || s == ScreenId::Notifications) showScreen(ScreenId::Face);
-  else showScreen(ScreenId::Menu);
+  switch (s) {
+    case ScreenId::Face: return;
+    case ScreenId::Menu: case ScreenId::Settings: case ScreenId::Notifications: case ScreenId::Talk: case ScreenId::Controller:
+      showScreen(ScreenId::Face); return;
+    case ScreenId::DigitalClock: case ScreenId::AnalogClock: case ScreenId::Timer: case ScreenId::Stopwatch: case ScreenId::Weather:
+      showScreen(ScreenId::ClockMenu); return;
+    case ScreenId::Mouse: case ScreenId::BlePairing: showScreen(ScreenId::Remotes); return;
+    case ScreenId::SettingValue: case ScreenId::Diagnostics: showScreen(ScreenId::Settings); return;
+    default:
+      if (s >= ScreenId::TicTacToe && s <= ScreenId::Blackjack) showScreen(ScreenId::Games);
+      else showScreen(ScreenId::Menu);
+  }
 }
 
 void App::sleepNow() {
@@ -219,6 +227,8 @@ void App::sound(SoundEvent e) {
 
 void App::gesture(const GestureEvent& e) {
   power.activity();
+  // Everywhere but the face, a swipe down from the top edge goes back (design 1a).
+  if (e.g == Gesture::SwipeDown && e.y < 70 && screenId_ != ScreenId::Face) { sfx.play("interactions/swipe"); goBack(); return; }
   bool cap = cur()->capturesSwipes();
   bool isSwipe = e.g == Gesture::SwipeLeft || e.g == Gesture::SwipeRight || e.g == Gesture::SwipeUp || e.g == Gesture::SwipeDown;
   if (isSwipe && !cap && (e.g == Gesture::SwipeLeft || e.g == Gesture::SwipeRight)) {
@@ -255,10 +265,13 @@ void App::chat(const char* text) {
 }
 
 void App::listen() {
-  if (!settings.aiVoiceConsent) { toast("Голос выключен", "Разреши в настройках", "system/error"); return; }
-  if (!ai_->submitVoice()) { toast("Нет AI-сервера", "Голос требует Wi-Fi и сервер", "system/error"); return; }
-  showScreen(ScreenId::Face);
-  react(Emotion::Attentive, 4000, EmotionPriority::Strong);
+  talkMs = 0;
+  talkText[0] = 0;
+  showScreen(ScreenId::Talk);
+  if (!settings.aiVoiceConsent) { talk = Talk::Unavailable; talkProblem = "Разрешите голос в настройках"; sfx.play("system/error"); return; }
+  if (!ai_->submitVoice()) { talk = Talk::Unavailable; talkProblem = "Нужны Wi-Fi и AI-сервер"; sfx.play("system/error"); return; }
+  talk = Talk::Listening;
+  react(Emotion::Attentive, 6000, EmotionPriority::Strong);
   sfx.play("system/notify");
 }
 
@@ -472,9 +485,16 @@ void App::tickBehaviour(float dt) {
     toast(n.title, n.text, "system/notify");
   }
   if (aiThinkMs_ > 0) aiThinkMs_ -= dt;
+  // The recording takes five seconds, then the answer is awaited with a thinking face.
+  if (talk == Talk::Listening && (talkMs += dt) > 5200) { talk = Talk::Thinking; react(Emotion::Thinking, 9000, EmotionPriority::Strong); }
   AIReply r;
   if (aiThinkMs_ <= 0 && ai_->poll(&r)) {
-    caption(r.text);
+    if (screenId_ == ScreenId::Talk && (talk == Talk::Listening || talk == Talk::Thinking)) {
+      talk = Talk::Answer;
+      snprintf(talkText, sizeof talkText, "%s", r.text);
+    } else {
+      caption(r.text);
+    }
     react(r.emotion, 3000, EmotionPriority::Strong);
   }
 }
@@ -513,33 +533,19 @@ void App::tick(float dt) {
 }
 
 // Shortens text to a pixel width on a character boundary, adding an ellipsis.
-static void fitText(char* out, size_t cap, const char* src, FontSize f, int maxW) {
-  snprintf(out, cap, "%s", src);
-  size_t n = strlen(out);
-  if (Canvas::textWidth(out, f) <= maxW) return;
-  while (n > 0) {
-    n--;
-    while (n > 0 && ((uint8_t)out[n] & 0xC0) == 0x80) n--;
-    if (n + 4 > cap) continue;
-    memcpy(out + n, "\xE2\x80\xA6", 4);  // UTF-8 ellipsis with terminator
-    if (Canvas::textWidth(out, f) <= maxW) return;
-  }
-}
-
 void App::drawOverlays(Canvas& c) {
+  using namespace theme;
   if (toastMs_ > 0) {
-    // A slim pill near the top edge, sliding in: the face stays the main thing on screen.
+    // A pill near the top edge, sliding in: the screen below stays the main thing.
     float inT = smooth01((3800 - toastMs_) / 180), outT = smooth01(toastMs_ / 180);
-    float y = lerpf(-74, 46, inT < outT ? inT : outT);
-    c.roundRect(kScreenW / 2.f - 140, y, 280, 64, 26, kDark);
-    c.fillCircle(kScreenW / 2.f - 118, y + 32, 6, kAccent);
-    char fit[64];
-    fitText(fit, sizeof(fit), toast_.title, FontSize::S, 216);
-    c.text(kScreenW / 2 + 8, (int)y + 6, fit, FontSize::S, kWhite, Align::Center);
-    fitText(fit, sizeof(fit), toastText_, FontSize::S, 216);
-    c.text(kScreenW / 2 + 8, (int)y + 32, fit, FontSize::S, kSoft, Align::Center);
+    float y = lerpf(-90, 40, inT < outT ? inT : outT);
+    c.roundRect(CX - 150, y, 300, 76, 38, SURFACE);
+    c.roundRectOutline(CX - 150, y, 300, 76, 38, 2, INK_3);
+    c.fillCircle(CX - 122, y + 38, 5, ACCENT);
+    c.textWrapped(CX + 10, (int)y + 8, 230, toast_.title, TXT_BTN, INK, Align::Center, 1, 0, true);
+    c.textWrapped(CX + 10, (int)y + 40, 230, toastText_, TXT_MIN, INK_2, Align::Center, 1, 0, true);
   }
-  if (captionMs_ > 0) c.textWrapped(kScreenW / 2, kScreenH - 110, 330, caption_, FontSize::S, kSoft, Align::Center, 3);
+  if (captionMs_ > 0) c.textWrapped(CX, kScreenH - 124, 320, caption_, TXT_CAP, INK_2, Align::Center, 3, 0, true);
 }
 
 void App::render(Canvas& c) {

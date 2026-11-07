@@ -170,22 +170,28 @@ def test_strip_rendering_identical_to_full(screen, strip):
 
 # ---- touch -----------------------------------------------------------------------------------
 def test_gestures_map_to_screens(c):
+    """Design 1a: back is a swipe down from the top edge; a tap on the face opens the menu, holding it talks."""
     def scr():
         return c.state()["screen"]
+    def back():
+        swipe(c, 233, 20, 233, 300); c.run(300)
     swipe(c, 233, 350, 233, 120); c.run(300)
     assert scr() == "settings"
-    swipe(c, 100, 233, 360, 233); c.run(300)
+    back()
     assert scr() == "face"
     swipe(c, 233, 120, 233, 350); c.run(300)
     assert scr() == "notifications"
-    swipe(c, 100, 233, 360, 233); c.run(300)
+    back()
     assert scr() == "face"
     swipe(c, 360, 233, 100, 233); c.run(300)
     assert scr() == "pet"
     swipe(c, 100, 233, 360, 233); c.run(300)
     assert scr() == "face"
-    c.touch(True, 233, 233); c.run(800); c.touch(False, 233, 233); c.run(300)
+    tap(c); c.run(400)
     assert scr() == "menu"
+    back()
+    c.touch(True, 233, 233); c.run(800); c.touch(False, 233, 233); c.run(300)
+    assert scr() == "talk"
 
 
 def test_tap_and_double_tap_react_on_face(c):
@@ -193,6 +199,8 @@ def test_tap_and_double_tap_react_on_face(c):
     tap(c); c.run(400)
     assert c.state()["attention"] >= h0
     assert emotion(c) in ("curious", "attentive")
+    assert c.state()["screen"] == "menu"
+    c.handle_command({"type": "screen", "value": "face"})
     c.run(3000)
     tap(c); c.run(80); tap(c); c.run(300)
     assert emotion(c) in ("happy", "surprised")
@@ -203,12 +211,13 @@ def test_touch_dropout_of_one_frame_is_not_a_release(c):
     c.touch(False, 233, 233); c.tick(16)
     c.touch(True, 233, 233); c.run(700)
     c.touch(False, 233, 233); c.run(200)
-    assert c.state()["screen"] == "menu", "long press must survive a dropped sample"
+    assert c.state()["screen"] == "talk", "long press must survive a dropped sample"
 
 
 def test_repeated_taps_annoy_the_pet(c):
     s0 = c.state()["stress"]
     for _ in range(9):
+        c.handle_command({"type": "screen", "value": "face"})  # a tap opens the menu: come back and poke again
         tap(c); c.run(400)
     assert c.state()["stress"] > s0
     assert emotion(c) in ("annoyed", "angry")
@@ -453,7 +462,9 @@ def test_every_screen_draws_something(c, name):
 def test_menu_opens_all_items(c):
     c.handle_command({"type": "screen", "value": "menu"})
     c.run(300)
-    tap(c, 233, 233 + 140); c.run(300)     # two rows below the focused first one: Pet
+    tap(c, 233, 233 + 128); c.run(400)     # two rows below the face, Pet comes to the centre
+    assert c.state()["screen"] == "menu"
+    tap(c); c.run(300)                     # and opens with a tap on the centre
     assert c.state()["screen"] == "pet"
 
 
@@ -519,11 +530,11 @@ def test_settings_tap_changes_value(c):
     c.handle_command({"type": "screen", "value": "settings"})
     c.run(300)
     v0 = c.state()["brightness"]
-    tap(c, 233 - 180, 233)
-    c.run(100)
+    tap(c); c.run(300)                     # brightness is the first row: its own screen opens
+    assert c.state()["screen"] == "setting_value"
+    tap(c, 58, 360); c.run(100)            # minus
     assert c.state()["brightness"] == v0 - 10
-    tap(c, 233 + 180, 233)
-    c.run(100)
+    tap(c, 408, 360); c.run(100)           # plus
     assert c.state()["brightness"] == v0
 
 
@@ -1258,7 +1269,7 @@ def test_shake_pauses_tilt_and_top_swipe_exits(c):
     assert collect_mouse(c, 50, ax=0.5)[0] == 0, "shake switches tilt off"
     assert c.state()["emotion"] not in ("surprised", "confused")
     swipe(c, 233, 30, 233, 260)
-    assert c.state()["screen"] == "face"
+    assert c.state()["screen"] == "remotes"  # back one level, to the list it came from
     assert collect_mouse(c, 20, ax=0.5)[0] == 0
 
 

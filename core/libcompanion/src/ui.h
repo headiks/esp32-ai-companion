@@ -61,6 +61,7 @@ void drawRimSquares(Canvas& c, float fraction, uint16_t on);
 void drawWeatherIcon(Canvas& c, Weather w, float cx, float cy, float size, float tMs);
 const char* weatherTitle(Weather w);
 
+Screen* systemScreen(ScreenId id);  // ui_system.cpp, nullptr for other screens
 Screen* gameScreen(ScreenId id);
 Screen* partyScreen(ScreenId id);
 
