@@ -60,7 +60,7 @@ class MazeScreen : public Screen {
     char lv[8];
     snprintf(lv, sizeof(lv), "%d", level_ + 1);
     c.text(kCx, 14, lv, FontSize::S, kGray, Align::Center);
-    a.face.drawScaled(c, a.anim, kCx, 428, 0.14f, a.eyeColor());
+    miniFace(c, a, kCx, 428, 59);
     if (m_.won()) c.text(kCx, kCy - 24, "Выход!", FontSize::L, kSoft, Align::Center);
   }
  private:
@@ -135,7 +135,7 @@ class OrbitScreen : public Screen {
     c.ring(kCx, kCy, kRim + 7, 1, kDark);
     float deg = paddle_ * 57.29578f, hw = halfWidth() * 57.29578f;
     c.arc(kCx, kCy, kRim + 7, 8, deg - hw, deg + hw, kAccent);
-    a.face.drawScaled(c, a.anim, kCx, kCy - 8, 0.42f, a.eyeColor());
+    miniFace(c, a, kCx, kCy - 8, 178);
     if (running_) c.fillCircle(kCx + bx_, kCy + by_, kBallR, kWhite);
     num_.draw(c, kCx, kCy + 42, 5, 1, running_ ? kGray : kWhite);
     if (!running_) c.text(kCx, kCy + 92, over_ ? "Ещё раз" : "Нажми", FontSize::S, kGray, Align::Center);
@@ -247,7 +247,7 @@ class SimonScreen : public Screen {
       bool on = lit_ == i;
       c.arc(kCx, kCy, 190, on ? 62 : 44, a0, a1, on ? col[i] : blend565(kBlack, col[i], 96));
     }
-    a.face.drawScaled(c, a.anim, kCx, kCy - 14, 0.42f, a.eyeColor());
+    miniFace(c, a, kCx, kCy - 14, 178);
     char b[12];
     snprintf(b, sizeof(b), "%d", len_);
     if (state_ == Ready) c.text(kCx, kCy + 36, "Нажми", FontSize::S, kGray, Align::Center);

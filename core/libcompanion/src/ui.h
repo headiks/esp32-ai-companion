@@ -70,4 +70,7 @@ void formatTime(char* out, int cap, float ms, bool tenths);
 
 Screen* screenInstance(ScreenId id);
 
+// The character centred on (cx, cy), `width` wide: MiniFace of the spec, live, without overlays.
+void miniFace(Canvas& c, App& a, float cx, float cy, float width);
+
 }  // namespace cc

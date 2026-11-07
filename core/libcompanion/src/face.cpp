@@ -1,184 +1,150 @@
 #include "companion/face.h"
 #include <string.h>
+#include "ui/components.h"
 
 namespace cc {
+using namespace theme;
 
-static constexpr float kEyeX = 122;   // distance of each eye from the screen centre
-static constexpr float kEyeY = -42;   // ellipse centre sits above screen centre: lids cut its top
-
-// Shorthand: dx dy  rx ry  up slope  lo slope  cheek  pupilR px py
-#define POSE(...) EyePose{__VA_ARGS__}
-#define NOCHEEK 90.f  // just below the eye: blending toward a smile stays proportional
-
+// Eye parameters of design 1a, from the table in section 5 of documentation/design/1a/claude-code-prompt.md:
+//   P(t, a, b, px, py, s, pr) for the left eye and the right one, pupil shape, overlay, then the behaviour of
+//   the emotion: transition ms, blinks per minute, saccade amplitude and period, bob amplitude and frequency,
+//   tremble, preferred gaze x and y (only for a wandering look: px, py already aim the eyes), sound delay,
+//   double blink %, wandering look.
+#define P(...) EyePose{__VA_ARGS__}
 static const EmotionDef kDefs[kEmotionCount] = {
-    // Neutral: the reference look. Slanted flat lid, pupil pressed against it, slightly sly.
-    {POSE(0, 0, 90, 72, 2, .19f, 72, 0, NOCHEEK, 19, -8, 23), POSE(0, 0, 90, 72, 2, .19f, 72, 0, NOCHEEK, 19, -8, 23),
-     260, .86f, 13, 22, 1700, 2.2f, .28f, 0, 0, 0, Accent::None, PupilShape::Round, 40, 15, false},
-    // Happy: lids lift, cheeks push up into a smile.
-    {POSE(0, -4, 90, 74, -74, 0, 74, 0, 28, 21, 0, -12), POSE(0, -4, 90, 74, -74, 0, 74, 0, 28, 21, 0, -12),
-     220, .62f, 16, 16, 1400, 4.f, .9f, 0, 0, 0, Accent::None, PupilShape::Round, 60, 25, false},
-    // VeryHappy: full "^ ^" arcs, bouncing.
-    {POSE(0, -10, 90, 74, -74, 0, 74, 0, -14, 0, 0, 0), POSE(0, -10, 90, 74, -74, 0, 74, 0, -14, 0, 0, 0),
-     200, .55f, 0, 0, 3000, 9.f, 2.1f, 0, 0, 0, Accent::Sparkle, PupilShape::Round, 50, 0, false},
-    // Sad: nose side of the lid rises, pupil large and low, whole face sinks.
-    {POSE(4, 10, 84, 66, -2, -.34f, 66, 0, NOCHEEK, 23, 0, 24), POSE(4, 10, 84, 66, -2, -.34f, 66, 0, NOCHEEK, 23, 0, 24),
-     760, 1.f, 7, 10, 3200, 2.f, .18f, 0, 0, 10, Accent::Tear, PupilShape::Round, 220, 10, false},
-    // Angry: strong slant, small pupils, trembling with tension.
-    {POSE(8, 4, 92, 64, 10, .46f, 64, 0, NOCHEEK, 15, 6, 30), POSE(8, 4, 92, 64, 10, .46f, 64, 0, NOCHEEK, 15, 6, 30),
-     150, .68f, 6, 6, 2200, 0, 0, 1.2f, 0, 0, Accent::Steam, PupilShape::Round, 20, 0, false},
-    // Annoyed: flat half lids and a side glance.
-    {POSE(0, 2, 90, 62, 12, .05f, 54, -.02f, NOCHEEK, 16, 0, 26), POSE(0, 2, 90, 62, 12, .05f, 54, -.02f, NOCHEEK, 16, 0, 26),
-     300, .9f, 9, 6, 2600, 1.f, .2f, 0, 34, 0, Accent::None, PupilShape::Round, 90, 0, false},
-    // Surprised: eyes pop wide, tiny pupils.
-    {POSE(-4, -10, 88, 86, -86, 0, 86, 0, NOCHEEK, 15, 0, 0), POSE(-4, -10, 88, 86, -86, 0, 86, 0, NOCHEEK, 15, 0, 0),
-     120, .46f, 3, 4, 2500, 0, 0, 0, 0, 0, Accent::Bang, PupilShape::Round, 15, 0, false},
-    // Curious: one eye opens more, tilted head.
-    {POSE(0, -8, 92, 84, -44, 0, 84, 0, NOCHEEK, 22, 4, -6), POSE(0, 8, 88, 68, -4, .14f, 68, 0, NOCHEEK, 20, 0, 14),
-     280, .7f, 12, 30, 1100, 1.5f, .5f, 0, 10, -10, Accent::Question, PupilShape::Round, 80, 10, false},
-    // Thinking: pupils up and away, one lid lower.
-    {POSE(0, -2, 88, 72, -24, -.08f, 72, 0, NOCHEEK, 16, 0, -4), POSE(0, 2, 88, 72, 6, .1f, 72, 0, NOCHEEK, 16, 0, 2),
-     340, .9f, 7, 14, 1900, 1.f, .25f, 0, -34, -22, Accent::Dots, PupilShape::Round, 130, 0, true},
-    // Sleepy: heavy lids, slow breathing.
-    {POSE(0, 8, 90, 68, 30, .02f, 68, 0, NOCHEEK, 20, 0, 34), POSE(0, 8, 90, 68, 30, .02f, 68, 0, NOCHEEK, 20, 0, 34),
-     900, 1.f, 16, 8, 3800, 3.f, .16f, 0, 0, 8, Accent::None, PupilShape::Round, 260, 0, false},
-    // Sleeping: only the lower arc of the eye stays visible.
-    {POSE(0, 14, 90, 66, 54, 0, 66, 0, NOCHEEK, 0, 0, 40), POSE(0, 14, 90, 66, 54, 0, 66, 0, NOCHEEK, 0, 0, 40),
-     1400, 1.f, 0, 0, 9000, 4.f, .13f, 0, 0, 0, Accent::Zzz, PupilShape::Round, 500, 0, false},
-    // WakingUp: lids drag open, double blinks handled by doubleBlinkPct.
-    {POSE(0, 6, 90, 70, 18, .08f, 70, 0, NOCHEEK, 18, 0, 26), POSE(0, 6, 90, 70, 18, .08f, 70, 0, NOCHEEK, 18, 0, 26),
-     1100, .95f, 40, 18, 900, 1.5f, .25f, 0, 0, 0, Accent::None, PupilShape::Round, 180, 90, false},
-    // Scared: wide, pupils shrink to dots, shaking, eyes pull together.
-    {POSE(14, -6, 78, 84, -70, -.2f, 84, 0, NOCHEEK, 10, 0, 0), POSE(14, -6, 78, 84, -70, -.2f, 84, 0, NOCHEEK, 10, 0, 0),
-     110, .55f, 12, 18, 420, 0, 0, 2.6f, 0, 0, Accent::None, PupilShape::Round, 10, 30, false},
-    // Affection: soft raised cheeks, heart pupils.
-    {POSE(0, -2, 90, 76, -76, 0, 76, 0, 36, 28, 2, -8), POSE(0, -2, 90, 76, -76, 0, 76, 0, 36, 28, 2, -8),
-     420, .8f, 11, 6, 2800, 3.f, .55f, 0, 0, 0, Accent::Hearts, PupilShape::Heart, 120, 30, false},
-    // Bored: half closed, looking away and down.
-    {POSE(0, 8, 90, 64, 20, -.05f, 64, 0, NOCHEEK, 18, 0, 26), POSE(0, 8, 90, 64, 20, -.05f, 64, 0, NOCHEEK, 18, 0, 26),
-     700, 1.f, 8, 18, 3400, 1.5f, .15f, 0, -26, 12, Accent::None, PupilShape::Round, 200, 0, true},
-    // Attentive: open, centred, pupils big and still.
-    {POSE(0, -4, 90, 78, -32, .05f, 78, 0, NOCHEEK, 23, 0, 0), POSE(0, -4, 90, 78, -32, .05f, 78, 0, NOCHEEK, 23, 0, 0),
-     180, .75f, 9, 4, 2600, .8f, .4f, 0, 0, 0, Accent::None, PupilShape::Round, 40, 0, false},
-    // Confused: mismatched eyes and pupil sizes.
-    {POSE(0, -6, 86, 80, -48, -.05f, 80, 0, NOCHEEK, 14, 0, -4), POSE(0, 6, 90, 62, 14, .24f, 62, 0, NOCHEEK, 22, 0, 22),
-     320, .7f, 15, 24, 800, 1.f, .35f, 0, 0, 0, Accent::Question, PupilShape::Round, 100, 40, true},
-    // Excited: wide and smiling, big pupils, quick bounce.
-    {POSE(0, -6, 92, 84, -84, 0, 84, 0, 44, 27, 0, -14), POSE(0, -6, 92, 84, -84, 0, 84, 0, 44, 27, 0, -14),
-     160, .5f, 18, 14, 700, 7.f, 2.8f, 0, 0, 0, Accent::Sparkle, PupilShape::Round, 30, 20, false},
-    // Mischievous: the reference look turned up, one lid raised, plotting something.
-    {POSE(2, -2, 92, 70, 8, .34f, 70, 0, 46, 17, -12, 26), POSE(2, -2, 92, 70, -8, .2f, 70, 0, 46, 18, -6, 16),
-     260, .7f, 12, 18, 1500, 1.2f, .6f, 0, 20, 2, Accent::None, PupilShape::Round, 80, 10, false},
-    // Shy: eyes shrink together and look away, cheeks glow.
-    {POSE(8, 10, 80, 62, -6, -.14f, 62, 0, 40, 20, 0, 8), POSE(8, 10, 80, 62, -6, -.14f, 62, 0, 40, 20, 0, 8),
-     420, .85f, 22, 12, 1300, 1.f, .4f, 0, -24, 16, Accent::Blush, PupilShape::Round, 120, 40, true},
-    // Proud: lids half lowered, chin up.
-    {POSE(0, -10, 92, 68, 14, -.13f, 68, 0, 50, 17, 0, 28), POSE(0, -10, 92, 68, 14, -.13f, 68, 0, 50, 17, 0, 28),
-     340, .8f, 8, 6, 2600, 1.2f, .3f, 0, 0, -6, Accent::Sparkle, PupilShape::Round, 90, 0, false},
-    // Dizzy: spirals for pupils, the gaze circles.
-    {POSE(0, 0, 86, 80, -74, 0, 80, 0, NOCHEEK, 24, 0, 0), POSE(0, 0, 86, 80, -74, 0, 80, 0, NOCHEEK, 24, 0, 0),
-     260, .6f, 4, 0, 5000, 2.f, .9f, 0, 0, 0, Accent::None, PupilShape::Spiral, 40, 0, false},
-    // Yawning: squeezed shut in the middle by a procedural curve, see composeLayers.
-    {POSE(0, 6, 90, 72, 26, 0, 72, 0, NOCHEEK, 20, 0, 30), POSE(0, 6, 90, 72, 26, 0, 72, 0, NOCHEEK, 20, 0, 30),
-     700, 1.f, 0, 4, 3000, 2.f, .15f, 0, 0, 6, Accent::None, PupilShape::Round, 200, 0, false},
-    // Cold: narrow, shivering.
-    {POSE(12, 4, 80, 64, -6, -.2f, 58, 0, NOCHEEK, 14, 0, 8), POSE(12, 4, 80, 64, -6, -.2f, 58, 0, NOCHEEK, 14, 0, 8),
-     320, .8f, 20, 8, 1400, 0, 0, 1.7f, 0, 4, Accent::Frost, PupilShape::Round, 80, 20, false},
-    // Hot: heavy melting lids, sweat.
-    {POSE(-2, 10, 94, 66, 24, -.08f, 66, 0, NOCHEEK, 21, 0, 28), POSE(-2, 10, 94, 66, 24, -.08f, 66, 0, NOCHEEK, 21, 0, 28),
-     620, .95f, 14, 10, 2600, 2.5f, .2f, 0, 0, 8, Accent::Sweat, PupilShape::Round, 150, 0, false},
-    // Dreamy: big soft pupils drifting upward.
-    {POSE(0, -2, 90, 76, -24, -.12f, 70, 0, 52, 27, 0, -18), POSE(0, -2, 90, 76, -24, -.12f, 70, 0, 52, 27, 0, -18),
-     800, 1.f, 9, 26, 2400, 2.5f, .17f, 0, 12, -14, Accent::None, PupilShape::Round, 240, 0, true},
-    // Focused: narrow beam, almost no drift.
-    {POSE(6, 0, 88, 62, 8, .15f, 50, 0, NOCHEEK, 16, 0, 18), POSE(6, 0, 88, 62, 8, .15f, 50, 0, NOCHEEK, 16, 0, 18),
-     220, .85f, 5, 3, 3000, .4f, .3f, 0, 0, 0, Accent::None, PupilShape::Round, 50, 0, false},
-    // Winking: one happy eye, one closed.
-    {POSE(0, -4, 90, 74, -70, 0, 74, 0, 36, 22, 0, -10), POSE(0, 2, 90, 66, 54, 0, 66, 0, NOCHEEK, 0, 0, 30),
-     170, .6f, 0, 8, 2000, 2.f, .8f, 0, 0, 0, Accent::None, PupilShape::Round, 40, 0, false},
-    // Smug: flat half lids over a small smile.
-    {POSE(0, -4, 92, 68, 16, .02f, 68, 0, 40, 17, 0, 30), POSE(0, -4, 92, 68, 16, .02f, 68, 0, 40, 17, 0, 30),
-     320, .85f, 9, 8, 2400, 1.f, .3f, 0, 0, -2, Accent::None, PupilShape::Round, 90, 0, false},
-    // Skeptical: one brow far up, the other eye narrowed.
-    {POSE(0, -8, 90, 80, -40, 0, 80, 0, NOCHEEK, 17, 0, 0), POSE(0, 6, 90, 62, 16, .16f, 56, 0, NOCHEEK, 17, 0, 22),
-     300, .8f, 8, 8, 2000, .6f, .3f, 0, 14, 0, Accent::None, PupilShape::Round, 80, 0, false},
-    // Guilty: sinks low and avoids looking at you.
-    {POSE(6, 12, 82, 60, 2, -.3f, 60, 0, NOCHEEK, 22, 0, 26), POSE(6, 12, 82, 60, 2, -.3f, 60, 0, NOCHEEK, 22, 0, 26),
-     560, .95f, 14, 12, 1500, 1.f, .2f, 0, -18, 22, Accent::None, PupilShape::Round, 150, 20, true},
-    // Embarrassed: eyes pull in, quick nervous blinks, cheeks glow.
-    {POSE(10, 8, 78, 66, -16, -.2f, 66, 0, 34, 18, 0, 8), POSE(10, 8, 78, 66, -16, -.2f, 66, 0, 34, 18, 0, 8),
-     300, .7f, 34, 14, 800, 1.f, .8f, .5f, 0, 14, Accent::Blush, PupilShape::Round, 70, 50, true},
-    // Hopeful: inner corners lifted, big pupils looking up.
-    {POSE(0, -8, 88, 82, -50, -.22f, 82, 0, NOCHEEK, 26, 0, -14), POSE(0, -8, 88, 82, -50, -.22f, 82, 0, NOCHEEK, 26, 0, -14),
-     420, .8f, 10, 6, 2400, 1.5f, .4f, 0, 0, -14, Accent::None, PupilShape::Round, 110, 10, false},
-    // Lonely: small and low, looking away, a tear now and then.
-    {POSE(6, 14, 80, 58, 6, -.28f, 58, 0, NOCHEEK, 20, 0, 26), POSE(6, 14, 80, 58, 6, -.28f, 58, 0, NOCHEEK, 20, 0, 26),
-     900, 1.f, 7, 12, 3600, 1.5f, .13f, 0, -30, 10, Accent::Tear, PupilShape::Round, 280, 10, true},
-    // Grateful: closed soft arcs with hearts.
-    {POSE(0, -2, 84, 72, -72, 0, 72, 0, -2, 0, 0, 0), POSE(0, -2, 84, 72, -72, 0, 72, 0, -2, 0, 0, 0),
-     360, .75f, 0, 0, 3000, 2.5f, .5f, 0, 0, 0, Accent::Hearts, PupilShape::Round, 110, 0, false},
-    // Jealous: tight slit, glaring to the side.
-    {POSE(0, 2, 92, 58, 14, .12f, 46, -.04f, NOCHEEK, 15, 0, 22), POSE(0, 2, 92, 58, 14, .12f, 46, -.04f, NOCHEEK, 15, 0, 22),
-     300, .85f, 6, 5, 2600, .5f, .2f, 0, 36, 4, Accent::None, PupilShape::Round, 90, 0, false},
-    // Determined: slanted like anger, but big pupils and no trembling.
-    {POSE(8, 0, 92, 66, 6, .38f, 66, 0, NOCHEEK, 22, 2, 26), POSE(8, 0, 92, 66, 6, .38f, 66, 0, NOCHEEK, 22, 2, 26),
-     200, .8f, 5, 3, 3000, .6f, .5f, 0, 0, -2, Accent::None, PupilShape::Round, 40, 0, false},
-    // Terrified: eyes as tall as they get, pupils specks, whole face shaking.
-    {POSE(18, -10, 74, 88, -80, -.1f, 88, 0, NOCHEEK, 7, 0, 0), POSE(18, -10, 74, 88, -80, -.1f, 88, 0, NOCHEEK, 7, 0, 0),
-     90, .5f, 6, 26, 300, 0, 0, 4.f, 0, 0, Accent::Sweat, PupilShape::Round, 10, 0, false},
-    // Disgusted: lower lids pushed up, one eye squeezed more.
-    {POSE(0, 4, 88, 58, 10, .1f, 36, .06f, NOCHEEK, 15, 0, 14), POSE(0, 8, 84, 48, 18, .22f, 30, -.08f, NOCHEEK, 14, 0, 12),
-     240, .8f, 12, 6, 1800, .8f, .4f, 0, -20, 6, Accent::None, PupilShape::Round, 60, 0, false},
-    // Hungry: wide eyes fixed on something below, drooling a little.
-    {POSE(0, 2, 92, 78, -30, -.1f, 78, 0, NOCHEEK, 24, 0, 28), POSE(0, 2, 92, 78, -30, -.1f, 78, 0, NOCHEEK, 24, 0, 28),
-     380, .8f, 10, 8, 1500, 1.2f, .3f, 0, 0, 26, Accent::Drool, PupilShape::Round, 120, 0, false},
-    // Starstruck: stars for pupils.
-    {POSE(0, -8, 90, 84, -84, 0, 84, 0, NOCHEEK, 30, 0, -4), POSE(0, -8, 90, 84, -84, 0, 84, 0, NOCHEEK, 30, 0, -4),
-     200, .55f, 8, 4, 2000, 4.f, 1.2f, 0, 0, 0, Accent::Sparkle, PupilShape::Star, 40, 0, false},
-    // Laughing: tight arcs, shaking with it.
-    {POSE(0, -8, 92, 70, -70, 0, 70, 0, -20, 0, 0, 0), POSE(0, -8, 92, 70, -70, 0, 70, 0, -20, 0, 0, 0),
-     180, .6f, 0, 0, 3000, 6.f, 4.f, 2.4f, 0, 0, Accent::None, PupilShape::Round, 30, 0, false},
-    // Crying: eyes shut and sagging, streams down.
-    {POSE(4, 10, 86, 62, 40, -.22f, 62, 0, NOCHEEK, 0, 0, 40), POSE(4, 10, 86, 62, 40, -.22f, 62, 0, NOCHEEK, 0, 0, 40),
-     600, .9f, 0, 0, 4000, 3.f, 1.5f, .8f, 0, 0, Accent::Stream, PupilShape::Round, 180, 0, false},
-    // Relieved: lids sink, a small smile, slow exhale.
-    {POSE(0, 4, 90, 70, 30, -.12f, 70, 0, 46, 16, 0, 40), POSE(0, 4, 90, 70, 30, -.12f, 70, 0, 46, 16, 0, 40),
-     700, 1.f, 8, 4, 3200, 3.f, .15f, 0, 0, 4, Accent::None, PupilShape::Round, 200, 0, false},
-    // Sneaky: thin slits, pupils flicking sideways.
-    {POSE(4, 2, 92, 50, 10, .08f, 44, 0, NOCHEEK, 15, 0, 24), POSE(4, 2, 92, 50, 10, .08f, 44, 0, NOCHEEK, 15, 0, 24),
-     240, .8f, 5, 40, 700, .4f, .3f, 0, 40, 0, Accent::None, PupilShape::Round, 60, 0, true},
-    // Nostalgic: soft and far away, up and to the side.
-    {POSE(0, -2, 88, 72, -8, -.14f, 70, 0, 60, 22, 0, -6), POSE(0, -2, 88, 72, -8, -.14f, 70, 0, 60, 22, 0, -6),
-     900, 1.f, 8, 10, 4200, 2.f, .14f, 0, -28, -16, Accent::None, PupilShape::Round, 260, 0, true},
-    // Playful: uneven eyes, big pupils, bouncing.
-    {POSE(0, -6, 90, 78, -60, 0, 78, 0, 40, 24, 0, -6), POSE(0, 0, 90, 70, -10, .16f, 70, 0, 50, 22, 0, 8),
-     200, .55f, 15, 20, 800, 5.f, 1.6f, 0, 8, 0, Accent::None, PupilShape::Round, 50, 20, false},
-    // Amazed: fully round, pupils nearly filling the eye.
-    {POSE(-2, -8, 90, 84, -84, 0, 84, 0, NOCHEEK, 34, 0, 0), POSE(-2, -8, 90, 84, -84, 0, 84, 0, NOCHEEK, 34, 0, 0),
-     200, .5f, 4, 4, 2600, .8f, .3f, 0, 0, -4, Accent::None, PupilShape::Round, 40, 0, false},
-    // Exhausted: uneven drooping lids, barely holding on.
-    {POSE(0, 14, 88, 60, 34, -.1f, 60, 0, NOCHEEK, 19, 0, 34), POSE(0, 18, 88, 58, 42, -.1f, 58, 0, NOCHEEK, 19, 0, 36),
-     1000, 1.f, 12, 4, 4000, 3.f, .1f, 0, 0, 14, Accent::Sweat, PupilShape::Round, 280, 0, false},
-    // Suspicious: narrowed, watching from the corner, slowly checking both sides.
-    {POSE(2, 0, 90, 62, 10, .06f, 48, 0, NOCHEEK, 15, 0, 22), POSE(2, 0, 90, 66, 2, .1f, 52, 0, NOCHEEK, 15, 0, 18),
-     320, .85f, 5, 10, 1100, .5f, .2f, 0, 30, 0, Accent::None, PupilShape::Round, 90, 0, true},
+    // neutral: Спокоен
+    {P(.14, 0, 0, 0, 0, 1, .17), P(.14, 0, 0, 0, 0, 1, .17), PupilShape::Round, Overlay::None, 250, 13, 22, 1700, 2.2f, .28f, 0, 0, 0, 40, 15, false},
+    // happy: Рад
+    {P(0, 0, .42, 0, -.2, 1, .17), P(0, 0, .42, 0, -.2, 1, .17), PupilShape::Round, Overlay::None, 220, 16, 16, 1400, 4.f, .9f, 0, 0, 0, 60, 25, false},
+    // very_happy: Очень рад
+    {P(0, 0, .78, 0, 0, 1, 0), P(0, 0, .78, 0, 0, 1, 0), PupilShape::Round, Overlay::Sparkle, 200, 0, 0, 3000, 9.f, 2.1f, 0, 0, 0, 50, 0, false},
+    // sad: Грустит
+    {P(.36, -16, 0, 0, .35, 1, .17), P(.36, -16, 0, 0, .35, 1, .17), PupilShape::Round, Overlay::Tear, 250, 7, 10, 3200, 2.f, .18f, 0, 0, 0, 220, 10, false},
+    // angry: Злится
+    {P(.42, 24, .06, 0, .25, 1, .17), P(.42, 24, .06, 0, .25, 1, .17), PupilShape::Round, Overlay::None, 150, 6, 6, 2200, 0, 0, 1.2f, 0, 0, 20, 0, false},
+    // annoyed: Раздражён
+    {P(.5, 6, 0, 0, .3, 1, .17), P(.5, 6, 0, 0, .3, 1, .17), PupilShape::Round, Overlay::None, 250, 9, 6, 2600, 1.f, .2f, 0, 0, 0, 90, 0, false},
+    // surprised: Удивлён
+    {P(0, 0, 0, 0, 0, 1.14, .11), P(0, 0, 0, 0, 0, 1.14, .11), PupilShape::Round, Overlay::None, 150, 3, 4, 2500, 0, 0, 0, 0, 0, 15, 0, false},
+    // curious: Любопытно
+    {P(0, 0, 0, .3, -.2, 1.06, .17), P(.4, -6, 0, .3, -.2, 1, .17), PupilShape::Round, Overlay::Question, 250, 12, 30, 1100, 1.5f, .5f, 0, 0, 0, 80, 10, false},
+    // thinking: Думает
+    {P(.2, -4, 0, .45, -.5, 1, .17), P(.42, -4, 0, .45, -.5, 1, .17), PupilShape::Round, Overlay::Dots, 250, 7, 14, 1900, 1.f, .25f, 0, -34, 0, 130, 0, true},
+    // sleepy: Сонный
+    {P(.62, -3, 0, 0, .45, 1, .17), P(.62, -3, 0, 0, .45, 1, .17), PupilShape::Round, Overlay::None, 250, 16, 8, 3800, 3.f, .16f, 0, 0, 0, 260, 0, false},
+    // sleeping: Спит
+    {P(.86, 0, 0, 0, 0, 1, 0), P(.86, 0, 0, 0, 0, 1, 0), PupilShape::Round, Overlay::Zzz, 250, 0, 0, 9000, 4.f, .13f, 0, 0, 0, 500, 0, false},
+    // waking_up: Просыпается
+    {P(.5, 0, .12, 0, .25, 1, .17), P(.5, 0, .12, 0, .25, 1, .17), PupilShape::Round, Overlay::None, 250, 40, 18, 900, 1.5f, .25f, 0, 0, 0, 180, 90, false},
+    // scared: Испуган
+    {P(.06, -10, 0, 0, 0, 1.1, .09), P(.06, -10, 0, 0, 0, 1.1, .09), PupilShape::Round, Overlay::None, 150, 12, 18, 420, 0, 0, 2.6f, 0, 0, 10, 30, false},
+    // affection: Нежность
+    {P(0, 0, .3, 0, 0, 1, .2), P(0, 0, .3, 0, 0, 1, .2), PupilShape::Heart, Overlay::Hearts, 250, 11, 6, 2800, 3.f, .55f, 0, 0, 0, 120, 30, false},
+    // bored: Скучает
+    {P(.55, -4, 0, .3, .4, 1, .17), P(.55, -4, 0, .3, .4, 1, .17), PupilShape::Round, Overlay::None, 250, 8, 18, 3400, 1.5f, .15f, 0, -26, 0, 200, 0, true},
+    // attentive: Внимателен
+    {P(.06, 0, 0, 0, -.1, 1.05, .17), P(.06, 0, 0, 0, -.1, 1.05, .17), PupilShape::Round, Overlay::None, 180, 9, 4, 2600, .8f, .4f, 0, 0, 0, 40, 0, false},
+    // confused: Растерян
+    {P(.05, 6, 0, 0, 0, 1.05, .17), P(.4, -14, 0, 0, 0, 1, .17), PupilShape::Round, Overlay::Question, 250, 15, 24, 800, 1.f, .35f, 0, 0, 0, 100, 40, true},
+    // excited: Воодушевлён
+    {P(0, 0, .25, 0, 0, 1.08, .24), P(0, 0, .25, 0, 0, 1.08, .24), PupilShape::Round, Overlay::Sparkle, 160, 18, 14, 700, 7.f, 2.8f, 0, 0, 0, 30, 20, false},
+    // mischievous: Хитрый
+    {P(.34, 22, .22, -.2, 0, 1, .17), P(.34, 22, .22, -.2, 0, 1, .17), PupilShape::Round, Overlay::None, 250, 12, 18, 1500, 1.2f, .6f, 0, 0, 0, 80, 10, false},
+    // shy: Стесняется
+    {P(.2, 0, .28, .25, .35, 1, .17), P(.2, 0, .28, .25, .35, 1, .17), PupilShape::Round, Overlay::Blush, 250, 22, 12, 1300, 1.f, .4f, 0, -24, 0, 120, 40, true},
+    // proud: Гордится
+    {P(.4, -8, .25, 0, -.1, 1, .17), P(.4, -8, .25, 0, -.1, 1, .17), PupilShape::Round, Overlay::Sparkle, 250, 8, 6, 2600, 1.2f, .3f, 0, 0, 0, 90, 0, false},
+    // dizzy: Кружится голова
+    {P(0, 0, 0, 0, 0, 1.08, .16), P(0, 0, 0, 0, 0, 1.08, .16), PupilShape::Spiral, Overlay::None, 250, 4, 0, 5000, 2.f, .9f, 0, 0, 0, 40, 0, false},
+    // yawning: Зевает
+    {P(.8, 0, .06, 0, 0, 1, 0), P(.8, 0, .06, 0, 0, 1, 0), PupilShape::Round, Overlay::None, 250, 0, 4, 3000, 2.f, .15f, 0, 0, 0, 200, 0, false},
+    // cold: Мёрзнет
+    {P(.3, 0, .3, 0, -.1, 1, .17), P(.3, 0, .3, 0, -.1, 1, .17), PupilShape::Round, Overlay::Frost, 250, 20, 8, 1400, 0, 0, 1.7f, 0, 0, 80, 20, false},
+    // hot: Жарко
+    {P(.5, 0, 0, 0, .3, 1, .17), P(.5, 0, 0, 0, .3, 1, .17), PupilShape::Round, Overlay::Sweat, 250, 14, 10, 2600, 2.5f, .2f, 0, 0, 0, 150, 0, false},
+    // dreamy: Мечтает
+    {P(.4, -10, .3, .2, -.6, 1, .17), P(.4, -10, .3, .2, -.6, 1, .17), PupilShape::Round, Overlay::None, 250, 9, 26, 2400, 2.5f, .17f, 0, 12, 0, 240, 0, true},
+    // focused: Сосредоточен
+    {P(.42, 10, .2, 0, 0, 1, .15), P(.42, 10, .2, 0, 0, 1, .15), PupilShape::Round, Overlay::None, 220, 5, 3, 3000, .4f, .3f, 0, 0, 0, 50, 0, false},
+    // winking: Подмигивает
+    {P(.1, 0, .2, 0, 0, 1, .17), P(.86, 0, 0, 0, 0, 1, 0), PupilShape::Round, Overlay::None, 170, 0, 8, 2000, 2.f, .8f, 0, 0, 0, 40, 0, false},
+    // smug: Доволен собой
+    {P(.52, -6, .12, .2, 0, 1, .17), P(.52, -6, .12, .2, 0, 1, .17), PupilShape::Round, Overlay::None, 250, 9, 8, 2400, 1.f, .3f, 0, 0, 0, 90, 0, false},
+    // skeptical: Сомневается
+    {P(.1, 4, 0, 0, 0, 1.05, .17), P(.5, -6, 0, 0, 0, 1, .17), PupilShape::Round, Overlay::None, 250, 8, 8, 2000, .6f, .3f, 0, 0, 0, 80, 0, false},
+    // guilty: Виноват
+    {P(.2, -18, 0, -.3, .5, 1, .17), P(.2, -18, 0, -.3, .5, 1, .17), PupilShape::Round, Overlay::None, 250, 14, 12, 1500, 1.f, .2f, 0, -18, 0, 150, 20, true},
+    // embarrassed: Смущён
+    {P(.14, 0, .35, 0, .1, 1, .17), P(.14, 0, .35, 0, .1, 1, .17), PupilShape::Round, Overlay::Blush, 250, 34, 14, 800, 1.f, .8f, .5f, 0, 0, 70, 50, true},
+    // hopeful: Надеется
+    {P(0, -12, .1, 0, -.6, 1, .2), P(0, -12, .1, 0, -.6, 1, .2), PupilShape::Round, Overlay::None, 250, 10, 6, 2400, 1.5f, .4f, 0, 0, 0, 110, 10, false},
+    // lonely: Одиноко
+    {P(.34, -14, 0, -.4, .4, 1, .17), P(.34, -14, 0, -.4, .4, 1, .17), PupilShape::Round, Overlay::Tear, 250, 7, 12, 3600, 1.5f, .13f, 0, -30, 0, 280, 10, true},
+    // grateful: Благодарен
+    {P(0, 0, .75, 0, 0, 1, 0), P(0, 0, .75, 0, 0, 1, 0), PupilShape::Round, Overlay::Hearts, 250, 0, 0, 3000, 2.5f, .5f, 0, 0, 0, 110, 0, false},
+    // jealous: Ревнует
+    {P(.55, 8, 0, .6, .1, 1, .17), P(.55, 8, 0, .6, .1, 1, .17), PupilShape::Round, Overlay::None, 250, 6, 5, 2600, .5f, .2f, 0, 0, 0, 90, 0, false},
+    // determined: Решителен
+    {P(.38, 26, 0, 0, .1, 1, .2), P(.38, 26, 0, 0, .1, 1, .2), PupilShape::Round, Overlay::None, 200, 5, 3, 3000, .6f, .5f, 0, 0, 0, 40, 0, false},
+    // terrified: В ужасе
+    {P(0, -8, 0, 0, 0, 1.14, .06), P(0, -8, 0, 0, 0, 1.14, .06), PupilShape::Round, Overlay::Sweat, 150, 6, 26, 300, 0, 0, 4.f, 0, 0, 10, 0, false},
+    // disgusted: Брезгует
+    {P(.55, 10, .32, 0, 0, 1, .17), P(.62, 10, .32, 0, 0, 1, .17), PupilShape::Round, Overlay::None, 240, 12, 6, 1800, .8f, .4f, 0, 0, 0, 60, 0, false},
+    // hungry: Голоден
+    {P(.1, 0, 0, 0, .5, 1, .17), P(.1, 0, 0, 0, .5, 1, .17), PupilShape::Round, Overlay::Drool, 250, 10, 8, 1500, 1.2f, .3f, 0, 0, 0, 120, 0, false},
+    // starstruck: Восхищён
+    {P(0, 0, 0, 0, 0, 1.08, .22), P(0, 0, 0, 0, 0, 1.08, .22), PupilShape::Star, Overlay::Sparkle, 200, 8, 4, 2000, 4.f, 1.2f, 0, 0, 0, 40, 0, false},
+    // laughing: Смеётся
+    {P(0, 0, .82, 0, 0, 1, 0), P(0, 0, .82, 0, 0, 1, 0), PupilShape::Round, Overlay::Joy, 180, 0, 0, 3000, 6.f, 4.f, 2.4f, 0, 0, 30, 0, false},
+    // crying: Плачет
+    {P(.78, -14, 0, 0, 0, 1, 0), P(.78, -14, 0, 0, 0, 1, 0), PupilShape::Round, Overlay::Streams, 250, 0, 0, 4000, 3.f, 1.5f, .8f, 0, 0, 180, 0, false},
+    // relieved: Облегчение
+    {P(.45, 0, .18, 0, 0, 1, .15), P(.45, 0, .18, 0, 0, 1, .15), PupilShape::Round, Overlay::None, 250, 8, 4, 3200, 3.f, .15f, 0, 0, 0, 200, 0, false},
+    // sneaky: Крадётся
+    {P(.55, 4, .1, .7, 0, 1, .17), P(.55, 4, .1, .7, 0, 1, .17), PupilShape::Round, Overlay::None, 240, 5, 40, 700, .4f, .3f, 0, 40, 0, 60, 0, true},
+    // nostalgic: Ностальгия
+    {P(.3, -8, .3, -.3, -.5, 1, .17), P(.3, -8, .3, -.3, -.5, 1, .17), PupilShape::Round, Overlay::None, 250, 8, 10, 4200, 2.f, .14f, 0, -28, 0, 260, 0, true},
+    // playful: Игривый
+    {P(.2, 0, .25, 0, 0, 1, .17), P(.45, -10, .2, 0, 0, 1, .17), PupilShape::Round, Overlay::None, 200, 15, 20, 800, 5.f, 1.6f, 0, 0, 0, 50, 20, false},
+    // amazed: Изумлён
+    {P(0, 0, 0, 0, 0, 1.12, .24), P(0, 0, 0, 0, 0, 1.12, .24), PupilShape::Round, Overlay::None, 200, 4, 4, 2600, .8f, .3f, 0, 0, 0, 40, 0, false},
+    // exhausted: Вымотан
+    {P(.66, -8, 0, 0, .4, 1, .17), P(.72, -8, 0, 0, .4, 1, .17), PupilShape::Round, Overlay::Sweat, 250, 12, 4, 4000, 3.f, .1f, 0, 0, 0, 280, 0, false},
+    // suspicious: Подозревает
+    {P(.44, -4, .26, .6, 0, 1, .17), P(.44, -4, .26, .6, 0, 1, .17), PupilShape::Round, Overlay::None, 250, 5, 10, 1100, .5f, .2f, 0, 30, 0, 90, 0, true},
 };
+#undef P
+static_assert(sizeof(kDefs) / sizeof(kDefs[0]) == kEmotionCount, "one row per emotion");
 
 const EmotionDef& emotionDef(Emotion e) { return kDefs[(int)e]; }
 
+static EyePose lerpPose(const EyePose& a, const EyePose& b, float k) {
+  EyePose r;
+  const float* pa = (const float*)&a;
+  const float* pb = (const float*)&b;
+  float* pr = (float*)&r;
+  for (int i = 0; i < kPoseFields; i++) pr[i] = pa[i] + (pb[i] - pa[i]) * k;
+  return r;
+}
+
 AnimationEngine::AnimationEngine() {
-  cur_[0] = kDefs[0].left;
-  cur_[1] = kDefs[0].right;
-  memset(vel_, 0, sizeof(vel_));
+  from_[0] = cur_[0] = out_[0] = kDefs[0].left;
+  from_[1] = cur_[1] = out_[1] = kDefs[0].right;
 }
 
 void AnimationEngine::setEmotion(Emotion e) {
   if (e == emotion_) return;
+  previous_ = emotion_;
   emotion_ = e;
+  from_[0] = cur_[0];  // a new emotion mid-way starts from where the face is, never jumps
+  from_[1] = cur_[1];
+  progress_ = 0;
   age_ = 0;
   soundPending_ = true;
-  settled_ = false;
   nextSaccade_ = 300;
 }
+
+PupilShape AnimationEngine::pupil() const { return emotionDef(progress_ < 0.5f ? previous_ : emotion_).pupil; }
 
 bool AnimationEngine::soundCueReady() {
   if (!soundPending_ || age_ < emotionDef(emotion_).soundDelayMs) return false;
@@ -316,6 +282,11 @@ static float emotionRoll(Emotion e) {
   }
 }
 
+
+// Pupil travel per px of gaze: the gaze is kept in px of the old face, where it moved the pupil by 0.75 px;
+// one unit of px and py is 27 % of the 132 x 116 eye.
+static constexpr float kGazeX = 0.75f / (132 * 0.27f), kGazeY = 0.75f / (116 * 0.27f);
+
 void AnimationEngine::update(float dtMs) {
   float dt = clampf(dtMs, 0, 100) * speed_;
   t_ += dt;
@@ -326,32 +297,16 @@ void AnimationEngine::update(float dtMs) {
   updateBlink(dt);
   updateGaze(dt, d);
 
-  // Spring toward the pose. Lids move ahead of the eye shape and the right eye lags slightly: no two
-  // parameters arrive together, which is what removes the "preset" look of a transition.
-  static const float kRate[kPoseFields] = {.8f, .8f, .9f, .9f, 1.25f, 1.25f, 1.1f, 1.1f, 1.f, 1.f, 1.f, 1.f};
-  float omega = 4.6f / d.transitionMs;
-  const float* tgtA[2] = {(const float*)&d.left, (const float*)&d.right};
-  const float* tgtB[2] = {(const float*)&d2.left, (const float*)&d2.right};
-  int steps = (int)(dt / 8.0f) + 1;
-  float h = dt / steps;
-  float err = 0;
-  for (int s = 0; s < steps; s++) {
-    for (int e = 0; e < 2; e++) {
-      float* x = (float*)&cur_[e];
-      float* v = (float*)&vel_[e];
-      float eyeRate = e ? 0.93f : 1.f;
-      // A closed eye or a "^" arc has no pupil to mix: blending would open it.
-      float bl = tgtA[e][9] == 0 ? 0 : blend_;
-      for (int i = 0; i < kPoseFields; i++) {
-        float w = omega * kRate[i] * eyeRate;
-        float target = lerpf(tgtA[e][i], tgtB[e][i], bl);
-        v[i] += (w * w * (target - x[i]) - 2 * d.damping * w * v[i]) * h;
-        x[i] += v[i] * h;
-        if (s == steps - 1) err += fabsf(target - x[i]);
-      }
-    }
+  // Ease-out from the pose at the moment of the change: fast start, soft landing, 150..250 ms.
+  progress_ = clampf(progress_ + dt / d.transitionMs, 0, 1);
+  float q = 1 - progress_, k = 1 - q * q * q;
+  const EyePose* ta[2] = {&d.left, &d.right};
+  const EyePose* tb[2] = {&d2.left, &d2.right};
+  for (int e = 0; e < 2; e++) {
+    // A closed eye or a "^" arc has no pupil to mix: blending would open it.
+    float bl = ta[e]->pr == 0 ? 0 : blend_;
+    cur_[e] = lerpPose(from_[e], lerpPose(*ta[e], *tb[e], bl), k);
   }
-  settled_ = err < 1.5f;
 
   // Body: breathing, sway and jitter, all scaled by arousal.
   float ts = t_ * 0.001f;
@@ -369,11 +324,6 @@ void AnimationEngine::update(float dtMs) {
   kickY_ += kickV_ * dt;
   bodyX_ = sway + tx + tiltX_ * 7;
   bodyY_ = bob + breath + ty + kickY_ + tiltY_ * 6;
-  // Volume preservation: the eye stretches when thrown and when the gaze snaps.
-  float gazeSpeed = dt > 0 ? (fabsf(gazeX_ - lastGX_) + fabsf(gazeY_ - lastGY_)) / dt : 0;
-  lastGX_ = gazeX_; lastGY_ = gazeY_;
-  float want = clampf(-kickV_ * 0.5f, -0.1f, 0.12f) + clampf(gazeSpeed * 0.05f, 0, 0.05f);
-  squash_ += (want - squash_) * clampf(dt / 40.f, 0, 1);
   float rollTarget = (emotionRoll(emotion_) + wander(ts * 0.17f, 9.f) * 2.4f + tiltX_ * 9) * 0.0174533f;
   roll_ += (rollTarget - roll_) * clampf(dt / 320.f, 0, 1);
   composeLayers();
@@ -382,217 +332,254 @@ void AnimationEngine::update(float dtMs) {
 void AnimationEngine::composeLayers() {
   float ts = t_ * 0.001f;
   float amp = lerpf(0.6f, 1.2f, arousal_);
-  float rollSlope = roll_;  // small angle: tan(a) = a
+  float rollDeg = roll_ * 57.29578f;
   for (int e = 0; e < 2; e++) {
     EyePose p = cur_[e];
-    float side = e ? 1.f : -1.f;     // screen side, pose space is mirrored
-    // Lids breathe on their own and follow the gaze, as real lids do when looking down.
-    // A wide open eye has its lid above the ellipse: pushing it down there would flatten the top.
-    float lidFree = smooth01((p.up + p.ry * 0.9f) / (p.ry * 0.5f));
-    p.up += (wander(ts * 0.55f, 1.3f + e * 2.1f) * 2.4f * amp + (1 - arousal_) * 7.f + gazeY_ * 0.32f) * lidFree;
-    p.upSlope += wander(ts * 0.31f, 4.f + e) * 0.02f - valence_ * 0.04f;
-    if (p.cheek < p.ry) p.cheek -= (valence_ > 0 ? valence_ : 0) * 4.f;
-    if (p.pupilR > 1) {
-      // Pupil: hippus noise, darkness and interest dilate it.
-      p.pupilR *= (1 + 0.07f * wander(ts * 0.9f, 7.f)) * lerpf(1.18f, 0.9f, light_) * (1 + 0.14f * (arousal_ - 0.5f));
-    }
-    p.ry *= 1 + squash_;
-    p.rx *= 1 - squash_ * 0.7f;
-    // Whole head rolls: one eye up, the other down, lids rotate along.
-    p.dy += side * kEyeX * roll_;
-    p.upSlope += -side * rollSlope;
-    p.loSlope += -side * rollSlope;
-    if (emotion_ == Emotion::Yawning) {
-      float ph = clampf(age_ / 2600.f, 0, 1);
-      float q = sinf(ph * 3.14159f);
-      p.up = lerpf(p.up, 58, q * q);
-      p.ry *= 1 + 0.12f * q;
-      p.rx *= 1 - 0.05f * q;
-      p.dy += 8 * q;
-    }
+    float side = e ? 1.f : -1.f;  // screen side
+    float dir = -side;            // the spec's dir: +1 for the left eye
+    // Lids breathe on their own, droop with drowsiness and follow the gaze down, as real lids do.
+    p.t = clampf(p.t + wander(ts * 0.55f, 1.3f + e * 2.1f) * 0.018f * amp + (1 - arousal_) * 0.05f + gazeY_ * 0.0022f, 0, 0.96f);
+    p.a += wander(ts * 0.31f, 4.f + e) * 1.2f - valence_ * 2.5f;
+    if (p.b > 0) p.b = clampf(p.b + (valence_ > 0 ? valence_ : 0) * 0.04f, 0, 0.95f);
+    // Pupil: hippus noise, darkness and interest dilate it.
+    if (p.pr > 0) p.pr *= (1 + 0.07f * wander(ts * 0.9f, 7.f)) * lerpf(1.12f, 0.94f, light_) * (1 + 0.1f * (arousal_ - 0.5f));
+    float gx = gazeX_ + (indepHold_ > 0 ? indepX_[e] : 0), gy = gazeY_ + (indepHold_ > 0 ? indepY_[e] : 0);
+    p.px = clampf(p.px + gx * kGazeX, -1.1f, 1.1f);
+    p.py = clampf(p.py + gy * kGazeY, -0.85f, 0.85f);  // the pupil never touches the rim, where it would read as a lid
+    // The head rolls: one eye up, the other down, and both lids turn with it.
+    p.a += dir * rollDeg;
+    // A blink brings the lid to 0.9 and back.
+    if (p.t < 0.9f) p.t += (0.9f - p.t) * blinkAmt_;
     out_[e] = p;
+    offX_[e] = bodyX_;
+    offY_[e] = bodyY_ + side * 85 * roll_;
   }
 }
 
 // ---- drawing ---------------------------------------------------------------------------------
+// Geometry of the spec at full size: eyes 85 px either side of the centre, centre line at y 224. A mini face
+// maps the region (56, 136)..(410, 312) onto its own rectangle; everything below is computed in screen pixels.
 
-void FaceEngine::drawEye(Canvas& c, const AnimationEngine& a, int eye, float ox, float oy, float sc, uint16_t color) const {
-  const EyePose& p = eye == 0 ? a.leftPose() : a.rightPose();
-  float mirror = eye == 0 ? 1.f : -1.f;  // +x in pose space is toward the nose
-  // Nearest-neighbour blending of the emotion's pose is done by springs, so values may overshoot.
-  float ry = p.ry < 8 ? 8 : p.ry, rx = p.rx < 8 ? 8 : p.rx;
-  float cx = ox + (-mirror * kEyeX + mirror * p.dx + a.bodyX()) * sc;
-  float cy = oy + (kEyeY + p.dy + a.bodyY()) * sc;
+struct EyeGeom {
+  float cx, x0, x1, y0, y1, rx;
+  float lidY, lidK;                  // the white stays below y = lidY + lidK (x - cx)
+  float cheekTop, cheekRise, cheekSpan;  // the white stays above the cheek parabola
+  float pcx, pcy, pr;                // round pupil
+  bool pupilPass;                    // second pass: only the pupil, clipped to the white
+};
 
-  float up = p.up, lo = p.lo;
-  // Blink lowers the upper lid to a resting arc on the lower edge of the eye.
-  float closed = ry - 11.f;
-  float b = a.blinkAmount();
-  up = lerpf(up, closed, b);
-  float slope = p.upSlope * (1 - b);
-  float gx = a.gazeX() + a.eyeGazeOffset(eye, false);
-  float gy = a.gazeY() + a.eyeGazeOffset(eye, true);
-
-  EyeShape s;
-  s.cx = cx; s.cy = cy; s.rx = rx * sc; s.ry = ry * sc;
-  s.upY = cy + up * sc; s.upSlope = slope * mirror;
-  s.loY = cy + lo * sc; s.loSlope = p.loSlope * mirror;
-  // Always the same cut: a far-away cheek simply misses the eye, so it can rise smoothly.
-  s.cheekY = cy + p.cheek * sc;
-  s.cheekRx = rx * 1.18f * sc;
-  s.cheekRy = ry * 1.2f * sc;
-  c.eye(s, color);
-
-  if (p.pupilR < 1 || b > 0.72f) return;
-  float px = cx + (mirror * p.px + gx * 0.75f) * sc;
-  float py = cy + (p.py + gy * 0.75f) * sc;
-  // Keep the pupil on the eye even at extreme gaze.
-  float nx = (px - cx) / (s.rx - 6 * sc), ny = (py - cy) / (s.ry - 6 * sc);
-  float len = sqrtf(nx * nx + ny * ny);
-  if (len > 1) { px = cx + (px - cx) / len; py = cy + (py - cy) / len; }
-  float r = p.pupilR * sc * (1 - b * 0.25f);
-  PupilShape shape = emotionDef(a.emotion()).pupil;
-  if (shape == PupilShape::Heart && a.emotionAge() > 40) {
-    float beat = 1 + 0.08f * sinf(a.timeMs() * 0.0075f);
-    c.heart(px, py - r * 0.2f, r * 0.9f * beat, kBlack);
-  } else if (shape == PupilShape::Star) {
-    // Four tapered rays from a centre, slowly turning and twinkling.
-    float rot = a.timeMs() * 0.0012f, tw = r * (1 + 0.15f * sinf(a.timeMs() * 0.009f));
-    for (int k = 0; k < 4; k++) {
-      float ang = rot + k * 1.5708f, ca = cosf(ang), sa = sinf(ang);
-      c.line(px - ca * tw * 0.45f, py - sa * tw * 0.45f, px + ca * tw, py + sa * tw, 11 * sc, kBlack);
-      c.line(px + ca * tw * 0.3f, py + sa * tw * 0.3f, px + ca * tw * 1.1f, py + sa * tw * 1.1f, 5 * sc, kBlack);
-    }
-    c.fillCircle(px, py, r * 0.32f, kBlack);
-  } else if (shape == PupilShape::Spiral) {
-    // Rings wobbling out of phase read as a spinning spiral.
-    float w = a.timeMs() * 0.009f;
-    c.ring(px + 3 * sc * cosf(w), py + 3 * sc * sinf(w), r, 3.5f * sc, kBlack);
-    c.ring(px - 2 * sc * cosf(w), py - 2 * sc * sinf(w), r * 0.55f, 3 * sc, kBlack);
-    c.fillCircle(px + 2 * sc * cosf(w * 1.3f), py + 2 * sc * sinf(w * 1.3f), r * 0.16f, kBlack);
+// Rows of the eye: rounded white, minus what is above the lid and below the cheek. In the pupil pass, the
+// part of those rows covered by the pupil.
+static int eyeSpans(float sy, float* xs, int max, const void* ctx) {
+  const EyeGeom& g = *(const EyeGeom*)ctx;
+  if (sy < g.y0 || sy > g.y1) return 0;
+  float hw = (g.x1 - g.x0) / 2, e = 0;
+  if (sy < g.y0 + g.rx) e = g.y0 + g.rx - sy;
+  else if (sy > g.y1 - g.rx) e = sy - (g.y1 - g.rx);
+  if (e > 0) {
+    float q = g.rx * g.rx - e * e;
+    if (q <= 0) return 0;
+    hw += sqrtf(q) - g.rx;
+  }
+  float l = g.cx - hw, r = g.cx + hw;
+  float d = sy - g.lidY;
+  if (fabsf(g.lidK) < 1e-4f) {
+    if (d < 0) return 0;
+  } else if (g.lidK > 0) {
+    float b = g.cx + d / g.lidK;
+    if (b < r) r = b;
   } else {
-    c.fillCircle(px, py, r, kBlack);
+    float b = g.cx + d / g.lidK;
+    if (b > l) l = b;
+  }
+  if (r <= l) return 0;
+  float part[4] = {l, r, 0, 0};
+  int parts = 1;
+  if (g.cheekRise > 0 && sy > g.cheekTop) {
+    float cut = g.cheekSpan * sqrtf((sy - g.cheekTop) / g.cheekRise);
+    part[1] = r < g.cx - cut ? r : g.cx - cut;
+    part[2] = l > g.cx + cut ? l : g.cx + cut;
+    part[3] = r;
+    parts = 2;
+  }
+  float pl = 0, pr = 0;
+  if (g.pupilPass) {
+    float dy = sy - g.pcy, q = g.pr * g.pr - dy * dy;
+    if (q <= 0) return 0;
+    float h = sqrtf(q);
+    pl = g.pcx - h;
+    pr = g.pcx + h;
+  }
+  int n = 0;
+  for (int i = 0; i < parts && n < max; i++) {
+    float a = part[2 * i], b = part[2 * i + 1];
+    if (g.pupilPass) {
+      if (a < pl) a = pl;
+      if (b > pr) b = pr;
+    }
+    if (b > a) { xs[2 * n] = a; xs[2 * n + 1] = b; n++; }
+  }
+  return n;
+}
+
+static void drawEyes(Canvas& c, const EyePose* pose, const float* offX, const float* offY, PupilShape shape,
+                     float left, float top, float k, uint16_t color) {
+  for (int e = 0; e < 2; e++) {
+    const EyePose& p = pose[e];
+    float dir = e ? -1.f : 1.f;
+    float s = p.s > 0.5f ? p.s : 0.5f;
+    float w = 132 * s * k, h = 116 * s * k;
+    float cx = left + (233 - dir * 85 + offX[e] - 56) * k, cy = top + (224 + offY[e] - 136) * k;
+    EyeGeom g;
+    g.cx = cx; g.x0 = cx - w / 2; g.x1 = cx + w / 2; g.y0 = cy - h / 2; g.y1 = cy + h / 2; g.rx = 46 * s * k;
+    g.lidY = g.y0 + clampf(p.t, 0, 1) * h;
+    g.lidK = tanf(clampf(p.a, -60, 60) * 0.0174533f) * dir;
+    float b = clampf(p.b, 0, 1);
+    g.cheekTop = g.y1 - b * h;
+    g.cheekRise = 0.6f * b * h;
+    g.cheekSpan = w / 2 + 10 * k;
+    g.pr = h * p.pr;
+    g.pcx = cx + p.px * w * 0.27f;
+    g.pcy = cy + p.py * h * 0.27f;
+    g.pupilPass = false;
+    c.spans(g.y0, g.y1, g.x0, g.x1, color, eyeSpans, &g);
+    if (p.pr <= 0.01f) continue;
+    float r = g.pr;
+    switch (shape) {
+      case PupilShape::Round:
+        g.pupilPass = true;
+        c.spans(g.pcy - r, g.pcy + r, g.pcx - r, g.pcx + r, BG, eyeSpans, &g);
+        break;
+      // Shaped pupils are not clipped by the lid: these emotions keep their eyes open, so hide them on a blink.
+      case PupilShape::Heart:
+        if (p.t < 0.5f) ui::heart(c, g.pcx, g.pcy, 1.5f * r, BG);
+        break;
+      case PupilShape::Spiral:
+        if (p.t < 0.5f) {
+          c.ring(g.pcx, g.pcy, 1.5f * r, 5 * k, BG);
+          c.ring(g.pcx, g.pcy, 0.8f * r, 5 * k, BG);
+          c.fillCircle(g.pcx, g.pcy, 0.28f * r, BG);
+        }
+        break;
+      case PupilShape::Star:
+        // Four points: outer radius 1.5 R, inner 0.42 R, as two crossed diamonds.
+        if (p.t < 0.5f) {
+          c.diamond(g.pcx, g.pcy, 1.5f * r, 0.37f * r, BG);
+          c.diamond(g.pcx, g.pcy, 0.37f * r, 1.5f * r, BG);
+        }
+        break;
+    }
   }
 }
 
-void FaceEngine::drawAccent(Canvas& c, const AnimationEngine& a, float ox, float oy, float sc) const {
+// A plus made of two bars with rounded ends.
+static void plus(Canvas& c, float x, float y, float half, float thick, uint16_t col) {
+  c.line(x - half, y, x + half, y, thick, col);
+  c.line(x, y - half, x, y + half, thick, col);
+}
+
+// A drop: a circle with a triangle above it, 2 r high.
+static void drop(Canvas& c, float x, float y, float r, uint16_t col) {
+  c.fillCircle(x, y, r, col);
+  c.diamond(x, y - r * 0.95f, r * 0.62f, r * 1.05f, col);
+}
+
+// Overlays live only on the full face. Positions are the spec's; they move with the body.
+static void drawOverlay(Canvas& c, const AnimationEngine& a, float ox, float oy) {
   const EmotionDef& d = emotionDef(a.emotion());
-  float t = a.emotionAge();
+  if (a.emotionAge() < 120) return;  // let the eyes change first
   float ts = a.timeMs() * 0.001f;
-  if (d.accent == Accent::None || sc < 0.8f) return;
-  switch (d.accent) {
-    case Accent::Zzz: {
+  auto X = [&](float x) { return x + ox; };
+  auto Y = [&](float y) { return y + oy; };
+  switch (d.overlay) {
+    case Overlay::None: break;
+    case Overlay::Sparkle: {
+      const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
+      for (int i = 0; i < 3; i++) plus(c, X(px[i]), Y(py[i]), half[i] * (0.8f + 0.2f * sinf(ts * 3.1f + i * 2.1f)), 3.5f, INK);
+      break;
+    }
+    case Overlay::Hearts:
+      ui::heart(c, X(116), Y(108 - 4 * sinf(ts * 2.f)), 22, ACCENT);
+      ui::heart(c, X(352), Y(92 - 4 * sinf(ts * 2.f + 1.7f)), 15, ACCENT);
+      break;
+    case Overlay::Question:
+      ui::textCentered(c, X(310), Y(110), "?", TXT_MENU_SEL, ACCENT);
+      break;
+    case Overlay::Dots:
       for (int i = 0; i < 3; i++) {
-        float ph = fmodf(ts * 0.22f + i * 0.33f, 1.f);
-        if (t < 1200) break;
-        int x = (int)(ox + 96 + ph * 70 + 8 * sinf(ph * 9));
-        int y = (int)(oy - 70 - ph * 90);
-        c.text(x, y, "z", i == 1 ? FontSize::L : FontSize::M, ph > 0.8f ? kDim : kAccent);
+        float ph = fmodf(ts * 1.2f - i * 0.22f, 1.f);
+        c.fillCircle(X(212.f + 21 * i), Y(128 - 4 * sinf(ph * 6.283f)), 5, INK_2);
       }
+      break;
+    case Overlay::Zzz: {
+      // The letters come one after another and drift up, then start again.
+      float ph = fmodf(ts * 0.4f, 1.f), lift = 10 * ph;
+      if (ph > 0.05f) ui::textCentered(c, X(316), Y(170 - lift), "z", TXT_UNB28, INK_2);
+      if (ph > 0.3f) ui::textCentered(c, X(344), Y(134 - lift), "z", TXT_UNB34, ACCENT);
+      if (ph > 0.55f) ui::textCentered(c, X(378), Y(90 - lift), "Z", TXT_MENU_SEL, ACCENT);
       break;
     }
-    case Accent::Tear: {
-      float ph = fmodf(ts * 0.28f, 1.f);
-      if (t < 900 || ph > 0.75f) break;
-      float y = oy + 46 + ph * 120, x = ox - 150;
-      c.fillCircle(x, y, 7, kAccent);
-      c.line(x, y - 11, x, y - 3, 4, kAccent);
+    case Overlay::Tear: {
+      float ph = fmodf(ts * 0.3f, 1.f);
+      if (ph < 0.8f) drop(c, X(118), Y(326 + 30 * ph), 8, ACCENT);
       break;
     }
-    case Accent::Hearts: {
-      for (int i = 0; i < 2; i++) {
-        float ph = fmodf(ts * 0.3f + i * 0.5f, 1.f);
-        if (ph > 0.85f) continue;
-        float x = ox + (i ? 110.f : -118.f) + 10 * sinf(ph * 7);
-        c.heart(x, oy - 150 - ph * 44, 11 + 5 * sinf(ph * 3.1f), kAccent);
+    case Overlay::Streams:
+      for (int side = 0; side < 2; side++) {
+        float x = side ? 332.f : 134.f;
+        float run = fmodf(ts * 1.1f, 1.f) * 32;  // the dots run down
+        for (int k = 0; k < 4; k++) c.fillCircle(X(x), Y(262 + 32 * k + run), 7.f - k - run / 32, ACCENT);
       }
+      break;
+    case Overlay::Blush:
+      for (int side = 0; side < 2; side++) {
+        float cx = side ? 318.f : 148.f;
+        for (int i = 0; i < 3; i++) c.line(X(cx - 30 + 18 * i), Y(320), X(cx - 22 + 18 * i), Y(302), 5, ACCENT_2);
+      }
+      break;
+    case Overlay::Frost: {
+      const float px[5] = {96, 160, 233, 306, 370}, py[5] = {108, 84, 72, 84, 108};
+      for (int i = 0; i < 5; i++) plus(c, X(px[i]), Y(py[i]), 7 * (0.75f + 0.25f * sinf(ts * 2.3f + i)), 3, ACCENT);
       break;
     }
-    case Accent::Bang:
-      if (t < 800) {
-        float grow = smooth01(t / 90);
-        c.roundRect(ox - 5, oy - 186 * grow, 10, 42 * grow, 5, kSoft);
-        c.fillCircle(ox, oy - 132 * grow, 6 * grow, kSoft);
-      }
-      break;
-    case Accent::Question:
-      if (fmodf(ts * 0.35f, 1.f) < 0.55f)
-        c.text((int)ox + 6, (int)oy - 170, "?", FontSize::L, kSoft, Align::Center);
-      break;
-    case Accent::Sparkle:
-      for (int i = 0; i < 3; i++) {
-        float ph = fmodf(ts * 0.9f + i * 0.37f, 1.f);
-        float sz = 9 * sinf(ph * 3.14159f);
-        float x = ox + (i == 0 ? -128.f : i == 1 ? 132.f : 4.f), y = oy + (i == 2 ? -176.f : -158.f);
-        c.line(x - sz, y, x + sz, y, 3, kSoft);
-        c.line(x, y - sz, x, y + sz, 3, kSoft);
-      }
-      break;
-    case Accent::Steam:
-      for (int i = 0; i < 2; i++) {
-        float ph = fmodf(ts * 1.1f + i * 0.5f, 1.f);
-        float x = ox + (i ? 40.f : -40.f), y = oy - 104 - ph * 44;
-        float r = 3 + ph * 7;
-        c.ring(x, y, r, 3, ph > 0.7f ? kDim : kAccent);
-      }
-      break;
-    case Accent::Blush:
-      for (int i = 0; i < 2; i++) {
-        float x = ox + (i ? 122.f : -122.f);
-        for (int k = 0; k < 3; k++) c.line(x - 16 + k * 14, oy + 58, x - 22 + k * 14, oy + 70, 4, kRose);
-      }
-      break;
-    case Accent::Sweat: {
-      float ph = fmodf(ts * 0.42f, 1.f);
-      float y = oy - 100 + ph * 150, x = ox + 196 - ph * 8;
-      c.fillCircle(x, y, 6, kSoft);
-      c.line(x, y - 10, x, y - 2, 3.5f, kSoft);
-      break;
-    }
-    case Accent::Stream:
-      for (int i = 0; i < 2; i++) {
-        float x = ox + (i ? 110.f : -110.f);
-        for (int k = 0; k < 4; k++) {
-          float ph = fmodf(ts * 0.9f + k * 0.25f, 1.f);
-          c.fillCircle(x + 4 * sinf(ph * 6 + i), oy + 34 + ph * 150, 6 - ph * 3, kAccent);
-        }
-      }
-      break;
-    case Accent::Drool: {
+    case Overlay::Sweat: {
       float ph = fmodf(ts * 0.35f, 1.f);
-      float x = ox - 112, y = oy + 42 + ph * ph * 34;
-      c.line(x, oy + 36, x, y, 3, kSoft);
-      c.fillCircle(x, y, 4.5f, kSoft);
+      drop(c, X(394), Y(158 + 26 * ph), 9, ACCENT);
       break;
     }
-    case Accent::Frost:
-      for (int i = 0; i < 5; i++) {
-        float ph = fmodf(ts * 0.2f + i * 0.21f, 1.f);
-        float x = ox - 130 + i * 65 + 8 * sinf(ts * 2 + i), y = oy - 170 + ph * 40;
-        float sz = 5;
-        c.line(x - sz, y, x + sz, y, 2, kWhite);
-        c.line(x, y - sz, x, y + sz, 2, kWhite);
-      }
+    case Overlay::Drool: {
+      float stretch = 8 * (0.5f + 0.5f * sinf(ts * 1.6f));
+      c.line(X(150), Y(276), X(150), Y(330 + stretch), 3, INK_2);
+      c.fillCircle(X(150), Y(334 + stretch), 6, INK_2);
       break;
-    case Accent::Dots:
-      for (int i = 0; i < 3; i++) {
-        float ph = fmodf(ts * 0.8f - i * 0.18f, 1.f);
-        float s = 3.5f + 2.5f * sinf(ph * 6.283f);
-        c.fillCircle(ox - 16 + i * 16, oy - 130, s, kSoft);
-      }
+    }
+    case Overlay::Joy: {
+      float bounce = 4 * sinf(ts * 6.f);
+      drop(c, X(70), Y(262 + bounce), 8, ACCENT);
+      drop(c, X(396), Y(262 - bounce), 8, ACCENT);
       break;
-    default: break;
+    }
   }
 }
 
 void FaceEngine::draw(Canvas& c, const AnimationEngine& a, uint16_t color) const {
-  drawScaled(c, a, kScreenW / 2.f, kScreenH / 2.f, 1.f, color);
+  EyePose pose[2] = {a.leftPose(), a.rightPose()};
+  float ox[2] = {a.eyeOffsetX(0), a.eyeOffsetX(1)}, oy[2] = {a.eyeOffsetY(0), a.eyeOffsetY(1)};
+  drawEyes(c, pose, ox, oy, a.pupil(), 56, 136, 1, color);
+  drawOverlay(c, a, a.bodyX(), a.bodyY());
 }
 
-void FaceEngine::drawScaled(Canvas& c, const AnimationEngine& a, float cx, float cy, float sc, uint16_t color) const {
-  drawEye(c, a, 0, cx, cy, sc, color);
-  drawEye(c, a, 1, cx, cy, sc, color);
-  drawAccent(c, a, cx, cy, sc);
+void FaceEngine::drawMini(Canvas& c, const AnimationEngine& a, float left, float top, float width, uint16_t color) const {
+  EyePose pose[2] = {a.leftPose(), a.rightPose()};
+  float ox[2] = {a.eyeOffsetX(0), a.eyeOffsetX(1)}, oy[2] = {a.eyeOffsetY(0), a.eyeOffsetY(1)};
+  drawEyes(c, pose, ox, oy, a.pupil(), left, top, width / 354.f, color);
+}
+
+void FaceEngine::drawMini(Canvas& c, Emotion e, float left, float top, float width, uint16_t color) const {
+  const EmotionDef& d = emotionDef(e);
+  EyePose pose[2] = {d.left, d.right};
+  float zero[2] = {0, 0};
+  drawEyes(c, pose, zero, zero, d.pupil, left, top, width / 354.f, color);
 }
 
 void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool night) const {
@@ -648,8 +635,8 @@ void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool night) const 
 }
 
 Rect FaceEngine::bounds(const AnimationEngine&) const {
-  // Includes room for accents and overshoot. The CO5300 needs even start and width.
-  return Rect{0, 20, kScreenW, kScreenH - 60};
+  // Eyes at their widest, overlays, the clock line on top and room for jumps. The CO5300 needs even sizes.
+  return Rect{40, 36, 386, 344};
 }
 
 }  // namespace cc

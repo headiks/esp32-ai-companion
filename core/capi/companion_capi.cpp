@@ -233,6 +233,6 @@ CC_API uint32_t cc_play_count(void* p) { return ((Host*)p)->app.audio.playCount(
 CC_API float cc_blink_amount(void* p) { return ((Host*)p)->app.anim.blinkAmount(); }
 CC_API float cc_pose(void* p, int eye, int field) {
   const EyePose& ep = eye ? ((Host*)p)->app.anim.rightPose() : ((Host*)p)->app.anim.leftPose();
-  return ((const float*)&ep)[field];
+  return field >= 0 && field < kPoseFields ? ((const float*)&ep)[field] : 0.f;
 }
 CC_API float cc_gaze(void* p, int y) { App& a = ((Host*)p)->app; return y ? a.anim.gazeY() : a.anim.gazeX(); }

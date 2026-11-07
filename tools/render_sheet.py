@@ -40,6 +40,7 @@ def collect(mode, scale=0.5, transparent=False):
     """(name, image) pairs for one group. Names are file names: lowercase, no spaces."""
     c = Companion(seed=7)
     c.handle_command({"type": "setting", "name": "sleep_after", "value": 7200})
+    c.handle_command({"type": "setting", "name": "blink_rate", "value": 0})  # a frame caught mid-blink says nothing
     c.handle_command({"type": "set_time", "epoch": 1767225600 + 12 * 3600 + 34 * 60 + 56, "tz_minutes": 0})
     c.run(3000)
     items = []

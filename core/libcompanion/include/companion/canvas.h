@@ -62,6 +62,10 @@ class Canvas {
   void diamond(float cx, float cy, float halfW, float halfH, uint16_t c);
   void heart(float cx, float cy, float size, uint16_t c);
   void eye(const EyeShape& s, uint16_t c);
+  // Anti-aliased fill of any shape given row by row: fn(sy, xs, max, ctx) writes up to max inside intervals
+  // [xs[2i], xs[2i+1]) of the sub-scanline at height sy (4 per pixel row) and returns how many it wrote.
+  typedef int (*SpanFn)(float sy, float* xs, int max, const void* ctx);
+  void spans(float top, float bottom, float left, float right, uint16_t c, SpanFn fn, const void* ctx);
   // UTF-8 text. Returns the drawn width in pixels.
   int text(int x, int y, const char* utf8, FontSize f, uint16_t c, Align a = Align::Left);
   // Word-wrapped text, returns the y after the last line.

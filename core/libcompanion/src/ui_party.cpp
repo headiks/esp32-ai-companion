@@ -42,7 +42,7 @@ class CoinScreen : public Screen {
     snprintf(b, sizeof(b), "%d : %d", heads_, tails_);
     c.text(kCx, kCy + 112, b, FontSize::M, kGray, Align::Center);
     if (!shown_ && p >= 1) c.text(kCx, kCy + 150, "Встряхни или нажми", FontSize::S, kDim, Align::Center);
-    a.face.drawScaled(c, a.anim, kCx, 66, 0.2f, a.eyeColor());
+    miniFace(c, a, kCx, 66, 85);
   }
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) flip(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; flip(a); return true; }
@@ -164,7 +164,7 @@ class DiceScreen : public Screen {
     char b[8];
     snprintf(b, sizeof(b), "%d", v_[0] + v_[1]);
     c.text(kCx, kCy + 72, b, FontSize::L, rollMs_ > 0 ? kDim : kWhite, Align::Center);
-    a.face.drawScaled(c, a.anim, kCx, 96, 0.22f, a.eyeColor());
+    miniFace(c, a, kCx, 96, 93);
   }
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) roll(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; roll(a); return true; }
@@ -276,7 +276,7 @@ class BalanceScreen : public Screen {
     c.fillCircle(kCx + x_, kCy + y_, 11, d > kLimit * 0.7f ? kRose : kWhite);
     num_.draw(c, kCx, 72, 5, 1, kGray);
     if (!running_) c.text(kCx, kCy + 50, over_ ? "Ещё раз?" : "Нажми и лови шар", FontSize::S, kGray, Align::Center);
-    a.face.drawScaled(c, a.anim, kCx, kScreenH - 50, 0.16f, a.eyeColor());
+    miniFace(c, a, kCx, kScreenH - 50, 68);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap || running_) return;
@@ -358,7 +358,7 @@ class DuelScreen : public Screen {
   bool onMotion(App&, MotionEvent m) override { return m == MotionEvent::Shake || m == MotionEvent::Jerk; }
  private:
   void label(App& a, Canvas& c, const char* t, const char* s) {
-    a.face.drawScaled(c, a.anim, kCx, 136, 0.5f, a.eyeColor());
+    miniFace(c, a, kCx, 136, 212);
     c.text(kCx, 238, t, FontSize::M, kWhite, Align::Center);
     c.text(kCx, 276, s, FontSize::S, kGray, Align::Center);
   }
@@ -393,7 +393,7 @@ class ShakerScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     drawRimSquares(c, st_ == Run ? left_ / 10000 : 0, kSky);
     num_.draw(c, kCx, kCy - 40, 10, 2, kWhite);
-    a.face.drawScaled(c, a.anim, kCx, 118, 0.28f, a.eyeColor());
+    miniFace(c, a, kCx, 118, 119);
     if (st_ != Run) {
       char b[32];
       snprintf(b, sizeof(b), "Рекорд %d", a.settings.shakerBest);
@@ -447,7 +447,7 @@ class SafeScreen : public Screen {
       float x = kCx - 40 + i * 40;
       if (i < stage_) c.fillCircle(x, kCy + 70, 9, kMint); else c.ring(x, kCy + 70, 9, 2, kDim);
     }
-    a.face.drawScaled(c, a.anim, kCx, kCy - 26, 0.42f, a.eyeColor());
+    miniFace(c, a, kCx, kCy - 26, 178);
     c.text(kCx, kCy + 100, opened() ? "Открыто!" : "Нажми на щелчке", FontSize::S, opened() ? kMint : kGray, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
@@ -507,7 +507,7 @@ class WorkoutScreen : public Screen {
       return;
     }
     drawRimSquares(c, (float)reps_ / kExercises[i_].reps, kMint);
-    a.face.drawScaled(c, a.anim, kCx, 112, 0.34f, a.eyeColor());
+    miniFace(c, a, kCx, 112, 144);
     c.text(kCx, 164, kExercises[i_].name, FontSize::M, kWhite, Align::Center);
     num_.draw(c, kCx, 212, 9, 2, kWhite);
     char b[32];
@@ -668,7 +668,7 @@ class BlackjackScreen : public Screen {
     row(c, 92, 50, 70, g_.dealerCount(), [&](int i, char* out) { label(g_.dealerCard(i), out); }, hide ? 1 : -1);
     snprintf(b, sizeof(b), hide ? "Дилер" : "Дилер: %d", g_.dealerValue());
     c.text(kCx, 134, b, FontSize::S, kGray, Align::Center);
-    a.face.drawScaled(c, a.anim, kCx, 178, 0.16f, a.eyeColor());
+    miniFace(c, a, kCx, 178, 68);
     // Player, lower row: bigger, the cards are what matters here.
     row(c, 260, 62, 88, g_.playerCount(), [&](int i, char* out) { label(g_.playerCard(i), out); }, -1);
     snprintf(b, sizeof(b), "%d", g_.playerValue());

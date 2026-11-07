@@ -1,4 +1,5 @@
 #include "companion/app.h"
+#include "ui/theme.h"
 #include "ui.h"
 #include <stdio.h>
 #include <string.h>
@@ -268,10 +269,8 @@ float App::alertness() const {
   return 0.5f + 0.5f * cosf((h - 14.f) * 0.2618f);
 }
 
-uint16_t App::eyeColor() const {
-  float night = clampf((0.45f - alertness()) * 2.5f, 0, 1);
-  return rgb565(255, (uint8_t)(255 - night * 42), (uint8_t)(255 - night * 90));
-}
+// One colour for the eyes at any hour: night is quieter through brightness, not a tint outside the palette.
+uint16_t App::eyeColor() const { return theme::INK; }
 
 void App::setWeather(Weather w, float tempC) {
   bool changed = !weather.known || w != weather.cond;

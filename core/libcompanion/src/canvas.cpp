@@ -279,6 +279,53 @@ void Canvas::eye(const EyeShape& s, uint16_t c) {
   }
 }
 
+// Same coverage scheme as eye(): 4 sub-scanlines per row, exact horizontal coverage accumulated in a
+// difference buffer, so a 2-pixel run costs as much as a 300-pixel one.
+void Canvas::spans(float top, float bottom, float left, float right, uint16_t c, SpanFn fn, const void* ctx) {
+  constexpr int kSub = 4, kMax = 8;
+  static int16_t delta[kScreenW + 4];  // only the render thread draws
+  int ya = (int)floorf(top), yb = (int)ceilf(bottom) + 1;
+  if (ya < y0_) ya = y0_;
+  if (yb > y0_ + h_) yb = y0_ + h_;
+  int xa = (int)floorf(left) - 1, xb = (int)ceilf(right) + 2;
+  if (xa < x0_) xa = x0_;
+  if (xb > x0_ + w_) xb = x0_ + w_;
+  if (xa >= xb || ya >= yb) return;
+  const int w = 256 / kSub;
+  float xs[kMax * 2];
+  for (int y = ya; y < yb; y++) {
+    memset(delta, 0, (size_t)(xb - xa + 2) * sizeof(delta[0]));
+    bool any = false;
+    for (int k = 0; k < kSub; k++) {
+      int n = fn(y + (k + 0.5f) / kSub, xs, kMax, ctx);
+      for (int i = 0; i < n; i++) {
+        float l = xs[2 * i], r = xs[2 * i + 1];
+        if (l < xa) l = (float)xa;
+        if (r > xb) r = (float)xb;
+        if (r <= l) continue;
+        any = true;
+        int li = (int)l, ri = (int)r;
+        int covL = (int)((li + 1 - l) * w), covR = (int)((r - ri) * w);
+        if (li == ri) {
+          int cov = (int)((r - l) * w);
+          delta[li - xa] += cov; delta[li - xa + 1] -= cov;
+        } else {
+          delta[li - xa] += covL; delta[li - xa + 1] += w - covL;
+          delta[ri - xa] -= w - covR; delta[ri - xa + 1] -= covR;
+        }
+      }
+    }
+    if (!any) continue;
+    uint16_t* p = buf_ + (y - y0_) * w_ + (xa - x0_);
+    int acc = 0;
+    for (int i = 0; i < xb - xa; i++) {
+      acc += delta[i];
+      if (acc >= 255) p[i] = c;
+      else if (acc > 4) p[i] = mix565(p[i], c, (uint32_t)acc);
+    }
+  }
+}
+
 // ---- text ------------------------------------------------------------------------------------
 
 static_assert((int)FontSize::Count == kFontCount, "FontSize must list the fonts of tools/gen_font.py, in order");

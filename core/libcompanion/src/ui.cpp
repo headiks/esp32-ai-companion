@@ -121,6 +121,11 @@ void drawIcon(Canvas& c, Icon i, float x, float y, float r, uint16_t col) {
   }
 }
 
+void miniFace(Canvas& c, App& a, float cx, float cy, float width) {
+  float k = width / 354;  // the face block is 354 x 176 at full size, its centre 88 px below its top
+  a.face.drawMini(c, a.anim, cx - width / 2, cy - 88 * k, width, a.eyeColor());
+}
+
 void drawTitle(Canvas& c, const char* title) { c.text(kCx, 20, title, FontSize::S, kGray, Align::Center); }
 
 void drawButton(Canvas& c, const Button& b, const char* label, bool accent) {
@@ -434,7 +439,7 @@ class PetScreen : public Screen {
       float lvl = clampf(st[i].v, 0, 100) / 100;
       if (lvl > 0.02f) c.arc(kCx, kCy, kCx - 10, 4, a0, a0 + 54 * lvl, st[i].v < 25 ? kAccent : kSoft);
     }
-    a.face.drawScaled(c, a.anim, kCx, 118, 0.5f, a.eyeColor());
+    miniFace(c, a, kCx, 118, 212);
     c.text(kCx, 164, petStatusTitle(a.pet.status()), FontSize::S, kGray, Align::Center);
     for (int i = 0; i < 6; i++) {
       float x = kCx - 112 + (i % 3) * 112, y = 216 + (i / 3) * 48;
@@ -546,7 +551,7 @@ class WeatherScreen : public Screen {
     temp_.draw(c, kCx, 214, 8, 2, kWhite);
     if (a.weather.known) c.text(kCx, 300, weatherTitle(w), FontSize::M, kSoft, Align::Center);
     else c.textWrapped(kCx, 296, 300, "Нет данных: нужен Wi-Fi с координатами или приложение", FontSize::S, kGray, Align::Center, 3);
-    a.face.drawScaled(c, a.anim, kCx, 392, 0.28f, a.eyeColor());
+    miniFace(c, a, kCx, 392, 119);
   }
  private:
   DotText temp_;
@@ -853,7 +858,7 @@ class TicTacToeScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     drawTitle(c, "Крестики-нолики");
     if (mode_ == 0) {
-      a.face.drawScaled(c, a.anim, kCx, 120, 0.42f);
+      miniFace(c, a, kCx, 120, 178);
       drawButton(c, kVsPet, "С Питомцем", true);
       drawButton(c, kVsHuman, "Вдвоём");
       return;
@@ -872,7 +877,7 @@ class TicTacToeScreen : public Screen {
         c.line(cx + 22, cy - 22, cx - 22, cy + 22, 9, col);
       } else if (b_[i] == 2) c.ring(cx, cy, 24, 9, hl ? kAccent : kSoft);
     }
-    a.face.drawScaled(c, a.anim, kCx, 80, 0.2f);
+    miniFace(c, a, kCx, 80, 85);
     char st[64];
     if (result_) {
       const char* r = result_ == 3 ? "Ничья" : (mode_ == 1 ? (result_ == 1 ? "Ты победил!" : "Я выиграл!") : (result_ == 1 ? "Победил X" : "Победил O"));
@@ -994,23 +999,23 @@ class ReactionScreen : public Screen {
         return;
       case Idle:
         drawTitle(c, "Реакция");
-        a.face.drawScaled(c, a.anim, kCx, 130, 0.42f);
+        miniFace(c, a, kCx, 130, 178);
         c.textWrapped(kCx, 200, 320, "Нажми, когда экран загорится", FontSize::M, kWhite, Align::Center);
         break;
       case Waiting:
-        a.face.drawScaled(c, a.anim, kCx, 180, 0.6f);
+        miniFace(c, a, kCx, 180, 254);
         c.text(kCx, kCy + 60, "Жди…", FontSize::L, kWhite, Align::Center);
         return;
       case Early:
-        a.face.drawScaled(c, a.anim, kCx, 130, 0.42f);
+        miniFace(c, a, kCx, 130, 178);
         c.text(kCx, 200, "Рано!", FontSize::L, kAccent, Align::Center);
         break;
       case Missed:
-        a.face.drawScaled(c, a.anim, kCx, 130, 0.42f);
+        miniFace(c, a, kCx, 130, 178);
         c.text(kCx, 200, "Проспал", FontSize::L, kAccent, Align::Center);
         break;
       case Result:
-        a.face.drawScaled(c, a.anim, kCx, 120, 0.36f);
+        miniFace(c, a, kCx, 120, 153);
         snprintf(b, sizeof(b), "%d мс", last_);
         c.text(kCx, 180, b, FontSize::L, kSoft, Align::Center);
         break;
@@ -1064,7 +1069,7 @@ class GuessScreen : public Screen {
     num_.tick(dt);
   }
   void draw(App& a, Canvas& c) override {
-    a.face.drawScaled(c, a.anim, kCx, 86, 0.34f);
+    miniFace(c, a, kCx, 86, 144);
     char b[32];
     num_.draw(c, kCx, 142, 11, 2, won_ ? kAccent : kWhite);
     c.text(kCx, 256, hint_, FontSize::M, kSoft, Align::Center);
@@ -1129,7 +1134,7 @@ class PetGameScreen : public Screen {
   }
   void draw(App& a, Canvas& c) override {
     if (running_) {
-      a.face.draw(c, a.anim);
+      a.face.draw(c, a.anim, a.eyeColor());
       c.fillCircle(fx_, fy_, 22, kAccent);
       c.fillCircle(fx_, fy_, 11, kSoft);
       char b[24];
@@ -1138,7 +1143,7 @@ class PetGameScreen : public Screen {
       return;
     }
     drawTitle(c, "Поймай светлячка");
-    a.face.drawScaled(c, a.anim, kCx, 130, 0.5f);
+    miniFace(c, a, kCx, 130, 212);
     char b[32];
     if (finished_) { snprintf(b, sizeof(b), "Поймано: %d", score_); c.text(kCx, 210, b, FontSize::L, kSoft, Align::Center); }
     c.text(kCx, 300, "Нажми, чтобы начать", FontSize::M, kWhite, Align::Center);

@@ -1,39 +1,39 @@
-// AnimationEngine: physically-damped eye parameters, blinks, gaze, idle life.
-// FaceEngine: draws the animated parameters; all geometry is computed, nothing is pre-rendered.
+// AnimationEngine: eye parameters of the 1a design, eased between emotions, plus the life on top of them:
+// blinks, gaze, breathing lids, head roll, little jumps.
+// FaceEngine: draws them; all geometry is computed, nothing is pre-rendered.
 #pragma once
 #include "canvas.h"
 
 namespace cc {
 
-// All geometry is in px at full size, relative to the eye rest position, mirrored for the right
-// eye so that "+x" always points to the nose. Layout follows the reference picture: a wide ellipse
-// with a straight, slanted upper lid and a round pupil pressed against that lid.
+// One eye in the parametric model of design 1a (documentation/design/1a, section 5 of the spec).
+// The white is a rounded rectangle 132 x 116 * s; the upper lid cuts it with a line, the cheek with a parabola.
 struct EyePose {
-  float dx, dy;          // eye position offset
-  float rx, ry;          // width / height radius
-  float up, upSlope;     // upper lid: y offset at eye centre; +slope lowers the nose side (mean look)
-  float lo, loSlope;     // lower lid
-  float cheek;           // top of the cheek cut, relative to the centre (>ry = no cut). "^" eyes.
-  float pupilR, px, py;  // pupil radius and offset
+  float t;   // upper lid: 0 open .. 1 closed, share of the eye height
+  float a;   // lid angle in degrees: > 0 lowers the inner corners (anger), < 0 raises them (sadness)
+  float b;   // cheek: 0 none .. 1, rises from below and turns the eye into a smile
+  float px;  // pupil offset, screen direction: -1 .. 1 of 27 % of the eye width
+  float py;  //               and of 27 % of the eye height
+  float s;   // scale of the whole eye
+  float pr;  // pupil radius as a share of the eye height; 0 hides it
 };
 constexpr int kPoseFields = sizeof(EyePose) / sizeof(float);
 
-enum class Accent : uint8_t { None, Zzz, Tear, Hearts, Bang, Question, Sparkle, Steam, Dots, Blush, Sweat, Frost, Stream, Drool };
+enum class Overlay : uint8_t { None, Sparkle, Hearts, Question, Dots, Zzz, Tear, Streams, Blush, Frost, Sweat, Drool, Joy };
 enum class PupilShape : uint8_t { Round, Heart, Spiral, Star };
 
-// Everything that makes one emotion look and sound like itself.
+// Everything that makes one emotion look and behave like itself.
 struct EmotionDef {
   EyePose left, right;
-  float transitionMs;    // spring settle time when entering
-  float damping;         // <1 overshoots: surprise pops, sadness sinks
+  PupilShape pupil;
+  Overlay overlay;
+  float transitionMs;    // ease-out from the previous pose, 150..250
   float blinksPerMin;
-  float saccadeAmp;      // random gaze travel, px
+  float saccadeAmp;      // random gaze travel, px of the old scale (see AnimationEngine::composeLayers)
   float saccadeEveryMs;
   float bobAmp, bobHz;   // whole-face motion
   float tremble;         // fast jitter, px
   float gazeX, gazeY;    // preferred gaze direction
-  Accent accent;
-  PupilShape pupil;
   uint16_t soundDelayMs; // sound fires at this moment of the transition, see SoundEmotionEngine
   uint8_t doubleBlinkPct;
   bool wanderLook;       // slowly looks left and right (thinking, confused)
@@ -69,8 +69,12 @@ class AnimationEngine {
   void retriggerCue() { soundPending_ = true; age_ = 0; }  // the same emotion asked for again must still answer
   bool soundCueReady();   // true once per transition, at the frame chosen by soundDelayMs
 
+  // The pose as drawn: emotion, blend and every life layer composed.
   const EyePose& leftPose() const { return out_[0]; }
   const EyePose& rightPose() const { return out_[1]; }
+  float eyeOffsetX(int eye) const { return offX_[eye]; }  // px at full size: body sway, head roll, jumps
+  float eyeOffsetY(int eye) const { return offY_[eye]; }
+  PupilShape pupil() const;  // switches halfway through a transition
   float blinkAmount() const { return blinkAmt_; }
   float gazeX() const { return gazeX_; }
   float gazeY() const { return gazeY_; }
@@ -78,17 +82,18 @@ class AnimationEngine {
   float bodyY() const { return bodyY_; }
   float timeMs() const { return t_; }
   float emotionAge() const { return age_; }
-  float eyeGazeOffset(int eye, bool y) const { return indepHold_ > 0 ? (y ? indepY_[eye] : indepX_[eye]) : 0; }
-  bool isSettled() const { return settled_; }
+  bool isSettled() const { return progress_ >= 1; }
 
  private:
   void updateBlink(float dt);
   void updateGaze(float dt, const EmotionDef& d);
   void composeLayers();
-  Emotion emotion_ = Emotion::Neutral, blendE_ = Emotion::Neutral;
-  EyePose cur_[2], vel_[2], out_[2];
+  Emotion emotion_ = Emotion::Neutral, previous_ = Emotion::Neutral, blendE_ = Emotion::Neutral;
+  EyePose from_[2], cur_[2], out_[2];
+  float offX_[2] = {0, 0}, offY_[2] = {0, 0};
+  float progress_ = 1;  // 0..1 of the current transition
   float blendTarget_ = 0, blend_ = 0, arousal_ = 0.6f, valence_ = 0, light_ = 0.7f, tiltX_ = 0, tiltY_ = 0, roll_ = 0;
-  float pursuit_ = 0, microX_ = 0, microY_ = 0, nextMicro_ = 400, squash_ = 0, lastGX_ = 0, lastGY_ = 0;
+  float pursuit_ = 0, microX_ = 0, microY_ = 0, nextMicro_ = 400;
   float t_ = 0, age_ = 0, speed_ = 1, blinkScale_ = 1;
   // blink
   float blinkAmt_ = 0, blinkT_ = -1, blinkDur_ = 170, blinkPause_ = 0, nextBlink_ = 2500, closedAmt_ = 0;
@@ -99,23 +104,22 @@ class AnimationEngine {
   float indepX_[2] = {0, 0}, indepY_[2] = {0, 0}, indepHold_ = 0;
   // body
   float bodyX_ = 0, bodyY_ = 0, kickY_ = 0, kickV_ = 0;
-  bool soundPending_ = false, settled_ = false;
+  bool soundPending_ = false;
   Rng rng_;
 };
 
 class FaceEngine {
  public:
-  // Full-screen face. `tint` lets low-power mode dim the eyes without touching panel brightness.
-  void draw(Canvas& c, const AnimationEngine& a, uint16_t color = kWhite) const;
-  // Same character at any scale: the pet screen and games use a small live face.
-  void drawScaled(Canvas& c, const AnimationEngine& a, float cx, float cy, float scale, uint16_t color = kWhite) const;
+  // Full-screen face with its overlays (tears, sparkles, zzz). `color` lets low-power mode dim the eyes.
+  void draw(Canvas& c, const AnimationEngine& a, uint16_t color) const;
+  // The same character fitted to `width`, top-left at (left, top), without overlays: MiniFace of the spec.
+  void drawMini(Canvas& c, const AnimationEngine& a, float left, float top, float width, uint16_t color) const;
+  // A fixed face for screens that show one emotion of their own (about, time not set, pairing).
+  void drawMini(Canvas& c, Emotion e, float left, float top, float width, uint16_t color) const;
   // Pixel bounds the face can touch this frame. Firmware pushes only this region to save power.
   Rect bounds(const AnimationEngine& a) const;
   // Weather behind the eyes: rain, snow, drifting clouds, night stars. Pure functions of time.
   void drawWeather(Canvas& c, Weather w, float tMs, bool night) const;
- private:
-  void drawEye(Canvas& c, const AnimationEngine& a, int eye, float cx, float cy, float scale, uint16_t color) const;
-  void drawAccent(Canvas& c, const AnimationEngine& a, float cx, float cy, float scale) const;
 };
 
 }  // namespace cc

@@ -13,6 +13,8 @@ from core.companion import Companion, emotion_names, lib, SCREEN  # noqa: E402
 from emulator.simulation.sensors import ImuSimulator, MicSimulator  # noqa: E402
 
 EMOTIONS = emotion_names()
+INK = 0xF79D          # theme::INK, the colour of the eyes and of main text
+POSE_FIELDS = 7       # EyePose of design 1a: t, a, b, px, py, s, pr
 REQUIRED = ["neutral", "happy", "very_happy", "sad", "angry", "annoyed", "surprised", "curious", "thinking", "sleepy", "sleeping",
             "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited",
             "mischievous", "shy", "proud", "dizzy", "yawning", "cold", "hot", "dreamy", "focused", "winking",
@@ -120,7 +122,8 @@ def test_each_emotion_has_distinct_geometry():
         c.handle_command({"type": "action", "value": "wake"})
         c.handle_command({"type": "emotion", "value": name, "hold_ms": 8000})
         c.run(3500)
-        poses[name] = tuple(round(c.pose(e, f), 0) for e in (0, 1) for f in range(12))
+        # t, a, b, px, py, s, pr of both eyes; the lid angle in whole degrees, the rest in hundredths.
+        poses[name] = tuple(round(c.pose(e, f), 0 if f == 1 else 2) for e in (0, 1) for f in range(POSE_FIELDS))
     assert len(set(poses.values())) == len(REQUIRED)
     c.close()
 
@@ -141,7 +144,7 @@ def test_blinks_happen_and_face_never_freezes(c):
 
 def test_face_image_matches_reference_layout(c):
     fb = c.render()
-    white = fb == 0xFFFF
+    white = fb == INK
     assert white.mean() > 0.04
     assert not white[:SCREEN // 2, :].all(axis=0).any()
     cols = np.where(white.any(axis=0))[0]
@@ -602,8 +605,8 @@ def test_sound_cue_is_synchronized_with_animation():
         c.tick(10); c.mix(160)
         if c.play_count() > n0:
             assert ms <= 60, f"sound at {ms} ms"
-            # Eyes are still far from fully open at that moment.
-            assert c.pose(0, 3) < 86
+            # Eyes are still far from fully open at that moment: the scale has not reached 1.14.
+            assert c.pose(0, 5) < 1.12
             break
     else:
         pytest.fail("no sound")
@@ -648,11 +651,15 @@ def test_animation_never_jumps():
     c.run(3000)
     for name in REQUIRED:
         c.handle_command({"type": "emotion", "value": name, "hold_ms": 700})
-        prev = [c.pose(e, f) for e in (0, 1) for f in range(12)]
+        prev = [c.pose(e, f) for e in (0, 1) for f in range(POSE_FIELDS)]
         for _ in range(60):
             c.tick(16)
-            now = [c.pose(e, f) for e in (0, 1) for f in range(12)]
-            assert max(abs(a - b) for a, b in zip(now, prev)) < 60, name
+            now = [c.pose(e, f) for e in (0, 1) for f in range(POSE_FIELDS)]
+            # Per frame: lid angle under 20 degrees; pupils may dart (saccades take about 40 ms) but not cross
+            # the eye, under 1 unit; lid, cheek, scale and pupil size under half their range.
+            limit = {1: 20, 3: 1.0, 4: 1.0}
+            for i, (x, y) in enumerate(zip(now, prev)):
+                assert abs(x - y) < limit.get(i % POSE_FIELDS, 0.5), (name, i)
             prev = now
     c.close()
 
@@ -688,7 +695,7 @@ def test_pose_breathes_while_holding_one_emotion(c):
     values = set()
     for _ in range(500):
         c.tick(20)
-        values.add(round(c.pose(0, 4), 1))
+        values.add(round(c.pose(0, 0), 3))
     assert len(values) > 20, "upper lid must keep moving"
 
 
@@ -713,12 +720,12 @@ def test_night_makes_it_sleepy_day_does_not():
     day.close(); night.close()
 
 
-def test_eyes_are_warmer_at_night(c):
-    set_hour(c, 14); c.run(200)
-    assert (c.render() == 0xFFFF).sum() > 3000
-    c.handle_command({"type": "emotion", "value": "neutral", "hold_ms": 9000})
-    set_hour(c, 2); c.run(200)
-    assert (c.render() == 0xFFFF).sum() < 50
+def test_eyes_are_ink_day_and_night(c):
+    """Design 1a: one eye colour from the palette; the night is quieter through brightness, not a tint."""
+    for hour in (14, 2):
+        c.handle_command({"type": "emotion", "value": "neutral", "hold_ms": 9000})
+        set_hour(c, hour); c.run(200)
+        assert (c.render() == INK).sum() > 3000, hour
 
 
 def test_weather_command_and_reactions(c):
