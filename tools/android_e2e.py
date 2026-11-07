@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+sys.stdout.reconfigure(errors="replace")  # the app shows emoji; a cp1251 Windows console cannot print them
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 from emulator.main import Emulator  # noqa: E402
@@ -61,7 +62,8 @@ def texts():
 
 def find(pattern):
     for n in nodes():
-        if n.get("text") and re.search(pattern, n.get("text")):
+        label = n.get("text") or n.get("content-desc")  # icon buttons carry their name in content-desc
+        if label and re.search(pattern, label):
             return n
     return None
 
@@ -170,6 +172,8 @@ def main():
     while time.time() < deadline and len(fields) < 2:
         tap(r"^(Allow|Разрешить|Wait|Подождать)$", required=False)  # Wait: "not responding" on a phone still booting
         fields = [n for n in nodes() if n.get("class") == "android.widget.EditText"]
+        if len(fields) == 1:
+            tap(r"^Эмулятор на ПК$", required=False)  # the address field is folded away below the PIN
         pump(0.5)
 
     pin = emu.companion.pin()
@@ -196,7 +200,7 @@ def main():
     pump(1)
     adb("shell", "input", "keyevent", "111")  # the keyboard would hide buttons
     pump(0.5)
-    tap(r"^Эмулятор$", 2.5)
+    tap(r"^Подключить$", 2.5)
     shot("1_connected")
     check("app shows it is connected", find("подключено") is not None, str(texts()[:6]))
     check("wrong PIN error absent", find("Неверный PIN") is None)
@@ -211,7 +215,7 @@ def main():
     tap(r"^Игры$")
     shot("2_games")
     tap(r"^Дурак$")
-    tap(r"^Подкидной$", 2)
+    tap(r"^Играть$", 2)  # the transfer-free mode is the default
     shot("3_durak_start")
     check("durak turns the emulator into a card controller", state()["screen"] == "controller")
     pump(1)
@@ -248,7 +252,7 @@ def main():
     def race_with_lean(lean):
         """Average height of the first player's car while it drives holding this lean: a held lean makes it circle."""
         emu.set_tilt(lean, 0)
-        tap(r"^Старт$", 0.1)
+        tap(r"^Играть$", 0.1)
         pump(3.3)
         at = [color_center(WHITE) for _ in range(5)]
         emu.set_tilt(0, 0)
@@ -271,7 +275,7 @@ def main():
     tap(r"^2$", 0.5)
     tap(r"^Восьмёрка$", 0.5)
     shot("9_race_two_setup")
-    tap(r"^Старт$", 4.5)
+    tap(r"^Играть$", 4.5)
     pads = [n for n in nodes() if n.get("text") == "▶"]
     check("the second player has buttons, the first has the device", len(pads) == 1, str(texts()[:16]))
     ROSE = (218, 176, 184)
@@ -285,8 +289,8 @@ def main():
 
     tap(r"^Арканоид$", 1.5)
     check("breakout starts the pad", state()["screen"] == "controller")
-    check("breakout says how to launch", find("запустить шарик") is not None)
-    PADDLE = (0.86, 0.95)  # the paddle's row of the screen
+    check("breakout says how to launch", find("старт") is not None)
+    PADDLE = (0.82, 0.86)  # the paddle's row of the screen, above the bottom navigation and its white labels
     emu.set_tilt(0.25, 0)
     pump(0.8)
     right = white_center(*PADDLE)
@@ -304,7 +308,8 @@ def main():
     tap(r"^Назад$", 1)
 
     tap(r"^Покер$", 1.5)
-    tap(r"^Трое$", 2.5)
+    tap(r"^3$", 0.5)
+    tap(r"^Играть$", 2.5)
     shot("9_poker_table")
     check("poker turns the emulator into a card controller", state()["screen"] == "controller")
     check("the phone hides the two hole cards", visible("Ваши карты на устройстве") and len(rank_cards_on_screen()) == 0, str(texts()[:16]))

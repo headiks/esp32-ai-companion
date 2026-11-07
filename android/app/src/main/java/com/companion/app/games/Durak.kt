@@ -2,7 +2,8 @@ package com.companion.app.games
 
 import kotlin.random.Random
 
-class TableCard(val attack: Card, var cover: Card? = null)
+/** [from] is who put the attack card down: the table shows it arriving from that seat. */
+class TableCard(val attack: Card, var cover: Card? = null, val from: Int = 0)
 
 /** Durak for 2 to 4 players with a 36 card deck. Player 0 is the human; the rest are played by [aiAct]. */
 class DurakGame(val players: Int = 2, val transferMode: Boolean = false, private val rng: Random = Random.Default) {
@@ -88,7 +89,7 @@ class DurakGame(val players: Int = 2, val transferMode: Boolean = false, private
         val ok = if (table.isEmpty()) cards.all { it.rank == cards[0].rank } else cards.all { it.rank in tableRanks }
         if (!ok) return false
         hands[p].removeAll(cards)
-        cards.forEach { table.add(TableCard(it)) }
+        cards.forEach { table.add(TableCard(it, from = p)) }
         passed.clear()
         advance()
         return true
@@ -123,7 +124,7 @@ class DurakGame(val players: Int = 2, val transferMode: Boolean = false, private
         if (!canTransfer(cards)) return false
         val old = defender
         hands[old].removeAll(cards)
-        cards.forEach { table.add(TableCard(it)) }
+        cards.forEach { table.add(TableCard(it, from = old)) }
         attacker = old
         defender = nextActive(old)
         cap = minOf(6, hands[defender].size)

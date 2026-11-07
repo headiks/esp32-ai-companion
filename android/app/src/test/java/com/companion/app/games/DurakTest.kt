@@ -129,6 +129,27 @@ class DurakTest {
         assertEquals(7, g.hands[def].size)
     }
 
+    /** Whoever takes loses the next attack: it goes to the first player after the taker who still has cards. */
+    @Test fun takerSkipsTheNextAttackInWholeGames() {
+        var takes = 0
+        for (players in 2..4) for (transfer in listOf(false, true)) repeat(150) { seed ->
+            val g = newGame(players, transfer, seed)
+            while (!g.finished) {
+                val taker = if (g.taking) g.defender else null
+                val before = g.hands.map { it.size }
+                g.autoPlay()
+                if (taker == null || g.taking || g.finished) continue
+                takes++
+                assertTrue("the taker got the cards", g.hands[taker].size > before[taker] || g.deckLeft == 0)
+                assertTrue("p=$players t=$transfer seed=$seed: taker $taker attacks again", g.attacker != taker)
+                var expected = (taker + 1) % players
+                while (g.hands[expected].isEmpty()) expected = (expected + 1) % players
+                assertEquals("p=$players t=$transfer seed=$seed", expected, g.attacker)
+            }
+        }
+        assertTrue(takes > 500)
+    }
+
     @Test fun afterBeatenBoutDefenderAttacks() {
         val g = gameWhere { g ->
             val a = g.hands[g.attacker].first()

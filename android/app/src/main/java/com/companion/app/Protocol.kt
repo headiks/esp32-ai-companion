@@ -66,6 +66,7 @@ data class PetState(
     val sound: Boolean = true,
     val mic: Boolean = true,
     val unread: Int = 0,
+    val personality: String = "",
 ) {
     companion object {
         val STAT_NAMES = listOf("happiness", "energy", "curiosity", "attention", "affection", "stress", "sleepiness", "hunger", "fun", "health")
@@ -86,6 +87,7 @@ data class PetState(
             sound = o.optBoolean("sound", sound),
             mic = o.optBoolean("mic", mic),
             unread = o.optInt("unread", unread),
+            personality = o.optString("personality", personality),
         )
     }
 }
