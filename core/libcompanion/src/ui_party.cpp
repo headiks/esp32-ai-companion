@@ -1,124 +1,48 @@
 // Chance toys, motion games in the spirit of Switch party games, and the phone controller screen.
 #include "companion/games.h"
 #include "ui.h"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 namespace cc {
+using namespace theme;
 
 static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 
-// A solid ellipse, using the eye rasterizer with lids out of the way.
-static void ellipse(Canvas& c, float x, float y, float rx, float ry, uint16_t col) {
-  if (rx < 1) rx = 1;
-  EyeShape s{x, y, rx, ry, y - ry - 2, 0, y + ry + 2, 0, y + ry + 50, 1, 1};
-  c.eye(s, col);
-}
-
-// ---- Coin ---------------------------------------------------------------------------------------
+// ---- 26. coin -------------------------------------------------------------------------------------
 class CoinScreen : public Screen {
  public:
-  void enter(App&) override { t_ = 1; heads_ = tails_ = 0; shown_ = false; }
+  void enter(App&) override { t_ = 1; heads_ = tails_ = 0; }
   void tick(App& a, float dt) override {
     if (t_ >= 1) return;
     t_ += dt / 1500;
     if (t_ >= 1) {
-      shown_ = true;
       (result_ ? heads_ : tails_)++;
       a.sfx.play("games/bounce");
       a.react(result_ ? Emotion::Happy : Emotion::Skeptical, 1200);
     }
   }
   void draw(App& a, Canvas& c) override {
+    miniFace(c, a, CX, 40 + 60 * 176 / 354.f, 120);
     float p = clampf(t_, 0, 1), ease = 1 - (1 - p) * (1 - p) * (1 - p);
-    // The whole number of half-turns decides which side lands up.
-    float ang = p >= 1 ? fmodf(turns_, 2) * 3.14159f : ease * turns_ * 3.14159f;  // at rest exactly flat
-    float lift = sinf(p * 3.14159f);
-    float y = kCy - 16 - lift * 90;
-    // The shadow on the "table" shrinks as the coin rises.
-    ellipse(c, kCx, kCy + 88, 78 - 40 * lift, 7 - 3 * lift, kDark);
-    drawCoin(c, kCx, y, 92, ang);
-    char b[32];
-    snprintf(b, sizeof(b), "%d : %d", heads_, tails_);
-    c.text(kCx, kCy + 112, b, FontSize::M, kGray, Align::Center);
-    if (!shown_ && p >= 1) c.text(kCx, kCy + 150, "Встряхни или нажми", FontSize::S, kDim, Align::Center);
-    miniFace(c, a, kCx, 66, 85);
+    // The whole number of half-turns decides which side lands up; turning is a squeeze by cos, no blur.
+    float ang = p >= 1 ? fmodf(turns_, 2) * 3.14159f : ease * turns_ * 3.14159f;
+    float w = fabsf(cosf(ang)), y = 200 - sinf(p * 3.14159f) * 60;
+    ui::ellipse(c, CX, y, 90 * w, 90, INK);
+    ui::ellipse(c, CX, y, 85 * w, 85, SURFACE);
+    ui::ellipse(c, CX, y, 74 * w, 74, INK_3);
+    ui::ellipse(c, CX, y, 72 * w, 72, SURFACE);
+    if (w > 0.7f) ui::textCentered(c, CX, y, cosf(ang) > 0 ? "Орёл" : "Решка", TXT_UNB34, INK);
+    char b[16];
+    snprintf(b, sizeof b, "%d : %d", heads_, tails_);
+    ui::textCentered(c, CX, 318, b, NUM_S, INK);
+    if (p >= 1) c.text(CX, 360, "встряхни или нажми", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) flip(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; flip(a); return true; }
+
  private:
-  // Everything on the face is squeezed by w around the axis, so the relief turns with the coin.
-  static void drawEagle(Canvas& c, float x, float y, float r, float w, uint16_t ink) {
-    auto X = [&](float d) { return x + d * r * w; };
-    auto Y = [&](float d) { return y + d * r; };
-    float th = r * 0.028f;
-    // Wings: feathers fanning out from the shoulders, the outer ones longer.
-    for (int side = -1; side <= 1; side += 2) {
-      for (int i = 0; i < 6; i++) {
-        float t = i / 5.f, ang = -1.25f + t * 1.5f, len = 0.33f + 0.22f * (1 - t);
-        c.line(X(side * 0.09f), Y(-0.02f + t * 0.1f), X(side * (0.09f + sinf(ang + 1.57f) * len)), Y(-0.02f + t * 0.1f + cosf(ang + 1.57f) * -len * 0.9f), th, ink);
-      }
-    }
-    ellipse(c, x, Y(0.06f), r * 0.11f * w, r * 0.21f, ink);          // body
-    c.fillCircle(x, Y(-0.27f), r * 0.075f * (0.4f + 0.6f * w), ink);  // head
-    c.line(x, Y(-0.27f), X(0.13f), Y(-0.23f), th * 1.5f, ink);        // beak
-    c.line(x, Y(-0.2f), x, Y(-0.1f), th * 2.4f, ink);                 // neck
-    for (int i = -2; i <= 2; i++) c.line(x, Y(0.24f), X(i * 0.055f), Y(0.42f - abs(i) * 0.015f), th, ink);  // tail
-    for (int side = -1; side <= 1; side += 2) c.line(X(side * 0.05f), Y(0.2f), X(side * 0.15f), Y(0.3f), th, ink);  // claws
-  }
-  static void drawDenomination(Canvas& c, float x, float y, float r, float w, uint16_t ink) {
-    auto X = [&](float d) { return x + d * r * w; };
-    auto Y = [&](float d) { return y + d * r; };
-    float th = r * 0.075f;
-    c.line(X(-0.1f), Y(-0.22f), X(0.03f), Y(-0.34f), th * 0.8f, ink);
-    c.line(X(0.03f), Y(-0.34f), X(0.03f), Y(0.26f), th, ink);
-    c.line(X(-0.13f), Y(0.28f), X(0.19f), Y(0.28f), th * 0.8f, ink);
-    // Wreath: leaves in pairs along an arc on both sides, tied at the bottom.
-    for (int side = -1; side <= 1; side += 2) {
-      for (int i = 0; i < 9; i++) {
-        float ang = 0.35f + i * 0.27f, ox = sinf(ang) * 0.53f, oy = cosf(ang) * 0.53f;
-        float tan = 0.1f, lean = (i % 2 ? 1 : -1) * 0.06f;
-        c.line(X(side * (ox + lean * sinf(ang))), Y(oy + lean * cosf(ang)), X(side * (ox + cosf(ang) * tan)), Y(oy - sinf(ang) * tan), r * 0.035f, ink);
-      }
-    }
-  }
-  static void drawCoin(Canvas& c, float x, float y, float r, float ang) {
-    float cs = cosf(ang), w = fabsf(cs), side = sinf(ang);
-    bool front = cs > 0;
-    const uint16_t rim = front ? kWhite : kSoft;
-    const uint16_t field = front ? rgb565(176, 178, 186) : rgb565(170, 164, 148);
-    const uint16_t relief = front ? rgb565(232, 234, 240) : rgb565(236, 230, 212);
-    const uint16_t shade = rgb565(84, 84, 90);
-    // The edge shows only when the coin is turned, on the side away from the viewer, with reeding across it.
-    float depth = 9 * fabsf(side), dir = side * cs > 0 ? -1.f : 1.f;
-    if (depth > 0.5f) {
-      float ex = x + dir * depth;
-      ellipse(c, ex, y, r * w, r, shade);
-      c.fillRect((int)(dir > 0 ? x : ex), (int)(y - r), (int)depth, (int)(2 * r), shade);
-      for (int i = -8; i <= 8; i++) {
-        float ly = y + i * r / 9.f, half = sqrtf(fabsf(1 - (float)(i * i) / 81.f));
-        c.line(x + dir * r * w * half, ly, ex + dir * r * w * half, ly, 1.2f, kGray);
-      }
-    }
-    ellipse(c, x, y, r * w, r, rim);
-    ellipse(c, x, y, r * 0.9f * w, r * 0.9f, shade);
-    ellipse(c, x, y, r * 0.88f * w, r * 0.88f, field);
-    if (w < 0.12f) return;  // edge-on: there is nothing to see of the face
-    // Beaded border.
-    for (int i = 0; i < 40; i++) {
-      float b = i * 6.28318f / 40;
-      c.fillCircle(x + sinf(b) * r * 0.8f * w, y + cosf(b) * r * 0.8f, r * 0.019f + 0.3f, relief);
-    }
-    if (front) drawEagle(c, x, y - r * 0.04f, r, w, relief);
-    else drawDenomination(c, x, y - r * 0.03f, r, w, relief);
-    // The glint runs across the coin as it turns.
-    float g = sinf(ang * 2) * 0.55f;
-    if (w > 0.25f && fabsf(g) < 0.5f && fabsf(g) > 0.01f) {  // at rest there is no glint, it would read as a scratch
-      float half = sqrtf(1 - g * g) * 0.82f;
-      c.line(x + (g - half * 0.5f) * r * w, y + half * r * 0.86f, x + (g + half * 0.5f) * r * w, y - half * r * 0.86f, 2.2f, kWhite);
-    }
-    if (w > 0.8f) c.text((int)x, (int)(y + r * 0.53f), front ? "ОРЁЛ" : "РЕШКА", FontSize::S, front ? kBlack : rgb565(60, 56, 46), Align::Center);
-  }
   void flip(App& a) {
     if (t_ < 1) return;
     result_ = a.rng.range(0, 1) == 1;
@@ -129,11 +53,11 @@ class CoinScreen : public Screen {
     a.react(Emotion::Attentive, 1500);
   }
   float t_ = 1, turns_ = 0;
-  bool result_ = false, shown_ = false;
+  bool result_ = false;
   int heads_ = 0, tails_ = 0;
 };
 
-// ---- Dice ---------------------------------------------------------------------------------------
+// ---- 27. dice ---------------------------------------------------------------------------------------
 class DiceScreen : public Screen {
  public:
   void enter(App&) override { rollMs_ = 0; }
@@ -155,27 +79,28 @@ class DiceScreen : public Screen {
     }
   }
   void draw(App& a, Canvas& c) override {
+    miniFace(c, a, CX, 48 + 60 * 176 / 354.f, 120);
     float wob = rollMs_ > 0 ? clampf(rollMs_ / kRoll, 0, 1) : 0, ts = a.nowMs() * 0.02f;
     for (int d = 0; d < 2; d++) {
-      float x = kCx + (d ? 84.f : -84.f) + wob * 16 * sinf(ts + d * 2), y = kCy - 14 + wob * 26 * sinf(ts * 1.4f + d);
-      float s = 124 * (1 + wob * 0.06f * sinf(ts * 2.1f + d));
-      die(c, x, y, s, v_[d]);
+      float x = CX + (d ? 74.f : -74.f) + wob * 12 * sinf(ts + d * 2), y = 180 + wob * 18 * sinf(ts * 1.4f + d);
+      die(c, x - 58, y - 58, v_[d]);
     }
     char b[8];
-    snprintf(b, sizeof(b), "%d", v_[0] + v_[1]);
-    c.text(kCx, kCy + 72, b, FontSize::L, rollMs_ > 0 ? kDim : kWhite, Align::Center);
-    miniFace(c, a, kCx, 96, 93);
+    snprintf(b, sizeof b, "%d", v_[0] + v_[1]);
+    ui::textCentered(c, CX, 300, b, NUM_L, rollMs_ > 0 ? INK_3 : INK);
+    c.text(CX, 352, "встряхни", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) roll(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; roll(a); return true; }
+
  private:
   static constexpr float kRoll = 1100;
-  static void die(Canvas& c, float x, float y, float s, int v) {
-    c.roundRect(x - s / 2, y - s / 2, s, s, s * 0.17f, kWhite);
-    float q = s * 0.26f, r = s * 0.09f;
-    // Pip map for a 3x3 grid, read as bit flags.
+  // 116 px, radius 26: a dark face with a bright outline, pips on the 23/49/75 grid.
+  static void die(Canvas& c, float x, float y, int v) {
+    c.roundRect(x, y, 116, 116, 26, INK);
+    c.roundRect(x + 3, y + 3, 110, 110, 23, SURFACE);
     static const uint16_t pips[7] = {0, 0x010, 0x101, 0x111, 0x145, 0x155, 0x16D};
-    for (int i = 0; i < 9; i++) if ((pips[v] >> i) & 1) c.fillCircle(x + (i % 3 - 1) * q, y + (i / 3 - 1) * q, r, kBlack);
+    for (int i = 0; i < 9; i++) if ((pips[v] >> i) & 1) c.fillCircle(x + 32 + (i % 3) * 26, y + 32 + (i / 3) * 26, 9, INK);
   }
   void roll(App& a) {
     if (rollMs_ > 0) return;
@@ -188,45 +113,44 @@ class DiceScreen : public Screen {
   int v_[2] = {6, 6};
 };
 
-// ---- Magic ball -----------------------------------------------------------------------------------
+// ---- 28. magic ball ---------------------------------------------------------------------------------
 static const char* const kAnswers[20] = {
     "Бесспорно", "Предрешено", "Никаких сомнений", "Определённо да", "Можешь быть уверен",
     "Мне кажется — да", "Вероятнее всего", "Хорошие перспективы", "Знаки говорят — да", "Да",
     "Пока не ясно", "Спроси позже", "Лучше не сейчас", "Не могу сказать", "Сосредоточься и спроси",
-    "Даже не думай", "Мой ответ — нет", "Мои источники говорят нет", "Перспективы так себе", "Весьма сомнительно"};
+    "Даже не думай", "Мой ответ — нет", "Источники говорят нет", "Перспективы так себе", "Весьма сомнительно"};
 
 class MagicBallScreen : public Screen {
  public:
-  void enter(App&) override { fade_ = 0; shakeMs_ = 0; answer_ = -1; }
+  void enter(App& a) override { shakeMs_ = 0; answer_ = -1; a.react(Emotion::Dreamy, 1500); }
   void tick(App& a, float dt) override {
-    if (shakeMs_ > 0) {
-      shakeMs_ -= dt;
-      if (shakeMs_ <= 0) {
-        answer_ = a.rng.range(0, 19);
-        fade_ = 0;
-        a.sfx.play("system/notify");
-        a.react(answer_ < 10 ? Emotion::Winking : answer_ < 15 ? Emotion::Thinking : Emotion::Skeptical, 1800);
-      }
-    } else if (fade_ < 1) fade_ += dt / 700;
+    if (shakeMs_ <= 0) return;
+    shakeMs_ -= dt;
+    if (shakeMs_ <= 0) {
+      answer_ = a.rng.range(0, 19);
+      a.sfx.play("system/notify");
+      a.react(answer_ < 10 ? Emotion::Winking : answer_ < 15 ? Emotion::Thinking : Emotion::Skeptical, 1800);
+    }
   }
   void draw(App& a, Canvas& c) override {
+    miniFace(c, a, CX, 62 + 45 * 176 / 354.f, 90);
     float k = shakeMs_ > 0 ? 8 : 0, ts = a.nowMs() * 0.04f;
-    float x = kCx + k * sinf(ts), y = kCy + k * 0.6f * sinf(ts * 1.3f);
-    c.ring(x, y, 208, 2, kDark);
-    if (shakeMs_ > 0 || answer_ < 0) {
-      c.text((int)x, (int)y - 40, "8", FontSize::L, kDim, Align::Center);
-      if (answer_ < 0 && shakeMs_ <= 0) c.textWrapped(kCx, kCy + 12, 280, "Задай вопрос и встряхни", FontSize::S, kGray, Align::Center, 2);
-      return;
+    float x = CX + k * sinf(ts), y = 248 + k * 0.6f * sinf(ts * 1.3f);
+    c.fillCircle(x, y, 130, SURFACE);
+    c.ring(x, y, 129, 2, INK_3);
+    if (answer_ < 0 || shakeMs_ > 0) ui::textCentered(c, x, y, "?", TXT_MENU_SEL, INK_3);
+    else {
+      c.text((int)x, (int)y - 62, "шар говорит", TXT_MIN, INK_2, Align::Center);
+      const char* s = kAnswers[answer_];
+      // Two lines at most: long answers drop to the smaller size.
+      FontSize f = Canvas::textWidth(s, TXT_UNB34) > 2 * 220 ? TXT_UNB28 : TXT_UNB34;
+      c.textWrapped((int)x, (int)y - 26, 220, s, f, INK, Align::Center, 2, Canvas::lineHeight(f) * 6 / 5, true);
     }
-    // The answer floats up out of the dark.
-    uint16_t col = blend565(kBlack, kSky, (uint32_t)(clampf(fade_, 0, 1) * 255));
-    c.line(x - 150, y - 86, x + 150, y - 86, 2, blend565(kBlack, kDim, (uint32_t)(clampf(fade_, 0, 1) * 255)));
-    c.line(x - 150, y - 86, x, y + 150, 2, blend565(kBlack, kDim, (uint32_t)(clampf(fade_, 0, 1) * 255)));
-    c.line(x + 150, y - 86, x, y + 150, 2, blend565(kBlack, kDim, (uint32_t)(clampf(fade_, 0, 1) * 255)));
-    c.textWrapped((int)x, (int)y - 56, 190, kAnswers[answer_], FontSize::M, col, Align::Center, 4);
+    c.text(CX, 394, "спроси и встряхни", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override { if (e.g == Gesture::Tap) ask(a); }
   bool onMotion(App& a, MotionEvent m) override { if (m != MotionEvent::Shake) return false; ask(a); return true; }
+
  private:
   void ask(App& a) {
     if (shakeMs_ > 0) return;
@@ -234,21 +158,22 @@ class MagicBallScreen : public Screen {
     a.sfx.play("interactions/shake");
     a.react(Emotion::Curious, 1000);
   }
-  float fade_ = 0, shakeMs_ = 0;
+  float shakeMs_ = 0;
   int answer_ = -1;
 };
 
-// ---- Balance: keep the marble in the middle while a growing wind pushes it ------------------------
+static void secondsText(char* out, int cap, float ms) {
+  int tenths = (int)(ms / 100);
+  snprintf(out, cap, "%d,%d", tenths / 10, tenths % 10);
+}
+
+// ---- 29. balance: keep the ball in the circle while a growing wind pushes it ----------------------
 class BalanceScreen : public Screen {
  public:
-  void enter(App& a) override { running_ = false; over_ = false; ms_ = 0; a.react(Emotion::Focused, 1000); }
-  bool capturesSwipes() const override { return running_; }
+  void enter(App& a) override { phase_ = Ready; ms_ = 0; a.react(Emotion::Focused, 1000); }
+  bool capturesSwipes() const override { return phase_ == Run; }
   void tick(App& a, float dt) override {
-    char b[8];
-    snprintf(b, sizeof(b), "%d", (int)(ms_ / 1000));
-    num_.set(b);
-    num_.tick(dt);
-    if (!running_) return;
+    if (phase_ != Run) return;
     ms_ += dt;
     float h = dt * 0.001f, wind = 18 + ms_ * 0.004f, t = ms_ * 0.001f;
     float wx = (sinf(t * 0.9f + seed_) + 0.6f * sinf(t * 2.3f)) * wind, wy = (sinf(t * 1.1f + seed_ * 2) + 0.6f * sinf(t * 1.9f)) * wind;
@@ -256,47 +181,55 @@ class BalanceScreen : public Screen {
     vy_ += (a.hal.ay * 420 + wy - vy_ * 0.9f) * h;
     x_ += vx_ * h;
     y_ += vy_ * h;
-    float d = sqrtf(x_ * x_ + y_ * y_);
     a.anim.lookOffset(x_ * 0.2f, y_ * 0.15f, 120);
-    if (d > kLimit) {
-      running_ = false;
-      over_ = true;
+    if (sqrtf(x_ * x_ + y_ * y_) > kLimit) {
+      phase_ = Over;
       int secs = (int)(ms_ / 1000);
-      bool record = secs > a.settings.balanceBest;
-      if (record) { a.settings.balanceBest = (uint16_t)secs; a.saveSettings(); }
-      a.pet.event(record ? PetEvent::GameWin : PetEvent::GameLose);
-      a.sfx.play(record ? "games/win" : "games/wrong");
-      a.react(record ? Emotion::Proud : Emotion::Dizzy, 1800);
+      newRecord_ = secs > a.settings.balanceBest;
+      if (newRecord_) { a.settings.balanceBest = (uint16_t)secs; a.saveSettings(); }
+      a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::GameLose);
+      a.sfx.play(newRecord_ ? "games/win" : "games/wrong");
+      a.react(newRecord_ ? Emotion::Proud : Emotion::Dizzy, 1800);
     }
   }
   void draw(App& a, Canvas& c) override {
-    c.ring(kCx, kCy, kLimit + 11, 2, kDim);
-    c.ring(kCx, kCy, 34, 1.5f, kDark);
-    float d = sqrtf(x_ * x_ + y_ * y_);
-    c.fillCircle(kCx + x_, kCy + y_, 11, d > kLimit * 0.7f ? kRose : kWhite);
-    num_.draw(c, kCx, 72, 5, 1, kGray);
-    if (!running_) c.text(kCx, kCy + 50, over_ ? "Ещё раз?" : "Нажми и лови шар", FontSize::S, kGray, Align::Center);
-    miniFace(c, a, kCx, kScreenH - 50, 68);
+    char b[24], rec[32] = "";
+    if (a.settings.balanceBest) snprintf(rec, sizeof rec, "рекорд %d с", a.settings.balanceBest);
+    if (phase_ == Ready) { gameStart(c, a, "Баланс", "Держи шар в круге, ветер мешает", rec); return; }
+    secondsText(b, sizeof b, ms_);
+    if (phase_ == Over) { gameResult(c, a, b, newRecord_ ? "с · новый рекорд" : "с", newRecord_ ? Emotion::Proud : Emotion::Dizzy); return; }
+    c.ring(CX, CY, 190, 3, INK_3);
+    c.ring(CX, CY, 42, 4, ACCENT);
+    c.fillCircle(CX + x_, CY + y_, 22, INK);
+    int w1 = Canvas::textWidth(b, NUM_M40), w2 = Canvas::textWidth(" с", TXT_MIN), x = CX - (w1 + w2) / 2;
+    int base = 72 + Canvas::capBottom(NUM_M40);
+    c.text(x, 72, b, NUM_M40, INK);
+    c.text(x + w1, base - Canvas::capBottom(TXT_MIN), " с", TXT_MIN, INK_2);
+    if (ms_ < HINT_MS) c.text(CX, 300, "держи шар в круге", TXT_MIN, INK_2, Align::Center);
+    miniFace(c, a, CX, 350 + 50 * 176 / 354.f, 100);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap || running_) return;
-    running_ = true; over_ = false; ms_ = 0; x_ = y_ = vx_ = vy_ = 0; seed_ = a.rng.rangef(0, 6);
-    a.sfx.play("games/go");
+    if (e.g != Gesture::Tap || phase_ == Run) return;
+    if (phase_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+    if ((phase_ == Ready && kStartButton.hit(e.x, e.y)) || (phase_ == Over && kAgainButton.hit(e.x, e.y))) {
+      phase_ = Run; ms_ = 0; x_ = y_ = vx_ = vy_ = 0; seed_ = a.rng.rangef(0, 6); newRecord_ = false;
+      a.sfx.play("games/go");
+    }
   }
+
  private:
-  static constexpr float kLimit = 150;
-  DotText num_;
-  bool running_ = false, over_ = false;
+  static constexpr float kLimit = 190 - 22;  // the ball touches the border
+  enum Phase { Ready, Run, Over } phase_ = Ready;
   float ms_ = 0, x_ = 0, y_ = 0, vx_ = 0, vy_ = 0, seed_ = 0;
+  bool newRecord_ = false;
 };
 
-// ---- Duel: hold still, at the signal swing first. The pet has its own reaction time. ----------------
+// ---- 30. duel: hold still, at the signal swing first. The pet has its own reaction time. ------------
 class DuelScreen : public Screen {
  public:
   void enter(App& a) override { st_ = Idle; a.react(Emotion::Determined, 1200); }
   void tick(App& a, float dt) override {
-    float mag = a.motionMgr.lastMagnitude();
-    float dev = fabsf(mag - 1.f);
+    float dev = fabsf(a.motionMgr.lastMagnitude() - 1.f);
     switch (st_) {
       case Steady:
         steadyMs_ = dev < 0.12f ? steadyMs_ + dt : 0;
@@ -335,47 +268,58 @@ class DuelScreen : public Screen {
   void draw(App& a, Canvas& c) override {
     char b[40];
     switch (st_) {
-      case Idle: label(a, c, "Дуэль", "Возьми в руку и нажми"); break;
-      case Steady: label(a, c, "Держи ровно", "Не двигайся"); break;
-      case Wait: label(a, c, "Жди сигнала…", ""); break;
-      case Draw:
-        c.fillCircle(kCx, kCy, 205, kWhite);
-        c.text(kCx, kCy - 26, "РЫВОК!", FontSize::L, kBlack, Align::Center);
-        break;
-      case Foul: label(a, c, "Фальстарт", "Нажми, чтобы повторить"); break;
-      case Won: snprintf(b, sizeof(b), "%d мс", last_); label(a, c, "Попал первым", b); break;
-      case Lost: snprintf(b, sizeof(b), "%d мс против %d", last_, (int)petMs_); label(a, c, "Питомец быстрее", b); break;
+      case Idle:
+        a.face.drawMini(c, Emotion::Determined, CX - 140, 70, 280, INK);
+        ui::textCentered(c, CX, 240, "Дуэль", TXT_MENU_SEL, INK);
+        ui::textCentered(c, CX, 288, "возьми в руку, жди сигнал", TXT_MIN, INK_2);
+        kReady.draw(c, "Готов");
+        return;
+      case Steady:
+      case Wait:
+      case Draw: {
+        bool lit = st_ == Draw;  // the ring lights up, the screen is never flooded white
+        c.ring(CX, CY, 212, 16, lit ? ACCENT : TRACK_2);
+        a.face.drawMini(c, Emotion::Determined, CX - 100, 112, 200, INK);
+        ui::textCentered(c, CX, 250, lit ? "Рывок!" : st_ == Steady ? "Держи ровно" : "Жди…", TXT_MENU_SEL, lit ? ACCENT : INK);
+        if (!lit) ui::textCentered(c, CX, 300, st_ == Steady ? "не двигайся" : "кольцо загорится", TXT_MIN, INK_2);
+        return;
+      }
+      case Foul: gameResult(c, a, "Рано!", "двинулся до сигнала", Emotion::Smug); return;
+      case Won:
+        snprintf(b, sizeof b, "%d", last_);
+        gameResult(c, a, b, "мс · ты первый", Emotion::Terrified);
+        return;
+      case Lost:
+        if (last_) { snprintf(b, sizeof b, "%d", last_); gameResult(c, a, b, "мс · Питомец быстрее", Emotion::Proud); }
+        else gameResult(c, a, "Проспал", "Питомец быстрее", Emotion::Proud);
+        return;
     }
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap || st_ == Steady || st_ == Wait || st_ == Draw) return;
-    st_ = Steady;
-    steadyMs_ = 0;
-    a.sfx.play("system/click");
+    if (st_ != Idle && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+    if ((st_ == Idle && kReady.hit(e.x, e.y)) || (st_ != Idle && kAgainButton.hit(e.x, e.y))) {
+      st_ = Steady;
+      steadyMs_ = 0;
+      a.sfx.play("system/click");
+    }
   }
   bool capturesSwipes() const override { return st_ == Steady || st_ == Wait || st_ == Draw; }
   // The duel reads the raw movement itself: a swing here must not become a pet reaction.
   bool onMotion(App&, MotionEvent m) override { return m == MotionEvent::Shake || m == MotionEvent::Jerk; }
+
  private:
-  void label(App& a, Canvas& c, const char* t, const char* s) {
-    miniFace(c, a, kCx, 136, 212);
-    c.text(kCx, 238, t, FontSize::M, kWhite, Align::Center);
-    c.text(kCx, 276, s, FontSize::S, kGray, Align::Center);
-  }
+  const ui::Button kReady = ui::primary(CX, 330);
   enum State { Idle, Steady, Wait, Draw, Foul, Won, Lost } st_ = Idle;
   float steadyMs_ = 0, waitMs_ = 0, drawMs_ = 0, petMs_ = 0;
   int last_ = 0;
 };
 
-// ---- Shaker: as many strokes as possible in ten seconds -----------------------------------------------
+// ---- 31. shaker: as many shakes as possible in ten seconds ------------------------------------------
 class ShakerScreen : public Screen {
  public:
   void enter(App&) override { st_ = Idle; count_ = 0; }
   void tick(App& a, float dt) override {
-    char b[8];
-    snprintf(b, sizeof(b), "%d", count_);
-    num_.set(b);
-    num_.tick(dt * 3);
     if (st_ != Run) return;
     left_ -= dt;
     float mag = a.motionMgr.lastMagnitude();
@@ -383,40 +327,45 @@ class ShakerScreen : public Screen {
     if (!armed_ && mag < 1.2f) armed_ = true;
     if (left_ <= 0) {
       st_ = Done;
-      bool record = count_ > a.settings.shakerBest;
-      if (record) { a.settings.shakerBest = (uint16_t)count_; a.saveSettings(); }
+      newRecord_ = count_ > a.settings.shakerBest;
+      if (newRecord_) { a.settings.shakerBest = (uint16_t)count_; a.saveSettings(); }
       a.pet.event(PetEvent::Play);
-      a.sfx.play(record ? "games/win" : "games/draw");
-      a.react(record ? Emotion::Starstruck : Emotion::Happy, 2000);
+      a.sfx.play(newRecord_ ? "games/win" : "games/draw");
+      a.react(newRecord_ ? Emotion::Starstruck : Emotion::Happy, 2000);
     }
   }
   void draw(App& a, Canvas& c) override {
-    drawRimSquares(c, st_ == Run ? left_ / 10000 : 0, kSky);
-    num_.draw(c, kCx, kCy - 40, 10, 2, kWhite);
-    miniFace(c, a, kCx, 118, 119);
-    if (st_ != Run) {
-      char b[32];
-      snprintf(b, sizeof(b), "Рекорд %d", a.settings.shakerBest);
-      c.text(kCx, kCy + 66, b, FontSize::S, kGray, Align::Center);
-      c.text(kCx, kCy + 94, "Нажми и тряси 10 секунд", FontSize::S, kGray, Align::Center);
-    }
+    char b[32], rec[32] = "";
+    if (a.settings.shakerBest) snprintf(rec, sizeof rec, "рекорд %d", a.settings.shakerBest);
+    if (st_ == Idle) { gameStart(c, a, "Тряска", "Тряси устройство десять секунд", rec); return; }
+    snprintf(b, sizeof b, "%d", count_);
+    if (st_ == Done) { gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Starstruck : Emotion::Happy); return; }
+    ui::progressRing(c, 214, 10, left_ / 10000);
+    miniFace(c, a, CX, 84, 150);
+    ui::textCentered(c, CX, 186, b, NUM_XXL, INK);
+    snprintf(b, sizeof b, "Тряси! %d с", (int)(left_ / 1000) + 1);
+    ui::textCentered(c, CX, 296, b, TXT_BODY, ACCENT);
+    if (rec[0]) ui::textCentered(c, CX, 334, rec, TXT_MIN, INK_2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap || st_ == Run) return;
-    st_ = Run; count_ = 0; left_ = 10000; armed_ = true;
-    a.sfx.play("games/go");
+    if (st_ == Done && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+    if ((st_ == Idle && kStartButton.hit(e.x, e.y)) || (st_ == Done && kAgainButton.hit(e.x, e.y))) {
+      st_ = Run; count_ = 0; left_ = 10000; armed_ = true; newRecord_ = false;
+      a.sfx.play("games/go");
+    }
   }
   bool capturesSwipes() const override { return st_ == Run; }
   bool onMotion(App&, MotionEvent m) override { return st_ == Run && (m == MotionEvent::Shake || m == MotionEvent::Jerk); }
+
  private:
   enum State { Idle, Run, Done } st_ = Idle;
-  DotText num_;
   int count_ = 0;
   float left_ = 0;
-  bool armed_ = true;
+  bool armed_ = true, newRecord_ = false;
 };
 
-// ---- Safe: turn the device like a dial. The right spot clicks; a tap locks it. ---------------------------
+// ---- 32. safe: turn the device like a dial. The right spot clicks; a tap locks it. -----------------
 class SafeScreen : public Screen {
  public:
   void enter(App& a) override { start(a); }
@@ -430,25 +379,29 @@ class SafeScreen : public Screen {
     int tick = (int)floorf(dial_ / 6);
     if (tick != lastTick_ && !opened()) {
       lastTick_ = tick;
-      // Louder near the secret: the sound is the whole clue, as with a real safe.
+      // Louder near the secret: the sound is the whole clue, as with a real safe. The click itself startles.
       if (near() < 8) a.sfx.play("games/move");
+      if (near() < 3) a.react(Emotion::Surprised, 300);
     }
     if (near() < 3 && !opened()) a.anim.lookOffset(0, -8, 120);
     if (openMs_ > 0) { openMs_ -= dt; if (openMs_ <= 0) start(a); }
   }
   void draw(App& a, Canvas& c) override {
+    // The whole scale turns with the device; the pointer on top stays.
     for (int i = 0; i < 60; i++) {
       float ang = (i * 6 + dial_) * 0.0174533f, s = sinf(ang), co = -cosf(ang);
-      float r0 = i % 5 == 0 ? 186.f : 196.f;
-      c.line(kCx + s * r0, kCy + co * r0, kCx + s * 208, kCy + co * 208, i % 5 == 0 ? 3 : 1.5f, i % 5 == 0 ? kGray : kDim);
+      bool major = i % 5 == 0;
+      float r1 = major ? 203.f : 200.f, r0 = r1 - (major ? 22 : 14);
+      c.line(CX + s * r0, CY + co * r0, CX + s * r1, CY + co * r1, major ? 4 : 2, major ? INK_2 : INK_3);
     }
-    c.fillCircle(kCx, 14, 5, near() < 3 ? kMint : kDim);
+    c.roundRect(CX - 4, 12, 8, 34, 4, ACCENT);
+    miniFace(c, a, CX, 130 + 75 * 176 / 354.f, 150);
     for (int i = 0; i < 3; i++) {
-      float x = kCx - 40 + i * 40;
-      if (i < stage_) c.fillCircle(x, kCy + 70, 9, kMint); else c.ring(x, kCy + 70, 9, 2, kDim);
+      float x = CX - 44 + i * 44;
+      if (i < stage_) c.fillCircle(x, 241, 13, INK);
+      else c.ring(x, 241, 12, 2, INK_3);
     }
-    miniFace(c, a, kCx, kCy - 26, 178);
-    c.text(kCx, kCy + 100, opened() ? "Открыто!" : "Нажми на щелчке", FontSize::S, opened() ? kMint : kGray, Align::Center);
+    ui::textCentered(c, CX, 292, opened() ? "Открыто!" : "крути и жди щелчка", TXT_MIN, opened() ? ACCENT : INK_2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap || opened()) return;
@@ -457,34 +410,32 @@ class SafeScreen : public Screen {
       if (++stage_ == 3) {
         a.sfx.play("games/win");
         a.pet.event(PetEvent::GameWin);
-        a.react(Emotion::Starstruck, 1800);
+        a.react(Emotion::Starstruck, 1800, EmotionPriority::Strong);  // stronger than the click's short surprise
         openMs_ = 2000;
-      } else { secret_ = a.rng.rangef(0, 360); a.react(Emotion::Sneaky, 900); }
+      } else { secret_ = a.rng.rangef(0, 360); a.react(Emotion::Sneaky, 900, EmotionPriority::Strong); }
     } else {
       a.sfx.play("games/wrong");
       a.react(Emotion::Suspicious, 800);
     }
   }
+
  private:
   bool opened() const { return stage_ >= 3; }
   float near() const { return fabsf(fmodf(dial_ - secret_ + 540.f, 360.f) - 180.f); }
-  void start(App& a) { stage_ = 0; secret_ = a.rng.rangef(0, 360); openMs_ = 0; a.react(Emotion::Sneaky, 1200); }
+  void start(App& a) { stage_ = 0; secret_ = a.rng.rangef(0, 360); openMs_ = 0; a.react(Emotion::Focused, 1200); }
   float dial_ = 0, secret_ = 0, openMs_ = 0;
   int stage_ = 0, lastTick_ = 0;
 };
 
-// ---- Workout: the device in hand counts repetitions from acceleration peaks ---------------------------------
+// ---- 33. workout: the device in hand counts repetitions from acceleration peaks ---------------------
 struct Exercise { const char* name; int reps; };
 static const Exercise kExercises[] = {{"Прыжки", 10}, {"Приседания", 10}, {"Махи руками", 12}, {"Шаги на месте", 20}};
+static constexpr int kExerciseCount = sizeof(kExercises) / sizeof(kExercises[0]);
 
 class WorkoutScreen : public Screen {
  public:
   void enter(App& a) override { i_ = 0; reps_ = 0; finished_ = false; a.react(Emotion::Determined, 1200); }
   void tick(App& a, float dt) override {
-    char b[8];
-    snprintf(b, sizeof(b), "%d", reps_);
-    num_.set(b);
-    num_.tick(dt * 3);
     if (finished_) return;
     refract_ -= dt;
     float mag = a.motionMgr.lastMagnitude();
@@ -500,33 +451,38 @@ class WorkoutScreen : public Screen {
     if (!armed_ && mag < 1.12f) armed_ = true;
   }
   void draw(App& a, Canvas& c) override {
-    const int n = sizeof(kExercises) / sizeof(kExercises[0]);
     if (finished_) {
-      a.face.draw(c, a.anim, a.eyeColor());
-      c.text(kCx, kCy + 90, "Отлично потренировались!", FontSize::S, kMint, Align::Center);
+      char b[8];
+      snprintf(b, sizeof b, "%d", kExerciseCount);
+      gameResult(c, a, b, "упражнения · отлично!", Emotion::Proud);
       return;
     }
-    drawRimSquares(c, (float)reps_ / kExercises[i_].reps, kMint);
-    miniFace(c, a, kCx, 112, 144);
-    c.text(kCx, 164, kExercises[i_].name, FontSize::M, kWhite, Align::Center);
-    num_.draw(c, kCx, 212, 9, 2, kWhite);
-    char b[32];
-    snprintf(b, sizeof(b), "из %d  ·  %d/%d", kExercises[i_].reps, i_ + 1, n);
-    c.text(kCx, 300, b, FontSize::S, kGray, Align::Center);
-    c.text(kCx, 340, "Нажми, чтобы пропустить", FontSize::S, kDim, Align::Center);
+    ui::progressRing(c, 214, 10, (float)reps_ / kExercises[i_].reps);
+    ui::textCentered(c, CX, 99, kExercises[i_].name, TXT_TITLE, INK);
+    char b[48];
+    snprintf(b, sizeof b, "%d", reps_);
+    ui::textCentered(c, CX, 182, b, NUM_XXL, INK);
+    snprintf(b, sizeof b, "из %d · упражнение %d из %d", kExercises[i_].reps, i_ + 1, kExerciseCount);
+    ui::textCentered(c, CX, 274, b, TXT_CAP, INK_2);
+    skip_.draw(c, "Пропустить");
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap) return;
-    if (finished_) { enter(a); return; }
-    next(a);
+    if (finished_) {
+      if (kExitButton.hit(e.x, e.y)) a.goBack();
+      else if (kAgainButton.hit(e.x, e.y)) enter(a);
+      return;
+    }
+    if (skip_.hit(e.x, e.y)) next(a);
   }
   bool onMotion(App&, MotionEvent m) override { return !finished_ && (m == MotionEvent::Shake || m == MotionEvent::Jerk || m == MotionEvent::Lifted); }
+
  private:
   void next(App& a) {
     i_++;
     reps_ = 0;
     a.sfx.play("games/correct");
-    if (i_ >= (int)(sizeof(kExercises) / sizeof(kExercises[0]))) {
+    if (i_ >= kExerciseCount) {
       finished_ = true;
       a.pet.stats.energy = clampf(a.pet.stats.energy - 6, 0, 100);
       a.pet.stats.happiness = clampf(a.pet.stats.happiness + 12, 0, 100);
@@ -537,23 +493,19 @@ class WorkoutScreen : public Screen {
       a.react(Emotion::Proud, 2500);
     } else a.react(Emotion::Happy, 800);
   }
-  DotText num_;
+  const ui::Button skip_ = ui::pill(CX, 318, 180);
   int i_ = 0, reps_ = 0;
   float refract_ = 0;
   bool armed_ = true, finished_ = false;
 };
 
-// ---- Mole: little eyes peek out of holes around the rim -------------------------------------------------------
+// ---- 34. mole: the character peeks out of holes around the rim --------------------------------------
 class MoleScreen : public Screen {
  public:
-  void enter(App&) override { running_ = false; score_ = 0; }
-  bool capturesSwipes() const override { return running_; }
+  void enter(App&) override { phase_ = Ready; score_ = 0; }
+  bool capturesSwipes() const override { return phase_ == Run; }
   void tick(App& a, float dt) override {
-    char b[8];
-    snprintf(b, sizeof(b), "%d", score_);
-    num_.set(b);
-    num_.tick(dt * 2);
-    if (!running_) return;
+    if (phase_ != Run) return;
     left_ -= dt;
     upMs_ -= dt;
     if (upMs_ <= 0) {
@@ -563,33 +515,45 @@ class MoleScreen : public Screen {
       lifeMs_ = upMs_ = lerpf(1100, 480, clampf(score_ / 30.f, 0, 1));
     }
     if (left_ <= 0) {
-      running_ = false;
-      bool record = score_ > a.settings.moleBest;
-      if (record) { a.settings.moleBest = (uint16_t)score_; a.saveSettings(); }
-      a.pet.event(record ? PetEvent::GameWin : PetEvent::Play);
-      a.sfx.play(record ? "games/win" : "games/draw");
-      a.react(record ? Emotion::Proud : Emotion::Happy, 1800);
+      phase_ = Over;
+      newRecord_ = score_ > a.settings.moleBest;
+      if (newRecord_) { a.settings.moleBest = (uint16_t)score_; a.saveSettings(); }
+      a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::Play);
+      a.sfx.play(newRecord_ ? "games/win" : "games/draw");
+      a.react(newRecord_ ? Emotion::Proud : Emotion::Happy, 1800);
     }
   }
   void draw(App& a, Canvas& c) override {
+    char b[24], rec[32] = "";
+    if (a.settings.moleBest) snprintf(rec, sizeof rec, "рекорд %d", a.settings.moleBest);
+    if (phase_ == Ready) { gameStart(c, a, "Крот", "Тапни, когда он выглянет из норки", rec); return; }
+    snprintf(b, sizeof b, "%d", score_);
+    if (phase_ == Over) { gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Proud : Emotion::Happy); return; }
     for (int i = 0; i < kHoles; i++) {
       float x, y;
       pos(i, &x, &y);
-      c.ring(x, y, 34, 2, kDark);
-      if (running_ && i == at_) {
+      if (i == at_) {
         float pop = smooth01((lifeMs_ - upMs_) / 120) * smooth01(upMs_ / 100);
-        c.fillCircle(x - 13, y, 11 * pop, kRose);
-        c.fillCircle(x + 13, y, 11 * pop, kRose);
-        c.fillCircle(x - 13, y + 2, 4 * pop, kBlack);
-        c.fillCircle(x + 13, y + 2, 4 * pop, kBlack);
-      }
+        c.fillCircle(x, y, 38, SURFACE);
+        c.ring(x, y, 36.5f, 3, ACCENT);
+        if (pop > 0.05f) a.face.drawMini(c, Emotion::Mischievous, x - 29 * pop, y - 14 * pop, 58 * pop, INK);
+      } else c.ring(x, y, 37, 2, INK_3);
     }
-    num_.draw(c, kCx, kCy - 20, 6, 1, kWhite);
-    if (!running_) c.text(kCx, kCy + 34, "Нажми", FontSize::S, kGray, Align::Center);
+    ui::textCentered(c, CX, CY - 8, b, NUM_L56, INK);
+    int s = (int)(left_ / 1000) + 1;
+    snprintf(b, sizeof b, "0:%02d", s);
+    ui::textCentered(c, CX, CY + 40, b, TXT_MIN, INK_2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap) return;
-    if (!running_) { running_ = true; score_ = 0; left_ = 25000; at_ = -1; upMs_ = 400; lifeMs_ = 400; a.sfx.play("games/go"); return; }
+    if (phase_ != Run) {
+      if (phase_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+      if ((phase_ == Ready && kStartButton.hit(e.x, e.y)) || (phase_ == Over && kAgainButton.hit(e.x, e.y))) {
+        phase_ = Run; score_ = 0; left_ = 25000; at_ = -1; upMs_ = 400; lifeMs_ = 400; newRecord_ = false;
+        a.sfx.play("games/go");
+      }
+      return;
+    }
     if (at_ < 0) return;
     float x, y;
     pos(at_, &x, &y);
@@ -601,13 +565,122 @@ class MoleScreen : public Screen {
       a.react(Emotion::Mischievous, 500);
     }
   }
+
  private:
   static constexpr int kHoles = 8;
-  static void pos(int i, float* x, float* y) { float a = i * 0.7854f; *x = kCx + sinf(a) * 150; *y = kCy - cosf(a) * 150; }
-  DotText num_;
-  bool running_ = false;
+  static void pos(int i, float* x, float* y) { float a = i * 0.7854f; *x = CX + sinf(a) * 150; *y = CY - cosf(a) * 150; }
+  enum Phase { Ready, Run, Over } phase_ = Ready;
   int score_ = 0, at_ = -1;
   float left_ = 0, upMs_ = 0, lifeMs_ = 1;
+  bool newRecord_ = false;
+};
+
+// ---- 35. twenty-one, played entirely on the device; the pet is the dealer -----------------------------
+class BlackjackScreen : public Screen {
+ public:
+  void enter(App& a) override { if (g_.phase() == BlackjackGame::Phase::Done) start(a); }
+  void tick(App& a, float dt) override {
+    if (g_.phase() != BlackjackGame::Phase::Dealer) return;
+    stepMs_ -= dt;
+    if (stepMs_ > 0) return;
+    stepMs_ = 650;  // the dealer turns cards one at a time, the pause is the tension
+    if (g_.dealerStep()) { a.sfx.play("games/move"); return; }
+    finish(a);
+  }
+  void draw(App& a, Canvas& c) override {
+    bool hide = g_.phase() == BlackjackGame::Phase::Player;
+    char b[40];
+    miniFace(c, a, CX, 38 + 65 * 176 / 354.f, 130);
+    // Dealer above, small; the second card stays face down until the player stands.
+    float right = row(c, 112, 50, 68, g_.dealerCount(), false, hide ? 1 : -1);
+    if (!hide) {
+      snprintf(b, sizeof b, "%d", g_.dealerValue());
+      c.text((int)right + 14, 112 + 34 - Canvas::capMiddle(TXT_MIN), b, TXT_MIN, INK_2);
+    }
+    right = row(c, 202, 82, 114, g_.playerCount(), true, -1);
+    snprintf(b, sizeof b, "%d", g_.playerValue());
+    c.text((int)right + 16, 202 + 57 - Canvas::capMiddle(NUM_M40), b, NUM_M40, g_.playerValue() > 21 ? ACCENT_2 : INK);
+    switch (g_.phase()) {
+      case BlackjackGame::Phase::Player:
+        hit_.draw(c, "Ещё");
+        stand_.draw(c, "Хватит");
+        break;
+      case BlackjackGame::Phase::Dealer:
+        ui::textCentered(c, CX, 356, "дилер ходит…", TXT_MIN, INK_2);
+        break;
+      case BlackjackGame::Phase::Done:
+        ui::textCentered(c, CX, 334, result(), TXT_CAP, g_.outcome() > 0 ? ACCENT : g_.outcome() < 0 ? ACCENT_2 : INK_2);
+        snprintf(b, sizeof b, g_.broke() ? "фишки кончились · нажми" : "фишки %d · нажми", g_.chips());
+        ui::textCentered(c, CX, 368, b, TXT_MIN, INK_2);
+        break;
+    }
+  }
+  void onGesture(App& a, const GestureEvent& e) override {
+    if (e.g == Gesture::SwipeUp && g_.phase() == BlackjackGame::Phase::Player) { stand(a); return; }
+    if (e.g != Gesture::Tap) return;
+    switch (g_.phase()) {
+      case BlackjackGame::Phase::Done: start(a); break;
+      case BlackjackGame::Phase::Player:
+        if (hit_.hit(e.x, e.y)) {
+          g_.hit();
+          a.sfx.play("games/move");
+          if (g_.phase() == BlackjackGame::Phase::Done) finish(a);
+          else if (g_.phase() == BlackjackGame::Phase::Dealer) stepMs_ = 500;
+          else if (g_.playerValue() >= 17) a.react(Emotion::Thinking, 900);
+        } else if (stand_.hit(e.x, e.y)) stand(a);
+        break;
+      default: break;
+    }
+  }
+  bool capturesSwipes() const override { return g_.phase() == BlackjackGame::Phase::Player; }
+
+ private:
+  static void label(const BlackjackGame::Card& k, char* out) {
+    static const char suits[] = "shdc";
+    const char* names[] = {"J", "Q", "K", "A"};
+    if (k.rank <= 10) snprintf(out, 6, "%d%c", k.rank, suits[k.suit]);
+    else snprintf(out, 6, "%s%c", names[k.rank - 11], suits[k.suit]);
+  }
+  // A row centred a little left of the middle, the total beside it. Cards close up as the hand grows.
+  // Returns the right edge of the last card.
+  float row(Canvas& c, float top, float w, float h, int n, bool player, int hidden) {
+    float step = n > 1 ? fminf(w + 8, 200.f / (n - 1)) : 0;
+    float x0 = CX - 24 - (step * (n - 1) + w) / 2;
+    char l[6];
+    for (int i = 0; i < n; i++) {
+      label(player ? g_.playerCard(i) : g_.dealerCard(i), l);
+      ui::card(c, x0 + i * step, top, w, h, l, i != hidden, true, player ? 3 : 2);
+    }
+    return x0 + step * (n - 1) + w;
+  }
+  const char* result() const {
+    if (g_.natural() && g_.outcome() > 0) return "Двадцать одно!";
+    if (g_.playerValue() > 21) return "Перебор";
+    return g_.outcome() > 0 ? "Победа" : g_.outcome() < 0 ? "Дилер выиграл" : "Ничья";
+  }
+  void start(App& a) {
+    if (g_.chips() < BlackjackGame::kBet) g_.resetChips();
+    g_.deal(a.rng);
+    a.sfx.play("games/go");
+    a.react(Emotion::Suspicious, 900);
+    stepMs_ = 700;
+  }
+  void stand(App& a) {
+    g_.stand();
+    stepMs_ = 500;
+    a.sfx.play("system/click");
+    a.react(Emotion::Attentive, 1000);
+  }
+  void finish(App& a) {
+    int o = g_.outcome();
+    a.pet.event(o > 0 ? PetEvent::GameLose : o < 0 ? PetEvent::GameWin : PetEvent::Play);  // the pet plays the dealer's side
+    a.sfx.play(o > 0 ? "games/win" : o < 0 ? "games/lose" : "games/draw");
+    a.react(o > 0 ? Emotion::Amazed : o < 0 ? Emotion::Smug : Emotion::Skeptical, 2000, EmotionPriority::Strong);
+  }
+  const ui::Button hit_ = ui::primary(180, 338);
+  const ui::Button stand_ = ui::secondary(290, 348);
+  BlackjackGame g_;
+  float stepMs_ = 0;
 };
 
 // ---- Controller: the phone hosts the game, this screen is the gamepad ----------------------------------------------
@@ -648,108 +721,6 @@ static void drawCard(Canvas& c, float x, float y, float w, float h, const char* 
   suitShape(c, suit, x, y + h * 0.22f, r, col);
   if (marked) c.fillCircle(x, y - h / 2 - 11, 5, kMint);
 }
-
-// ---- Twenty-one, played entirely on the device --------------------------------------------------------------------
-class BlackjackScreen : public Screen {
- public:
-  void enter(App& a) override { if (g_.phase() == BlackjackGame::Phase::Done) start(a); }
-  void tick(App& a, float dt) override {
-    if (g_.phase() != BlackjackGame::Phase::Dealer) return;
-    stepMs_ -= dt;
-    if (stepMs_ > 0) return;
-    stepMs_ = 650;   // the dealer turns cards one at a time, the pause is the tension
-    if (g_.dealerStep()) { a.sfx.play("games/move"); return; }
-    finish(a);
-  }
-  void draw(App& a, Canvas& c) override {
-    bool hide = g_.phase() == BlackjackGame::Phase::Player;
-    char b[32];
-    // Dealer, upper row: the second card stays face down until the player stands.
-    row(c, 92, 50, 70, g_.dealerCount(), [&](int i, char* out) { label(g_.dealerCard(i), out); }, hide ? 1 : -1);
-    snprintf(b, sizeof(b), hide ? "Дилер" : "Дилер: %d", g_.dealerValue());
-    c.text(kCx, 134, b, FontSize::S, kGray, Align::Center);
-    miniFace(c, a, kCx, 178, 68);
-    // Player, lower row: bigger, the cards are what matters here.
-    row(c, 260, 62, 88, g_.playerCount(), [&](int i, char* out) { label(g_.playerCard(i), out); }, -1);
-    snprintf(b, sizeof(b), "%d", g_.playerValue());
-    c.text(kCx, 310, b, FontSize::M, g_.playerValue() > 21 ? kRose : kWhite, Align::Center);
-    if (g_.phase() == BlackjackGame::Phase::Done) {
-      c.text(kCx, 346, result(), FontSize::M, g_.outcome() > 0 ? kMint : g_.outcome() < 0 ? kRose : kSoft, Align::Center);
-      snprintf(b, sizeof(b), g_.broke() ? "Фишки кончились · нажми" : "Фишки %d · нажми", g_.chips());
-      c.text(kCx, 382, b, FontSize::S, kGray, Align::Center);
-    } else if (g_.phase() == BlackjackGame::Phase::Player) {
-      drawButton(c, kHit, "Ещё", true);
-      drawButton(c, kStand, "Хватит");
-      snprintf(b, sizeof(b), "%d", g_.chips());
-      c.text(kCx, 28, b, FontSize::S, kDim, Align::Center);
-    } else c.text(kCx, 352, "Дилер ходит…", FontSize::S, kGray, Align::Center);
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g == Gesture::SwipeUp && g_.phase() == BlackjackGame::Phase::Player) { stand(a); return; }
-    if (e.g != Gesture::Tap) return;
-    switch (g_.phase()) {
-      case BlackjackGame::Phase::Done: start(a); break;
-      case BlackjackGame::Phase::Player:
-        if (kHit.hit(e.x, e.y)) {
-          g_.hit();
-          a.sfx.play("games/move");
-          if (g_.phase() == BlackjackGame::Phase::Done) finish(a);
-          else if (g_.phase() == BlackjackGame::Phase::Dealer) stepMs_ = 500;
-          else if (g_.playerValue() >= 17) a.react(Emotion::Thinking, 900);
-        } else if (kStand.hit(e.x, e.y)) stand(a);
-        break;
-      default: break;
-    }
-  }
-  bool capturesSwipes() const override { return g_.phase() == BlackjackGame::Phase::Player; }
- private:
-  static constexpr Button kHit{kCx - 62, 366, 44}, kStand{kCx + 62, 366, 44};
-  static void label(const BlackjackGame::Card& k, char* out) {
-    static const char suits[] = "shdc";
-    const char* names[] = {"J", "Q", "K", "A"};
-    if (k.rank <= 10) snprintf(out, 6, "%d%c", k.rank, suits[k.suit]);
-    else snprintf(out, 6, "%s%c", names[k.rank - 11], suits[k.suit]);
-  }
-  template <typename F>
-  static void row(Canvas& c, float y, float w, float h, int n, F labelOf, int hidden) {
-    // Cards close up as the hand grows, so even a long hand stays inside the circle.
-    float step = n > 1 ? (w + 6 < 230.f / (n - 1) ? w + 6 : 230.f / (n - 1)) : 0;
-    float x0 = kCx - step * (n - 1) / 2;
-    char l[6];
-    for (int i = 0; i < n; i++) {
-      labelOf(i, l);
-      if (i == hidden) { c.roundRect(x0 + i * step - w / 2, y - h / 2, w, h, 8, kDim); c.ring(x0 + i * step, y, w * 0.2f, 2, kGray); }
-      else drawCard(c, x0 + i * step, y, w, h, l, true, false);
-    }
-  }
-  const char* result() const {
-    if (g_.natural() && g_.outcome() > 0) return "Двадцать одно!";
-    if (g_.playerValue() > 21) return "Перебор";
-    return g_.outcome() > 0 ? "Победа" : g_.outcome() < 0 ? "Дилер выиграл" : "Ничья";
-  }
-  void start(App& a) {
-    if (g_.chips() < BlackjackGame::kBet) g_.resetChips();
-    g_.deal(a.rng);
-    a.sfx.play("games/go");
-    a.react(Emotion::Focused, 900);
-    stepMs_ = 700;
-  }
-  void stand(App& a) {
-    g_.stand();
-    stepMs_ = 500;
-    a.sfx.play("system/click");
-    a.react(Emotion::Attentive, 1000);
-  }
-  void finish(App& a) {
-    int o = g_.outcome();
-    a.pet.event(o > 0 ? PetEvent::GameLose : o < 0 ? PetEvent::GameWin : PetEvent::Play);  // the pet plays the dealer's side
-    a.sfx.play(o > 0 ? "games/win" : o < 0 ? "games/lose" : "games/draw");
-    a.react(o > 0 ? Emotion::Amazed : o < 0 ? Emotion::Smug : Emotion::Skeptical, 2000, EmotionPriority::Strong);
-  }
-  BlackjackGame g_;
-  float stepMs_ = 0;
-};
-constexpr Button BlackjackScreen::kHit, BlackjackScreen::kStand;
 
 class ControllerScreen : public Screen {
  public:

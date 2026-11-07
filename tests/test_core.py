@@ -14,6 +14,7 @@ from emulator.simulation.sensors import ImuSimulator, MicSimulator  # noqa: E402
 
 EMOTIONS = emotion_names()
 INK = 0xF79D          # theme::INK, the colour of the eyes and of main text
+ACCENT = 0xADBB       # theme::ACCENT
 POSE_FIELDS = 7       # EyePose of design 1a: t, a, b, px, py, s, pr
 REQUIRED = ["neutral", "happy", "very_happy", "sad", "angry", "annoyed", "surprised", "curious", "thinking", "sleepy", "sleeping",
             "waking_up", "scared", "affection", "bored", "attentive", "confused", "excited",
@@ -797,8 +798,8 @@ def test_snake_rules():
     assert lib().cc_snake_selftest(9) == 0
 
 
-def centroid_of_white(fb, y_max=400):
-    ys, xs = np.nonzero(fb[:y_max] == 0xFFFF)
+def centroid_of_white(fb, y_max=380):
+    ys, xs = np.nonzero(fb[:y_max] == INK)  # the ball; the mini face sits below y_max
     return xs.mean(), ys.mean(), len(xs)
 
 
@@ -818,19 +819,21 @@ def test_maze_screen_tilts_the_ball(c):
 
 
 def test_orbit_game_scores_or_ends(c):
+    """Design 1a orbit: points come one per block passed, never by themselves; without jumping the runner crashes."""
     c.handle_command({"type": "screen", "value": "orbit"})
     c.run(300)
-    tap(c)
-    c.run(9000)
-    assert (c.render() != 0).sum() > 100
-    tap(c)   # restarts after a miss, ignored while playing
-    c.run(500)
-
-
+    tap(c, 233, 372)          # "Старт"
+    c.mix(32000)
+    n0 = c.play_count()
+    for _ in range(45):       # 0.9 s: the first block is still ahead
+        c.tick(20); c.mix(320)
+    assert c.play_count() - n0 <= 1, "no points before the first block"
+    c.run(6000)
+    assert (c.render() == ACCENT).sum() > 3000, "crashed into a block: the result ring is up"
 def test_simon_sequence_lights_and_rejects_wrong(c):
     c.handle_command({"type": "screen", "value": "simon"})
     c.run(300); c.mix(32000)
-    tap(c)
+    tap(c, 233, 372)  # "Старт" of the start template
     n0 = c.play_count()
     for _ in range(200):
         c.tick(20); c.mix(320)
@@ -940,17 +943,17 @@ def test_coin_finishes_and_counts_either_side():
 def test_duel_false_start_then_win(c):
     c.handle_command({"type": "screen", "value": "duel"})
     c.run(300)
-    tap(c)
+    tap(c, 233, 376)                  # "Готов"
     still(c, 1000)
     c.imu(2.5, 0, 1, 300, 0, 0, 20)   # moving before the signal
     c.tick(20)
     still(c, 200)
     assert emotion(c) == "smug", "the pet gloats over a false start"
-    tap(c)
+    tap(c, 280, 356)                  # "Ещё"
     still(c, 1000)
-    for _ in range(400):              # wait for the white disc of the signal
+    for _ in range(400):              # wait for the ring of the signal: it lights up, the screen is never flooded
         still(c, 20)
-        if (c.render() == 0xFFFF).mean() > 0.4:
+        if (c.render() == ACCENT).sum() > 2000:
             break
     else:
         pytest.fail("no signal")
@@ -963,7 +966,7 @@ def test_duel_false_start_then_win(c):
 def test_shaker_counts_strokes_not_samples(c):
     c.handle_command({"type": "screen", "value": "shaker"})
     c.run(300)
-    tap(c)
+    tap(c, 233, 372)  # "Старт"
     c.mix(32000)
     n0 = c.play_count()
     for _ in range(12):
@@ -991,7 +994,7 @@ def test_workout_can_be_finished_and_rewards(tmp_path):
     c.handle_command({"type": "screen", "value": "workout"})
     c.run(300)
     for _ in range(4):
-        tap(c); c.run(200)
+        tap(c, 233, 354); c.run(200)   # "Пропустить"
     assert c.state()["stress"] <= 36
     c.close()
 
@@ -1359,7 +1362,9 @@ def test_blackjack_many_rounds_refill_chips_when_broke(c):
 def test_blackjack_opens_from_the_games_list(c):
     c.handle_command({"type": "screen", "value": "games"})
     c.run(300)
-    tap(c, 233, 233 + 140)   # third row
+    tap(c, 233, 233 + 128)   # third row comes to the centre
+    c.run(400)
+    tap(c)                   # and opens
     c.run(300)
     assert c.state()["screen"] == "blackjack"
 
@@ -1377,24 +1382,25 @@ def test_two_cards_are_both_big_and_tilt_selects_nothing(c):
 
 
 def test_blackjack_rank_and_suit_do_not_touch():
-    """A clear row of card background must separate the letter from the suit, for every card dealt."""
+    """Clear card background must separate the rank from the suit, for every card dealt."""
+    SURFACE = 0x10A2
     for seed in range(1, 25):
         c = Companion(seed=seed)
         c.run(500)
         c.handle_command({"type": "screen", "value": "blackjack"})
         c.run(400)
         fb = c.render()
-        # The dealer's open card: 50x70 at the left of the two card row.
-        x0, y0 = 233 - 28, 92
-        card = fb[y0 - 33:y0 + 33, x0 - 20:x0 + 20]
-        ink = (card != 0xFFFF).any(axis=1)
+        # The dealer's open card: 50 x 68 at the left of the two card row, top at y 112.
+        x0, y0 = 155, 112
+        card = fb[y0 + 6:y0 + 62, x0 + 6:x0 + 44]
+        ink = (card != SURFACE).any(axis=1)
         blocks = (ink[1:] & ~ink[:-1]).sum() + int(ink[0])
         assert blocks >= 2, f"seed {seed}: rank and suit merged into one block"
         c.close()
 
 
-def test_coin_is_detailed_and_sides_differ():
-    """The coin must show relief: many shades on the face, and heads must not look like tails."""
+def test_coin_has_two_sides_and_rests_still():
+    """Design 1a: a flat coin, dark with a bright rim, its side written on it; heads and tails differ."""
     seen = {}
     for seed in range(1, 10):
         c = Companion(seed=seed)
@@ -1402,11 +1408,9 @@ def test_coin_is_detailed_and_sides_differ():
         c.run(300)
         tap(c)
         c.run(2000)
-        face = c.render()[233 - 16 - 80:233 - 16 + 80, 233 - 80:233 + 80].copy()
+        face = c.render()[200 - 80:200 + 80, 233 - 80:233 + 80].copy()
         seen[face.tobytes()] = face
         c.close()
     assert len(seen) == 2, "exactly two faces, and the coin at rest does not flicker"
     a, b = seen.values()
-    assert (a != b).mean() > 0.1
-    for face in (a, b):
-        assert len(set(face.ravel().tolist())) >= 6
+    assert (a != b).mean() > 0.01, "the word differs"

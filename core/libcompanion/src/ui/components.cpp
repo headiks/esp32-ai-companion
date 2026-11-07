@@ -120,6 +120,25 @@ void card(Canvas& c, float x, float y, float w, float h, const char* label, bool
   drawSuit(c, suit, x + w / 2, y + h * 0.7f, w * 0.3f, ink);
 }
 
+// ---- ellipse ----------------------------------------------------------------------------------------
+
+struct EllipseSpan { float cx, cy, rx, ry; };
+static int ellipseRows(float sy, float* xs, int, const void* ctx) {
+  const EllipseSpan& e = *(const EllipseSpan*)ctx;
+  float d = (sy - e.cy) / e.ry, q = 1 - d * d;
+  if (q <= 0) return 0;
+  float hw = e.rx * sqrtf(q);
+  xs[0] = e.cx - hw;
+  xs[1] = e.cx + hw;
+  return 1;
+}
+
+void ellipse(Canvas& c, float cx, float cy, float rx, float ry, uint16_t color) {
+  if (rx < 0.5f || ry < 0.5f) return;
+  EllipseSpan e{cx, cy, rx, ry};
+  c.spans(cy - ry, cy + ry, cx - rx, cx + rx, color, ellipseRows, &e);
+}
+
 // ---- weather pieces -------------------------------------------------------------------------------
 
 void cloud(Canvas& c, float x, float y, float s, uint16_t color) {

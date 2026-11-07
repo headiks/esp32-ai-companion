@@ -1,14 +1,19 @@
-// Games made for a round, tiltable, touch screen: maze, orbit pong, snake from squares, Simon on the rim.
-#include "companion/games.h"
-#include "ui.h"
+// Design 1a: maze (19), orbit (20), snake (21) and Simon, "Повтори" (22).
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include "companion/games.h"
+#include "ui.h"
 
 namespace cc {
+using namespace theme;
 
-static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
+static void record(char* out, int cap, int best, const char* unit = "") {
+  if (best > 0) snprintf(out, cap, "рекорд %d%s", best, unit);
+  else out[0] = 0;
+}
 
-// Maze: the board is the inscribed square of the circle, the ball rolls with the device.
+// ---- 19. maze: the board is a 300 px square, the ball rolls with the device ------------------------
 class MazeScreen : public Screen {
  public:
   void enter(App& a) override {
@@ -32,7 +37,7 @@ class MazeScreen : public Screen {
     if (was - m_.speed() > 1.6f && cooldown_ <= 0) { a.sfx.play("games/bounce"); a.anim.kick(-0.1f); cooldown_ = 180; }
     if (cooldown_ > 0) cooldown_ -= dt;
     float sc = cell();
-    a.anim.lookAt(ox() + m_.x() * sc, oy() + m_.y() * sc, 200);
+    a.anim.lookAt(kX0 + m_.x() * sc, kY0 + m_.y() * sc, 200);
     if (m_.won()) {
       winMs_ = 0;
       a.sfx.play("games/win");
@@ -42,170 +47,207 @@ class MazeScreen : public Screen {
   }
   void draw(App& a, Canvas& c) override {
     const float sc = cell();
-    const int x0 = (int)ox(), y0 = (int)oy(), n = m_.size(), s = (int)sc;
-    // Plain rectangles: walls are axis-aligned and the whole board redraws every frame.
-    for (int y = 0; y < n; y++) {
-      if (!c.intersects(0, y0 + y * s - 2, kScreenW, s + 4)) continue;
-      for (int x = 0; x < n; x++) {
-        int px = x0 + x * s, py = y0 + y * s;
-        if (m_.wall(x, y, MazeGame::N)) c.fillRect(px - 1, py - 1, s + 3, 3, kGray);
-        if (m_.wall(x, y, MazeGame::W)) c.fillRect(px - 1, py - 1, 3, s + 3, kGray);
-        if (x == n - 1) c.fillRect(px + s - 1, py - 1, 3, s + 3, kGray);
-        if (y == n - 1) c.fillRect(px - 1, py + s - 1, s + 3, 3, kGray);
+    const int n = m_.size();
+    char b[24];
+    snprintf(b, sizeof b, "уровень %d", level_ + 1);
+    c.text(CX, 36, b, TXT_MIN, INK_2, Align::Center);
+    // Walls: 5 px with round ends, drawn only in the strips they cross.
+    for (int y = 0; y <= n; y++) {
+      float py = kY0 + y * sc;
+      if (!c.intersects(0, (int)py - (int)sc - 4, kScreenW, (int)sc + 8)) continue;
+      for (int x = 0; x <= n; x++) {
+        float px = kX0 + x * sc;
+        bool north = x < n && (y == n || m_.wall(x, y, MazeGame::N));
+        bool west = y < n && (x == n || m_.wall(x, y, MazeGame::W));
+        if (north) c.line(px, py, px + sc, py, 5, INK_2);
+        if (west) c.line(px, py, px, py + sc, 5, INK_2);
       }
     }
-    float pulse = 1 + 0.2f * sinf(a.nowMs() * 0.006f);
-    c.fillCircle(x0 + (n - 0.5f) * sc, y0 + (n - 0.5f) * sc, sc * 0.22f * pulse, kAccent);
-    c.fillCircle(x0 + m_.x() * sc, y0 + m_.y() * sc, sc * MazeGame::kBall, kWhite);
-    char lv[8];
-    snprintf(lv, sizeof(lv), "%d", level_ + 1);
-    c.text(kCx, 14, lv, FontSize::S, kGray, Align::Center);
-    miniFace(c, a, kCx, 428, 59);
-    if (m_.won()) c.text(kCx, kCy - 24, "Выход!", FontSize::L, kSoft, Align::Center);
+    float goalR = fminf(16, sc * 0.4f), ballR = fminf(17, sc * MazeGame::kBall);
+    c.ring(kX0 + (n - 0.5f) * sc, kY0 + (n - 0.5f) * sc, goalR, 5, ACCENT);
+    c.fillCircle(kX0 + m_.x() * sc, kY0 + m_.y() * sc, ballR, INK);
+    miniFace(c, a, CX, 388 + 40 * 176 / 354.f, 80);
+    if (m_.won()) ui::textCentered(c, CX, CY, "Выход!", TXT_MENU_SEL, ACCENT);
   }
+
  private:
+  static constexpr float kX0 = 83, kY0 = 83;
   void start(App& a) {
     m_.generate(clampi(5 + level_, 5, MazeGame::kMax), a.rng);
     winMs_ = 0;
     a.react(Emotion::Determined, 1500);
   }
   float cell() const { return 300.f / m_.size(); }
-  float ox() const { return kCx - 150.f; }
-  float oy() const { return kCy - 150.f; }
   MazeGame m_;
   int level_ = 0;
   float winMs_ = 0, cooldown_ = 0;
 };
 
-// Orbit: a paddle runs around the rim. Tilt or a finger moves it; the ball must stay in the circle.
+// ---- 20. orbit: run around the orbit, a tap jumps over the blocks ---------------------------------
+// Design 1a turned the old rim pong into this runner: the screen it draws has a player on an orbit and
+// blocks to jump over, nothing to bat.
 class OrbitScreen : public Screen {
  public:
-  void enter(App& a) override { running_ = false; over_ = false; score_ = 0; a.react(Emotion::Curious, 1200); }
-  bool capturesSwipes() const override { return running_; }
+  void enter(App& a) override { phase_ = Ready; a.react(Emotion::Curious, 1200); }
+  bool capturesSwipes() const override { return phase_ == Run; }
   void tick(App& a, float dt) override {
-    score_ = clampi(score_, 0, 9999);
-    char b[8];
-    snprintf(b, sizeof(b), "%d", score_);
-    num_.set(b);
-    num_.tick(dt);
-    if (!running_) return;
-    // The device's tilt points where the paddle should be, unless a finger is steering.
-    float tilt = sqrtf(a.hal.ax * a.hal.ax + a.hal.ay * a.hal.ay);
-    if (!a.touch.isDown() && tilt > 0.12f) {
-      float target = atan2f(a.hal.ax, -a.hal.ay);
-      float diff = fmodf(target - paddle_ + 9.42478f, 6.28319f) - 3.14159f;
-      paddle_ += diff * clampf(dt / 90.f, 0, 1);
-    }
+    if (phase_ != Run) return;
+    runMs_ += dt;
     float h = dt * 0.001f;
-    bx_ += vx_ * h;
-    by_ += vy_ * h;
-    a.anim.lookOffset(bx_ * 0.2f, by_ * 0.16f, 150);
-    float d = sqrtf(bx_ * bx_ + by_ * by_);
-    if (d <= kRim - kBallR) return;
-    float nx = bx_ / d, ny = by_ / d, ang = atan2f(nx, -ny);
-    float diff = fmodf(ang - paddle_ + 9.42478f, 6.28319f) - 3.14159f;
-    if (fabsf(diff) < halfWidth()) {
-      // Reflect about the rim normal; the offset from the paddle centre steers the ball.
-      float dot = vx_ * nx + vy_ * ny;
-      vx_ -= 2 * dot * nx;
-      vy_ -= 2 * dot * ny;
-      float sp = sqrtf(vx_ * vx_ + vy_ * vy_) * 1.03f;
-      if (sp > 460) sp = 460;
-      float dir = atan2f(vy_, vx_) + diff * 0.9f;
-      vx_ = cosf(dir) * sp;
-      vy_ = sinf(dir) * sp;
-      bx_ = nx * (kRim - kBallR - 1);
-      by_ = ny * (kRim - kBallR - 1);
-      score_++;
-      a.sfx.play("games/bounce");
-      a.anim.kick(-0.14f);
-      if (score_ % 5 == 0) a.react(Emotion::Excited, 900);
-      else if (a.rng.range(0, 3) == 0) a.react(Emotion::Happy, 700);
-    } else {
-      running_ = false;
-      over_ = true;
-      bool record = score_ > a.settings.orbitBest;
-      if (record) { a.settings.orbitBest = (uint16_t)score_; a.saveSettings(); }
-      a.pet.event(record ? PetEvent::GameWin : PetEvent::GameLose);
-      a.sfx.play(record ? "games/win" : "games/lose");
-      a.react(record ? Emotion::Proud : Emotion::Sad, 2000);
+    float speed = 70 + score_ * 3.5f;  // degrees a second
+    if (speed > 170) speed = 170;
+    angle_ += speed * h;
+    if (jumpMs_ >= 0) { jumpMs_ += dt; if (jumpMs_ > kJumpMs) jumpMs_ = -1; }
+    a.anim.lookOffset(cosf(angle_ * 0.0174533f) * 30, sinf(angle_ * 0.0174533f) * 20, 150);
+    // Angles are not wrapped: the player only moves forward, a block is passed once the player is beyond it.
+    const float reach = (11 + 16) / kR * 57.29578f;  // half a block plus the player, as an angle
+    for (int i = 0; i < kBlocks; i++) {
+      float d = blocks_[i] - angle_;
+      if (fabsf(d) < reach && lift() < 16) { crash(a); return; }
+      if (d < -reach) {
+        score_++;
+        a.sfx.play("games/correct");
+        if (score_ % 5 == 0) a.react(Emotion::Excited, 900);
+        // The passed block goes ahead of the farthest one.
+        float far = angle_;
+        for (int k = 0; k < kBlocks; k++) far = fmaxf(far, blocks_[k]);
+        blocks_[i] = far + a.rng.rangef(80, 150);
+      }
     }
   }
   void draw(App& a, Canvas& c) override {
-    c.ring(kCx, kCy, kRim + 7, 1, kDark);
-    float deg = paddle_ * 57.29578f, hw = halfWidth() * 57.29578f;
-    c.arc(kCx, kCy, kRim + 7, 8, deg - hw, deg + hw, kAccent);
-    miniFace(c, a, kCx, kCy - 8, 178);
-    if (running_) c.fillCircle(kCx + bx_, kCy + by_, kBallR, kWhite);
-    num_.draw(c, kCx, kCy + 42, 5, 1, running_ ? kGray : kWhite);
-    if (!running_) c.text(kCx, kCy + 92, over_ ? "Ещё раз" : "Нажми", FontSize::S, kGray, Align::Center);
+    char b[24], rec[32];
+    record(rec, sizeof rec, a.settings.orbitBest);
+    if (phase_ == Ready) { gameStart(c, a, "Орбита", "Прыгай через блоки на орбите", rec); return; }
+    if (phase_ == Over) {
+      snprintf(b, sizeof b, "%d", score_);
+      gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Starstruck : Emotion::Sad);
+      return;
+    }
+    c.ring(CX, CY, kR, 4, TRACK);
+    for (int i = 0; i < kBlocks; i++) {
+      float half = 11 / kR * 57.29578f;
+      ui::drawArc(c, CX, CY, kR, 16, blocks_[i] - half, 2 * half, INK, false);
+    }
+    float r = kR + lift(), rad = angle_ * 0.0174533f;
+    c.fillCircle(CX + cosf(rad) * r, CY + sinf(rad) * r, 16, ACCENT);
+    miniFace(c, a, CX, 146 + 60 * 176 / 354.f, 120);
+    snprintf(b, sizeof b, "%d", score_);
+    ui::textCentered(c, CX, 232, b, NUM_L56, INK);
+    if (runMs_ < HINT_MS) c.text(CX, 292, "тап — прыжок", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    if ((e.g == Gesture::Move || e.g == Gesture::Down) && running_) paddle_ = atan2f((float)(e.x - kCx), (float)(kCy - e.y));
-    if (e.g != Gesture::Tap || running_) return;
-    running_ = true; over_ = false; score_ = 0;
-    bx_ = by_ = 0;
-    float dir = a.rng.rangef(0, 6.28319f);
-    vx_ = cosf(dir) * 170; vy_ = sinf(dir) * 170;
+    if (e.g != Gesture::Tap) return;
+    if (phase_ == Run) {
+      if (jumpMs_ < 0) { jumpMs_ = 0; a.sfx.play("games/move"); }
+      return;
+    }
+    if (phase_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+    if ((phase_ == Ready && kStartButton.hit(e.x, e.y)) || (phase_ == Over && kAgainButton.hit(e.x, e.y))) start(a);
+  }
+
+ private:
+  static constexpr int kBlocks = 3;
+  static constexpr float kR = 160, kJumpMs = 620;
+  float lift() const { return jumpMs_ < 0 ? 0 : 40 * sinf(3.14159f * jumpMs_ / kJumpMs); }
+  void start(App& a) {
+    phase_ = Run;
+    score_ = 0;
+    angle_ = -90;
+    jumpMs_ = -1;
+    runMs_ = 0;
+    newRecord_ = false;
+    for (int i = 0; i < kBlocks; i++) blocks_[i] = angle_ + 100 + i * 110 + a.rng.rangef(0, 30);
     a.sfx.play("games/go");
     a.react(Emotion::Focused, 1500);
   }
- private:
-  // The paddle narrows as the score grows, down to a limit that stays playable.
-  float halfWidth() const { float w = 0.62f - score_ * 0.012f; return w < 0.26f ? 0.26f : w; }
-  static constexpr float kRim = 214, kBallR = 9;
-  DotText num_;
-  bool running_ = false, over_ = false;
+  void crash(App& a) {
+    phase_ = Over;
+    newRecord_ = score_ > a.settings.orbitBest;
+    if (newRecord_) { a.settings.orbitBest = (uint16_t)score_; a.saveSettings(); }
+    a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::GameLose);
+    a.sfx.play(newRecord_ ? "games/win" : "games/lose");
+    a.react(newRecord_ ? Emotion::Proud : Emotion::Sad, 2000);
+  }
+  enum Phase { Ready, Run, Over } phase_ = Ready;
+  float angle_ = -90, jumpMs_ = -1, runMs_ = 0;
+  float blocks_[kBlocks] = {};  // absolute angles, ahead of the player
   int score_ = 0;
-  float paddle_ = 0, bx_ = 0, by_ = 0, vx_ = 0, vy_ = 0;
+  bool newRecord_ = false;
 };
 
-// Snake from squares, matching the dot-matrix look of the clock. Swipes turn it.
+// ---- 21. snake: swipes turn it --------------------------------------------------------------------
 class SnakeScreen : public Screen {
  public:
-  void enter(App& a) override { started_ = false; g_.reset(a.rng); stepMs_ = 0; a.react(Emotion::Mischievous, 1500); }
-  bool capturesSwipes() const override { return started_ && g_.alive(); }
+  void enter(App& a) override { phase_ = Ready; g_.reset(a.rng); stepMs_ = 0; a.react(Emotion::Mischievous, 1500); }
+  bool capturesSwipes() const override { return phase_ == Run; }
   void tick(App& a, float dt) override {
-    if (!started_ || !g_.alive()) return;
+    if (phase_ != Run) return;
+    runMs_ += dt;
     stepMs_ += dt;
     float period = lerpf(230, 90, clampf(g_.score() / 40.f, 0, 1));
     if (stepMs_ < period) return;
     stepMs_ = 0;
     int was = g_.length();
     if (!g_.step(a.rng)) {
-      bool record = g_.score() > a.settings.snakeBest;
-      if (record) { a.settings.snakeBest = (uint16_t)g_.score(); a.saveSettings(); }
-      a.pet.event(record ? PetEvent::GameWin : PetEvent::GameLose);
-      a.sfx.play(record ? "games/win" : "games/lose");
-      a.react(record ? Emotion::Proud : Emotion::Dizzy, 2200);
+      phase_ = Over;
+      newRecord_ = g_.score() > a.settings.snakeBest;
+      if (newRecord_) { a.settings.snakeBest = (uint16_t)g_.score(); a.saveSettings(); }
+      a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::GameLose);
+      a.sfx.play(newRecord_ ? "games/win" : "games/lose");
+      a.react(newRecord_ ? Emotion::Proud : Emotion::Dizzy, 2200);
     } else if (g_.length() > was) {
       a.sfx.play("games/correct");
       a.pet.event(PetEvent::Feed);
       a.react(Emotion::Happy, 700);
     }
-    a.anim.lookAt(ox() + g_.foodX() * kCell, oy() + g_.foodY() * kCell, 300);
+    a.anim.lookAt(kX0 + g_.foodX() * kCell, kY0 + g_.foodY() * kCell, 300);
   }
   void draw(App& a, Canvas& c) override {
-    for (int y = 0; y < SnakeGame::kSize; y++)
-      for (int x = 0; x < SnakeGame::kSize; x++) {
-        if (x % 2 == 0 && y % 2 == 0) c.fillRect(ox() + x * kCell + 8, oy() + y * kCell + 8, 2, 2, kDark);
-      }
-    c.fillRect(ox() + g_.foodX() * kCell + 2, oy() + g_.foodY() * kCell + 2, kCell - 4, kCell - 4, kAccent);
-    for (int i = g_.length() - 1; i >= 0; i--) {
-      // The tail fades: readable direction without any extra elements.
-      uint16_t col = blend565(kDim, kWhite, (uint32_t)(255 - 180 * i / (g_.length() > 1 ? g_.length() - 1 : 1)));
-      c.fillRect(ox() + g_.segX(i) * kCell + 1, oy() + g_.segY(i) * kCell + 1, kCell - 2, kCell - 2, col);
+    char b[24], rec[32];
+    record(rec, sizeof rec, a.settings.snakeBest);
+    if (phase_ == Ready) { gameStart(c, a, "Змейка", "Свайпы поворачивают змейку", rec); return; }
+    if (phase_ == Over) {
+      snprintf(b, sizeof b, "%d", g_.score());
+      gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Proud : Emotion::Dizzy);
+      return;
     }
-    char b[16];
-    snprintf(b, sizeof(b), "%d", g_.score());
-    c.text(kCx, 18, b, FontSize::S, kGray, Align::Center);
-    if (!started_) c.text(kCx, kCy + 60, "Свайпы — повороты", FontSize::S, kGray, Align::Center);
-    if (!g_.alive()) c.text(kCx, kCy - 24, "Конец", FontSize::L, kSoft, Align::Center);
+    for (int y = 13; y < kScreenH; y += 22) {  // the dotted field, inside r200
+      if (!c.intersects(0, y - 2, kScreenW, 4)) continue;
+      for (int x = 13; x < kScreenW; x += 22)
+        if ((x - CX) * (x - CX) + (y - CY) * (y - CY) < 200 * 200) c.fillCircle((float)x, (float)y, 1.6f, SNAKE_GRID);
+    }
+    c.fillCircle(kX0 + g_.foodX() * kCell + kCell / 2.f, kY0 + g_.foodY() * kCell + kCell / 2.f, 7, ACCENT);
+    int n = g_.length();
+    for (int i = n - 1; i >= 0; i--) {
+      // The tail fades from INK to a warm grey: the direction reads without anything else.
+      float t = n > 1 ? (float)i / (n - 1) : 0;
+      uint16_t col = blend565(INK, SNAKE_TAIL, (uint32_t)(255 * t));
+      c.roundRect(kX0 + g_.segX(i) * kCell, kY0 + g_.segY(i) * kCell, kCell, kCell, 4, col);
+    }
+    // Eyes on the head, looking where it goes.
+    int dx = n > 1 ? g_.segX(0) - g_.segX(1) : 1, dy = n > 1 ? g_.segY(0) - g_.segY(1) : 0;
+    float hx = kX0 + g_.segX(0) * kCell + kCell / 2.f, hy = kY0 + g_.segY(0) * kCell + kCell / 2.f;
+    for (int s = -1; s <= 1; s += 2) {
+      float ex = hx + dx * 4 - dy * s * 4.5f, ey = hy + dy * 4 + dx * s * 4.5f;
+      bool along = dx != 0;
+      c.fillRect((int)(ex - (along ? 3 : 2)), (int)(ey - (along ? 2 : 3)), along ? 6 : 4, along ? 4 : 6, BG);
+    }
+    snprintf(b, sizeof b, "%d", g_.score());
+    ui::textCentered(c, CX, 38 + 14, b, NUM_S30, INK);
+    if (runMs_ < HINT_MS) c.text(CX, 360, "свайп — поворот", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g == Gesture::Tap) {
-      if (!started_) { started_ = true; a.sfx.play("games/go"); }
-      else if (!g_.alive()) { g_.reset(a.rng); started_ = true; a.sfx.play("games/go"); }
+    if (phase_ != Run) {
+      if (e.g != Gesture::Tap) return;
+      if (phase_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+      if ((phase_ == Ready && kStartButton.hit(e.x, e.y)) || (phase_ == Over && kAgainButton.hit(e.x, e.y))) {
+        if (phase_ == Over) g_.reset(a.rng);
+        phase_ = Run;
+        runMs_ = 0;
+        newRecord_ = false;
+        a.sfx.play("games/go");
+      }
       return;
     }
     if (e.g == Gesture::SwipeLeft) g_.turn(-1, 0);
@@ -213,16 +255,17 @@ class SnakeScreen : public Screen {
     if (e.g == Gesture::SwipeUp) g_.turn(0, -1);
     if (e.g == Gesture::SwipeDown) g_.turn(0, 1);
   }
+
  private:
   static constexpr int kCell = 20;
-  static int ox() { return kCx - SnakeGame::kSize * kCell / 2; }
-  static int oy() { return kCy - SnakeGame::kSize * kCell / 2; }
+  static constexpr float kX0 = CX - SnakeGame::kSize * kCell / 2.f, kY0 = CY - SnakeGame::kSize * kCell / 2.f;
+  enum Phase { Ready, Run, Over } phase_ = Ready;
   SnakeGame g_;
-  bool started_ = false;
-  float stepMs_ = 0;
+  float stepMs_ = 0, runMs_ = 0;
+  bool newRecord_ = false;
 };
 
-// Simon on four rim sectors: repeat the growing sequence of light and tone.
+// ---- 22. Simon, "Повтори": four sectors of a ring light up in turn ---------------------------------
 class SimonScreen : public Screen {
  public:
   void enter(App& a) override { state_ = Ready; len_ = 0; a.react(Emotion::Attentive, 1200); }
@@ -241,31 +284,38 @@ class SimonScreen : public Screen {
     }
   }
   void draw(App& a, Canvas& c) override {
-    static const uint16_t col[4] = {kRose, kSoft, kMint, kSky};
-    for (int i = 0; i < 4; i++) {
-      float a0 = i * 90.f + 5, a1 = a0 + 80;
-      bool on = lit_ == i;
-      c.arc(kCx, kCy, 190, on ? 62 : 44, a0, a1, on ? col[i] : blend565(kBlack, col[i], 96));
+    char b[24], rec[32];
+    record(rec, sizeof rec, a.settings.simonBest);
+    if (state_ == Ready) { gameStart(c, a, "Повтори", "Запомни, как загорятся цвета, и повтори", rec); return; }
+    if (state_ == Over) {
+      snprintf(b, sizeof b, "%d", len_ - 1);
+      gameResult(c, a, b, newRecord_ ? "раундов · новый рекорд" : "раундов", newRecord_ ? Emotion::Proud : Emotion::Confused);
+      return;
     }
-    miniFace(c, a, kCx, kCy - 14, 178);
-    char b[12];
-    snprintf(b, sizeof(b), "%d", len_);
-    if (state_ == Ready) c.text(kCx, kCy + 36, "Нажми", FontSize::S, kGray, Align::Center);
-    else c.text(kCx, kCy + 30, b, FontSize::M, kWhite, Align::Center);
+    static const uint16_t on[4] = {ACCENT, ACCENT_2, simon::GREEN, simon::YELLOW};
+    static const uint16_t off[4] = {simon::DIM_BLUE, simon::DIM_RED, simon::DIM_GREEN, simon::DIM_YELLOW};
+    for (int i = 0; i < 4; i++) ui::drawArc(c, CX, CY, 176, 72, kStart[i], 86, lit_ == i ? on[i] : off[i], false);
+    miniFace(c, a, CX, CY - 40, 130);
+    ui::textCentered(c, CX, CY + 22, state_ == Show ? "Запоминай" : "Повтори", TXT_CAP, INK);
+    snprintf(b, sizeof b, "раунд %d", len_);
+    ui::textCentered(c, CX, CY + 52, b, TXT_MIN, INK_2);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (e.g != Gesture::Tap) return;
-    if (state_ == Ready || state_ == Over) { next(a, true); return; }
+    if (state_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
+    if ((state_ == Ready && kStartButton.hit(e.x, e.y)) || (state_ == Over && kAgainButton.hit(e.x, e.y))) { next(a, true); return; }
     if (state_ != Input) return;
-    float ang = atan2f((float)(e.x - kCx), (float)(kCy - e.y)) * 57.29578f;
+    float dist = sqrtf((float)((e.x - CX) * (e.x - CX) + (e.y - CY) * (e.y - CY)));
+    if (dist < 120) return;
+    float ang = atan2f((float)(e.y - CY), (float)(e.x - CX)) * 57.29578f;  // 0 to the right, clockwise
     if (ang < 0) ang += 360;
-    float dist = sqrtf((float)((e.x - kCx) * (e.x - kCx) + (e.y - kCy) * (e.y - kCy)));
-    if (dist < 110) return;
-    int sector = (int)(ang / 90) % 4;
+    int sector = -1;
+    for (int i = 0; i < 4; i++) if (fmodf(ang - kStart[i] + 360, 360) < 90) sector = i;
+    if (sector < 0) return;
     if (sector != seq_[pos_]) {
       state_ = Over;
-      bool record = len_ - 1 > a.settings.simonBest;
-      if (record) { a.settings.simonBest = (uint16_t)(len_ - 1); a.saveSettings(); }
+      newRecord_ = len_ - 1 > a.settings.simonBest;
+      if (newRecord_) { a.settings.simonBest = (uint16_t)(len_ - 1); a.saveSettings(); }
       a.sfx.play("games/wrong");
       a.pet.event(PetEvent::GameLose);
       a.react(Emotion::Confused, 1800);
@@ -278,17 +328,20 @@ class SimonScreen : public Screen {
       next(a, false);
     }
   }
+
  private:
+  // The spec's sectors: 86° each with 4° gaps, top left, top right, bottom right, bottom left.
+  static constexpr float kStart[4] = {184, 274, 4, 94};
   enum State { Ready, Show, Input, Over };
   void light(App& a, int i, float ms) {
     lit_ = i;
     litMs_ = ms;
     static const char* const tones[4] = {"games/tone1", "games/tone2", "games/tone3", "games/tone4"};
     a.sfx.play(tones[i]);
-    a.anim.lookOffset(i == 0 || i == 1 ? 26.f : -26.f, i == 1 || i == 2 ? 16.f : -16.f, ms);
+    a.anim.lookOffset(i == 1 || i == 2 ? 26.f : -26.f, i == 0 || i == 1 ? -16.f : 16.f, ms);
   }
   void next(App& a, bool restart) {
-    if (restart) len_ = 0;
+    if (restart) { len_ = 0; newRecord_ = false; }
     if (len_ < (int)sizeof(seq_)) seq_[len_++] = (uint8_t)a.rng.range(0, 3);
     state_ = Show;
     pos_ = 0;
@@ -298,7 +351,9 @@ class SimonScreen : public Screen {
   uint8_t seq_[64];
   int len_ = 0, pos_ = 0, lit_ = -1;
   float timer_ = 0, litMs_ = 0;
+  bool newRecord_ = false;
 };
+constexpr float SimonScreen::kStart[4];
 
 Screen* gameScreen(ScreenId id) {
   static MazeScreen maze; static OrbitScreen orbit; static SnakeScreen snake; static SimonScreen simon;

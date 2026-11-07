@@ -44,6 +44,9 @@ void heart(Canvas& c, float x, float y, float r, uint16_t color);
 // label "As", "10h"; empty or faceDown draws the back. Inactive cards keep a dim outline.
 void card(Canvas& c, float x, float y, float w, float h, const char* label, bool faceUp = true, bool active = true, float stroke = 2);
 
+// A filled ellipse; a coin turning in the air is one, squeezed by cos of its angle.
+void ellipse(Canvas& c, float cx, float cy, float rx, float ry, uint16_t color);
+
 // Weather pieces shared by the face and the weather screen.
 void cloud(Canvas& c, float x, float y, float s, uint16_t color);   // three circles on a rounded base
 void bolt(Canvas& c, float x, float y, float s, float thick, uint16_t color);  // zigzag lightning, top at (x, y)

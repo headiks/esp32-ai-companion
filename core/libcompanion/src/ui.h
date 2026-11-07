@@ -1,6 +1,7 @@
 // Internal: screen base class and widgets. One static instance of every screen, no heap use.
 #pragma once
 #include "companion/app.h"
+#include "ui/components.h"
 
 namespace cc {
 
@@ -63,6 +64,14 @@ const char* weatherTitle(Weather w);
 
 Screen* systemScreen(ScreenId id);  // ui_system.cpp, nullptr for other screens
 Screen* timeScreen(ScreenId id);    // ui_time.cpp, likewise
+Screen* playScreen(ScreenId id);    // ui_play.cpp, likewise
+
+// Design 1a templates shared by the games (spec 17 and 18).
+// Start: the game's name, a focused mini face, its rule, the record, "Старт".
+void gameStart(Canvas& c, App& a, const char* name, const char* rule, const char* record);
+// Result: a full accent ring, a face for the outcome, the number (or a word), a caption, "Выход" and "Ещё".
+void gameResult(Canvas& c, App& a, const char* value, const char* caption, Emotion face);
+extern const ui::Button kStartButton, kExitButton, kAgainButton;
 Screen* gameScreen(ScreenId id);
 Screen* partyScreen(ScreenId id);
 
