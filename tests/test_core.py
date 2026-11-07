@@ -1308,8 +1308,8 @@ def test_two_line_hint_is_fully_visible(c):
     a = c.render().copy()
     c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "x", "hint": one + "\\n↑ бить · → перевод · ↓ беру"})
     c.run(300)
-    second_line = c.render()[233 + 130 + 24:233 + 130 + 48]
-    assert (second_line != a[233 + 130 + 24:233 + 130 + 48]).any()
+    second_line = c.render()[300 + 28:300 + 56]   # the hint starts at y 300, 28 px a line
+    assert (second_line != a[300 + 28:300 + 56]).any()
 
 
 # ---- twenty-one on the device ------------------------------------------------------------------
@@ -1369,11 +1369,25 @@ def test_blackjack_opens_from_the_games_list(c):
     assert c.state()["screen"] == "blackjack"
 
 
+def test_phone_buttons_stand_for_the_swipes(c):
+    """Design 1a poker: the phone sends three labels; left folds (swipe down), middle is the main move, right raises."""
+    c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "Фишки 190",
+                      "buttons": "Пас,Чек,Рейз"})
+    c.run(300); drain(c)
+    for (x, y), action in (((128, 338), "swipe_down"), ((233, 338), "tap"), ((338, 338), "swipe_up")):
+        tap(c, x, y)
+        assert action in [m.get("action") for m in drain(c)], action
+    long = c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "buttons": "Очень длинная подпись кнопки,b,c,d"})
+    assert long["status"] == "success", "long or extra labels are cut, not refused"
+
+
 def test_two_cards_are_both_big_and_tilt_selects_nothing(c):
     c.handle_command({"type": "controller", "value": "start", "mode": "cards", "labels": "As,Kh", "title": "Покер"})
     c.run(300); drain(c)
     fb = c.render()
-    assert (fb[233 - 24, 233 - 58] == 0xFFFF) and (fb[233 - 24, 233 + 58] == 0xFFFF), "both cards are face up and large"
+    SURFACE = 0x10A2
+    left, right = fb[140:256, 140:218], fb[140:256, 248:326]   # 96 x 136 each, side by side
+    assert (left == SURFACE).mean() > 0.5 and (right == SURFACE).mean() > 0.5, "both cards are face up and large"
     for _ in range(50):
         c.imu(0.6, 0, 0.8, dt=20); c.tick(20)
     assert not [m for m in drain(c) if m.get("action") == "select"]

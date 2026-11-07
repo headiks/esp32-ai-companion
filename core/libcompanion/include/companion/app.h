@@ -49,6 +49,8 @@ struct ControllerCfg {
   char info[64] = "";              // short state line, for example whose move it is
   char hint[160] = "";              // controls summary at the bottom of the screen
   char target[4] = "";             // the card to beat, shown beside the hand
+  char buttons[3][32] = {};        // labels sent by the phone: cards, fold / main move / raise; pad, the hold pill
+  int buttonCount = 0;
   float keepaliveMs = 0;
 };
 

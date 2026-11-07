@@ -411,6 +411,7 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
       const char* info = j.str("info");
       const char* hint = j.str("hint");
       const char* target = j.str("target");
+      const char* buttons = j.str("buttons");
       if (!mode || (strcmp(mode, "pad") && strcmp(mode, "cards"))) return errorResp(out, cap, "bad_value", "mode: pad, cards", id);
       cc.cards = !strcmp(mode, "cards");
       cc.count = 0;
@@ -427,6 +428,18 @@ int App::handleCommand(const char* json, char* out, int cap, Session& session) {
       copyUtf8(cc.info, info ? info : "", sizeof(cc.info));
       copyUtf8(cc.hint, hint ? hint : "", sizeof(cc.hint));
       snprintf(cc.target, sizeof(cc.target), "%s", target ? target : "");
+      // "Пас,Чек,Рейз": up to three short labels; longer ones are cut on a whole UTF-8 character.
+      cc.buttonCount = 0;
+      for (const char* p = buttons; p && *p && cc.buttonCount < 3;) {
+        const char* e = strchr(p, ',');
+        size_t n = e ? (size_t)(e - p) : strlen(p);
+        char one[64];
+        if (n >= sizeof(one)) n = sizeof(one) - 1;
+        memcpy(one, p, n);
+        one[n] = 0;
+        copyUtf8(cc.buttons[cc.buttonCount++], one, sizeof(cc.buttons[0]));
+        p = e ? e + 1 : nullptr;
+      }
       cc.active = true;
       cc.keepaliveMs = 8000;
       if (cc.selected >= cc.count) cc.selected = 0;

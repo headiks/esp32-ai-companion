@@ -16,7 +16,9 @@ SCREENS = [("face", "Лицо"), ("menu", "Меню"), ("pet", "Питомец")
            ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
            ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"),
            ("coin", "Монетка"), ("dice", "Кубики"), ("magic_ball", "Шар"), ("balance", "Баланс"), ("duel", "Дуэль"), ("shaker", "Шейкер"), ("safe", "Сейф"),
-           ("workout", "Зарядка"), ("mole", "Кротики"), ("blackjack", "Двадцать одно"), ("weather", "Погода"), ("mouse", "Мышь")]
+           ("workout", "Тренировка"), ("mole", "Крот"), ("blackjack", "Двадцать одно"), ("weather", "Погода"), ("mouse", "Мышь"),
+           ("talk", "Поговорить"), ("clocks", "Меню часов"), ("remotes", "Пульты"), ("ble_pairing", "Поиск Bluetooth"),
+           ("setting_value", "Яркость")]
 
 
 def grid(buttons, cols=3):

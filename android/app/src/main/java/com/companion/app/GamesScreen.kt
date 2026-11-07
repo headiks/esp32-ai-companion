@@ -151,13 +151,16 @@ private fun KeepControllerAlive(client: BleClient) {
     }
 }
 
-private fun BleClient.startPad(title: String, hint: String) =
-    send(Protocol.command("controller", "value" to "start", "mode" to "pad", "title" to title, "hint" to hint))
+// `buttons`: labels the device draws (design 1a). Cards: fold, main move, raise; pad: the hold pill. Older firmware ignores them.
+private fun BleClient.startPad(title: String, hint: String, info: String = "", buttons: String = "") =
+    send(Protocol.command("controller", "value" to "start", "mode" to "pad", "title" to title, "hint" to hint, "info" to info,
+        "buttons" to buttons))
 
-private fun BleClient.showCards(title: String, cards: List<Card>, marks: String = "", hint: String = "", info: String = "", target: Card? = null) =
+private fun BleClient.showCards(title: String, cards: List<Card>, marks: String = "", hint: String = "", info: String = "", target: Card? = null,
+                                buttons: String = "") =
     send(Protocol.command("controller", "value" to "start", "mode" to "cards", "title" to title,
         "labels" to cards.joinToString(",") { it.label }, "marks" to marks, "hint" to hint, "info" to info,
-        "target" to (target?.label ?: "")))
+        "target" to (target?.label ?: ""), "buttons" to buttons))
 
 /** Runs [body] once per display frame with the elapsed seconds, capped so a pause cannot teleport anything. */
 @Composable
@@ -218,7 +221,7 @@ private fun RaceHost(client: BleClient) {
     var setup by remember { mutableStateOf(true) }
     var players by remember { mutableIntStateOf(1) }
     var trackIndex by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран тормоз") }
+    LaunchedEffect(Unit) { client.startPad("Гонки", "наклон руль · держи экран тормоз", buttons = "Держи — тормоз") }
     if (setup) {
         GameSetup(onStart = { setup = false }) {
             PlayerPicker(1..4, players) { players = it }
@@ -297,6 +300,14 @@ private fun RaceTable(client: BleClient, track: RaceTrack, players: Int, onSetup
                 "up" -> deviceBrake = false
                 "tap" -> if (game.over) round++
             }
+        }
+    }
+    // The device is player 1's dashboard: its speed in km/h, a few times a second.
+    LaunchedEffect(round, hasDevice) {
+        while (hasDevice) {
+            delay(400)
+            val kmh = (game.cars[0].speed / RaceGame.TOP_SPEED * 120).toInt()
+            client.startPad("Гонки", "км/ч · наклон — руль", info = "$kmh", buttons = "Держи — тормоз")
         }
     }
     FrameLoop { dt ->
@@ -503,9 +514,12 @@ private fun PokerTable(client: BleClient, game: HoldemGame, onExit: () -> Unit) 
         val state = when {
             game.street.ordinal >= Street.Showdown.ordinal -> game.message
             game.folded[0] -> "Вы сбросили карты"
-            else -> "${game.street.title} · банк ${game.pot}"
+            else -> game.street.title
         }
-        client.showCards("Фишки ${game.stacks[0]}", game.hole[0], "", hint, state)
+        // On the player's move the device shows the three moves as buttons; otherwise the hint says what is going on.
+        val buttons = if (mine && game.street.ordinal < Street.Showdown.ordinal)
+            "Пас,${if (game.toCall(0) > 0) "Колл" else "Чек"},Рейз" else ""
+        client.showCards("фишки ${game.stacks[0]} · банк ${game.pot}", game.hole[0], "", hint, state, buttons = buttons)
     }
     fun act(action: String) {
         when (action) {

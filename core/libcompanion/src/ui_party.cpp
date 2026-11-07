@@ -8,7 +8,6 @@
 namespace cc {
 using namespace theme;
 
-static constexpr int kCx = kScreenW / 2, kCy = kScreenH / 2;
 
 // ---- 26. coin -------------------------------------------------------------------------------------
 class CoinScreen : public Screen {
@@ -683,45 +682,7 @@ class BlackjackScreen : public Screen {
   float stepMs_ = 0;
 };
 
-// ---- Controller: the phone hosts the game, this screen is the gamepad ----------------------------------------------
-static void suitShape(Canvas& c, char s, float x, float y, float r, uint16_t col) {
-  switch (s) {
-    case 'h': c.heart(x, y - r * 0.35f, r * 0.72f, col); break;
-    case 'd':
-      for (int i = -(int)r; i <= (int)r; i++) { int w = (int)(r * 0.8f * (1 - fabsf((float)i) / r)); c.fillRect((int)x - w, (int)y + i, w * 2 + 1, 1, col); }
-      break;
-    case 'c':
-      c.fillCircle(x, y - r * 0.45f, r * 0.42f, col);
-      c.fillCircle(x - r * 0.5f, y + r * 0.15f, r * 0.42f, col);
-      c.fillCircle(x + r * 0.5f, y + r * 0.15f, r * 0.42f, col);
-      c.line(x, y, x, y + r, r * 0.25f, col);
-      break;
-    default:
-      for (int i = 0; i <= (int)r; i++) { int w = (int)(r * 0.95f * i / r); c.fillRect((int)x - w, (int)(y - r) + i, w * 2 + 1, 1, col); }
-      c.fillCircle(x - r * 0.46f, y + r * 0.05f, r * 0.46f, col);
-      c.fillCircle(x + r * 0.46f, y + r * 0.05f, r * 0.46f, col);
-      c.line(x, y, x, y + r, r * 0.22f, col);
-      break;
-  }
-}
-
-static void drawCard(Canvas& c, float x, float y, float w, float h, const char* label, bool focus, bool marked) {
-  c.roundRect(x - w / 2, y - h / 2, w, h, 8, focus ? kWhite : (marked ? kDim : kDark));
-  size_t n = strlen(label);
-  if (!n) return;
-  char rank[6];
-  snprintf(rank, sizeof(rank), "%.*s", (int)(n - 1), label);
-  char suit = label[n - 1];
-  bool red = suit == 'h' || suit == 'd';
-  uint16_t col = focus ? (red ? rgb565(170, 96, 110) : kBlack) : (red ? kRose : kGray);
-  // Sizes follow the card: the rank takes the top part, the suit fits in what is left, so they never touch.
-  FontSize f = h >= 80 ? FontSize::M : FontSize::S;
-  c.text((int)x, (int)(y - h / 2 + h * 0.05f), rank, f, col, Align::Center);
-  float r = h * 0.17f < w * 0.26f ? h * 0.17f : w * 0.26f;
-  suitShape(c, suit, x, y + h * 0.22f, r, col);
-  if (marked) c.fillCircle(x, y - h / 2 - 11, 5, kMint);
-}
-
+// ---- 37..39. controller: the phone hosts the game, this screen is the gamepad ------------------------
 class ControllerScreen : public Screen {
  public:
   void enter(App&) override { sel_ = 0; pos_ = 0; held_ = false; }
@@ -744,7 +705,7 @@ class ControllerScreen : public Screen {
       // A big hand scrolls instead: the lean sets the speed, level holds still, so any card stays reachable.
       float t = a.hal.ax, mag = fabsf(t);
       if (mag > kDeadZone) {
-        float speed = (mag - kDeadZone) * 13;   // cards per second
+        float speed = (mag - kDeadZone) * 13;  // cards per second
         pos_ += (t > 0 ? speed : -speed) * dt * 0.001f;
         pos_ = clampf(pos_, 0, cc.count - 0.001f);
         sel_ = (int)pos_;
@@ -758,12 +719,22 @@ class ControllerScreen : public Screen {
   }
   void draw(App& a, Canvas& c) override {
     const ControllerCfg& cc = a.controller;
-    c.text(kCx, 28, cc.title, FontSize::S, kGray, Align::Center);
-    if (cc.cards) drawHand(c, cc);
-    else drawPad(a, c);
-    if (cc.hint[0]) c.textWrapped(kCx, kCy + 130, 350, cc.hint, FontSize::S, kGray, Align::Center, 2);
+    if (!cc.cards) drawPad(a, c);
+    else if (cc.count <= 2) drawPair(c, cc);
+    else drawHand(c, cc);
   }
   void onGesture(App& a, const GestureEvent& e) override {
+    const ControllerCfg& cc = a.controller;
+    // The phone's buttons, when it sent them, stand for the swipes: left down, middle tap, right up.
+    if (e.g == Gesture::Tap && cc.cards && cc.count <= 2 && cc.buttonCount == 3) {
+      static const char* const act[3] = {"swipe_down", "tap", "swipe_up"};
+      for (int i = 0; i < 3; i++) {
+        if (!pairButton(i).hit(e.x, e.y)) continue;
+        a.sfx.play("system/click");
+        a.pushInput(act[i], sel_);
+        return;
+      }
+    }
     switch (e.g) {
       case Gesture::Down: held_ = true; a.pushInput("down", sel_); break;
       case Gesture::Up: held_ = false; a.pushInput("up", sel_); break;
@@ -780,70 +751,95 @@ class ControllerScreen : public Screen {
     if (m == MotionEvent::Shake) a.pushInput("shake", sel_);
     return m == MotionEvent::Shake || m == MotionEvent::Jerk || m == MotionEvent::Lifted || m == MotionEvent::FaceDown;
   }
+
  private:
-  static constexpr int kDirectLimit = 6, kSide = 3;
+  static constexpr int kDirectLimit = 6;
   static constexpr float kDeadZone = 0.12f;
-  void drawHand(Canvas& c, const ControllerCfg& cc) const {
-    if (cc.info[0]) c.text(kCx, 50, cc.info, FontSize::S, kSoft, Align::Center);
-    if (cc.count <= 0) { c.text(kCx, kCy - 20, "Нет карт", FontSize::M, kGray, Align::Center); return; }
-    if (cc.count <= 2) {
-      for (int i = 0; i < cc.count; i++) drawCard(c, kCx + (cc.count == 2 ? (i ? 58.f : -58.f) : 0.f), kCy - 24, 104, 146, cc.labels[i], true, false);
-      return;
-    }
-    int focus = sel_ < cc.count ? sel_ : cc.count - 1;
-    // Neighbours sit below the focused card in fixed slots. Only a window of the hand fits; "+N" tells what is beyond.
-    for (int k = -kSide; k <= kSide; k++) {
-      int i = focus + k;
-      if (!k || i < 0 || i >= cc.count) continue;
-      bool mark = cc.marks[i] == '1';
-      drawCard(c, kCx + k * 52.f, kCy + 82 - (mark ? 8 : 0), 46, 64, cc.labels[i], false, mark);
-    }
-    int leftHidden = focus - kSide, rightHidden = cc.count - 1 - focus - kSide;
-    char more[8];
-    if (leftHidden > 0) { snprintf(more, sizeof(more), "+%d", leftHidden); c.text(kCx - 196, kCy + 72, more, FontSize::S, kDim, Align::Center); }
-    if (rightHidden > 0) { snprintf(more, sizeof(more), "+%d", rightHidden); c.text(kCx + 196, kCy + 72, more, FontSize::S, kDim, Align::Center); }
-    drawCard(c, kCx, kCy - 54, 96, 132, cc.labels[focus], true, cc.marks[focus] == '1');
-    if (cc.target[0]) {
-      c.text(kCx - 118, kCy - 112, "бей", FontSize::S, kGray, Align::Center);
-      drawCard(c, kCx - 118, kCy - 46, 58, 82, cc.target, false, false);
-    }
-    // Position in the hand and everything chosen, at a glance on the rim.
-    int chosen = 0;
-    for (int i = 0; i < cc.count; i++) {
-      float ang = (cc.count > 1 ? 140 + 80.f * i / (cc.count - 1) : 180.f) * 0.0174533f;
-      float x = kCx + sinf(ang) * (kCx - 9), y = kCy - cosf(ang) * (kCy - 9);
-      bool mark = cc.marks[i] == '1';
-      chosen += mark;
-      c.fillCircle(x, y, i == focus ? 4.5f : 2.5f, i == focus ? kWhite : (mark ? kMint : kDim));
-    }
-    char st[24];
-    snprintf(st, sizeof(st), "%d/%d", focus + 1, cc.count);
-    c.text(kCx + 112, kCy - 86, st, FontSize::S, kGray, Align::Center);
-    if (chosen) {
-      snprintf(st, sizeof(st), "выбрано %d", chosen);
-      c.text(kCx + 118, kCy - 60, st, FontSize::S, kMint, Align::Center);
-    }
+  static ui::Button pairButton(int i) {
+    return i == 1 ? ui::primary(CX, 292) : ui::secondary(i == 0 ? 128.f : 338.f, 302);
   }
+  static void hint(Canvas& c, const ControllerCfg& cc, int top) {
+    if (cc.hint[0]) c.textWrapped(CX, top, 300, cc.hint, TXT_MIN, INK_2, Align::Center, 2, 28, true);
+  }
+  // Poker: two cards whole, the phone's moves as buttons under them.
+  void drawPair(Canvas& c, const ControllerCfg& cc) const {
+    ui::textCentered(c, CX, 62, cc.title, TXT_MIN, INK_2);
+    if (cc.info[0]) ui::textCentered(c, CX, 96, cc.info, TXT_28, INK);
+    for (int i = 0; i < cc.count; i++) {
+      float x = cc.count == 2 ? (i ? CX + 6.f : CX - 102.f) : CX - 48.f;
+      ui::card(c, x, 130, 96, 136, cc.labels[i], true, true, 3);
+    }
+    if (cc.buttonCount == 3) for (int i = 0; i < 3; i++) pairButton(i).draw(c, cc.buttons[i]);
+    else hint(c, cc, 300);
+  }
+  // Durak: the card to beat, the chosen card large, three neighbours of the hand and how many more.
+  void drawHand(Canvas& c, const ControllerCfg& cc) const {
+    ui::textCentered(c, CX, 54, cc.title, TXT_MIN, INK_2);
+    if (cc.info[0]) ui::textCentered(c, CX, 88, cc.info, TXT_28, INK);
+    int focus = sel_ < cc.count ? sel_ : cc.count - 1;
+    float mainX = cc.target[0] ? 244 : CX;
+    if (cc.target[0]) {
+      ui::card(c, 115, 129, 62, 86, cc.target, true, false, 2);
+      ui::textCentered(c, 146, 238, "бьют", TXT_MIN, INK_2);
+    }
+    ui::card(c, mainX - 50, 130, 100, 136, cc.labels[focus], true, true, 3);
+    if (cc.marks[focus] == '1') c.fillCircle(mainX, 120, 5, ACCENT);
+    // Three neighbours: one on the left when there is one, the rest to the right.
+    int shown[3], n = 0;
+    if (focus > 0) shown[n++] = focus - 1;
+    for (int i = focus + 1; i < cc.count && n < 3; i++) shown[n++] = i;
+    for (int i = focus - 2; i >= 0 && n < 3; i--) shown[n++] = i;
+    for (int k = 0; k < n; k++) {
+      int i = shown[k];
+      bool mark = cc.marks[i] == '1';
+      float x = 170 + k * 54.f;
+      ui::card(c, x - 23, 281 - (mark ? 8 : 0), 46, 62, cc.labels[i], true, true, 2);
+      if (mark) c.fillCircle(x, 266, 4, ACCENT);
+    }
+    int more = cc.count - 1 - n;
+    if (more > 0) {
+      char b[8];
+      snprintf(b, sizeof b, "+%d", more);
+      ui::textCentered(c, 330, 312, b, TXT_MIN, INK_2);
+    }
+    hint(c, cc, 352);
+  }
+  // Race and other pads: a steering arc on top, the phone's number in the middle, a hold pill below.
   void drawPad(App& a, Canvas& c) const {
-    // A ring with a dot that follows the tilt; the disc fills while the screen is held.
-    float x = kCx + a.hal.ax * 130, y = kCy - 20 + a.hal.ay * 130;
-    c.ring(kCx, kCy - 20, 140, 2, kDark);
-    c.line(kCx - 140, kCy - 20, kCx + 140, kCy - 20, 1, kDark);
-    c.line(kCx, kCy - 160, kCx, kCy + 120, 1, kDark);
-    if (held_) c.fillCircle(kCx, kCy - 20, 56, kDim);
-    c.fillCircle(x, y, 18, kSky);
+    const ControllerCfg& cc = a.controller;
+    ui::drawArc(c, CX, CY, 196, 12, -150, 120, TRACK);
+    c.line(CX, 30, CX, 50, 3, INK_3);
+    float lean = clampf(a.hal.ax, -1, 1), deg = asinf(lean) * 57.29578f;
+    float at = (-90 + lean * 60) * 0.0174533f;
+    c.fillCircle(CX + cosf(at) * 196, CY + sinf(at) * 196, 16, ACCENT);
+    char b[64];
+    int d = (int)lroundf(fabsf(deg));
+    snprintf(b, sizeof b, d < 3 ? "%s · прямо" : "%s · %s %d°", cc.title, deg > 0 ? "вправо" : "влево", d);
+    ui::textCentered(c, CX, 96, b, TXT_MIN, INK_2);
+    if (cc.info[0]) {
+      bool number = strspn(cc.info, "0123456789") == strlen(cc.info);
+      ui::textCentered(c, CX, 172, cc.info, number ? NUM_XL : TXT_TITLE, INK);
+    }
+    hint(c, cc, 230);
+    if (cc.buttonCount >= 1) {
+      // The whole screen still reacts to a hold; the pill shows where and lights while held.
+      float x = CX - 110, y = 300, w = 220, h = 96;
+      c.roundRect(x, y, w, h, h / 2, held_ ? ACCENT : SURFACE);
+      if (!held_) c.roundRectOutline(x, y, w, h, h / 2, 2, INK_3);
+      ui::textCentered(c, CX, y + h / 2, cc.buttons[0], TXT_BODY, held_ ? BG : INK);
+    }
   }
   int sel_ = 0;
   float pos_ = 0;
   bool held_ = false;
 };
 
-// ---- Mouse: a Bluetooth mouse. Tilt or finger moves the pointer, the rim scrolls, as on a laptop touchpad ------------
+// ---- 36. mouse: a Bluetooth mouse. Tilt or finger moves the pointer, the right rim scrolls -----------
 class MouseScreen : public Screen {
  public:
   void enter(App& a) override {
-    zeroX_ = avgX_ = a.hal.ax; zeroY_ = avgY_ = a.hal.ay;   // however it is held now becomes "still"
-    tiltOn_ = true; rim_ = false; dragging_ = false; lastDy_ = 0;
+    zeroX_ = avgX_ = a.hal.ax; zeroY_ = avgY_ = a.hal.ay;  // however it is held now becomes "still"
+    tiltOn_ = true; rim_ = false; dragging_ = false; enteredMs_ = a.nowMs(); scroll_ = 0;
     a.mouseState = App::MouseState{};
     a.react(Emotion::Focused, 1000);
   }
@@ -862,36 +858,45 @@ class MouseScreen : public Screen {
       m.x += curve(a.hal.ax - zeroX_) * dt;
       m.y += curve(a.hal.ay - zeroY_) * dt;
     }
+    if (!rim_) scroll_ += (0 - scroll_) * clampf(dt / 300.f, 0, 1);  // the scroll thumb returns to the middle
     a.anim.lookOffset(clampf(a.hal.ax - zeroX_, -1, 1) * 36, clampf(a.hal.ay - zeroY_, -1, 1) * 24, 150);
   }
   void draw(App& a, Canvas& c) override {
     uint8_t b = a.mouseState.buttons;
-    c.arc(kCx, kCy, kCx - 9, 10, 15, 165, kDark);   // the right rim is the scroll strip
-    for (int i = 0; i < 5; i++) { float ang = (60 + i * 15) * 0.0174533f; c.fillCircle(kCx + sinf(ang) * (kCx - 9), kCy - cosf(ang) * (kCx - 9), 2, kDim); }
-    float px = kCx + clampf(a.hal.ax - zeroX_, -1, 1) * 70, py = kCy - 44 + clampf(a.hal.ay - zeroY_, -1, 1) * 70;
-    c.ring(kCx, kCy - 44, 78, 2, kDark);
-    if (tiltOn_) c.fillCircle(px, py, 12, kSky); else c.ring(kCx, kCy - 44, 12, 2, kDim);
-    c.roundRect(kCx - 72, kCy + 50, 68, 34, 10, (b & 1) ? kWhite : kDark);
-    c.roundRect(kCx + 4, kCy + 50, 68, 34, 10, (b & 2) ? kWhite : kDark);
-    c.text(kCx - 38, kCy + 54, "Л", FontSize::S, (b & 1) ? kBlack : kGray, Align::Center);
-    c.text(kCx + 38, kCy + 54, "П", FontSize::S, (b & 2) ? kBlack : kGray, Align::Center);
-    c.text(kCx, 48, a.hal.bleConnected ? "Подключена" : "Найди в Bluetooth", FontSize::S, a.hal.bleConnected ? kMint : kGray, Align::Center);
-    c.textWrapped(kCx, kCy + 96, 300, tiltOn_ ? "тап левая · два тапа правая\nкрай прокрутка · тряска стоп\n↓ от верхнего края выход"
-                                              : "наклон выключен, встряхни", FontSize::S, kDim, Align::Center, 3);
+    bool linked = a.hal.bleConnected;
+    int w1 = Canvas::textWidth("Мышь · ", TXT_MIN), w2 = Canvas::textWidth(linked ? "подключено" : "не подключено", TXT_MIN);
+    int x = CX - (w1 + w2) / 2, top = 48;
+    c.text(x, top, "Мышь · ", TXT_MIN, INK_2);
+    c.text(x + w1, top, linked ? "подключено" : "не подключено", TXT_MIN, linked ? ACCENT : INK_2);
+    // The touchpad and the cursor that follows the lean.
+    c.ring(CX, 198, 99, 2, INK_3);
+    float px = CX + clampf(a.hal.ax - zeroX_, -1, 1) * 70, py = 198 + clampf(a.hal.ay - zeroY_, -1, 1) * 70;
+    if (tiltOn_) c.fillCircle(px, py, 13, ACCENT);
+    else c.ring(CX, 198, 12, 2, INK_3);
+    for (int i = 0; i < 2; i++) {
+      bool down = b & (1 << i);
+      float bx = i ? 292.f - 52 : 176.f - 52;
+      c.roundRect(bx, 318, 104, 72, 36, down ? ACCENT : SURFACE);
+      if (!down) c.roundRectOutline(bx, 318, 104, 72, 36, 2, INK_3);
+      ui::textCentered(c, bx + 52, 354, i ? "П" : "Л", TXT_BTN, down ? BG : INK);
+    }
+    // Scroll strip on the right rim: 300 px of track, the thumb shows the last scroll.
+    const float sweep = 300 / 214.f * 57.29578f, thumb = 40 / 214.f * 57.29578f;
+    ui::drawArc(c, CX, CY, 214, 12, -sweep / 2, sweep, TRACK);
+    ui::drawArc(c, CX, CY, 214, 12, clampf(scroll_, -1, 1) * (sweep - thumb) / 2 - thumb / 2, thumb, ACCENT);
+    if (a.nowMs() - enteredMs_ < HINT_MS) c.text(CX, 404, tiltOn_ ? "край — прокрутка" : "наклон выключен, встряхни", TXT_MIN, INK_2, Align::Center);
+    else if (!tiltOn_) c.text(CX, 404, "наклон выключен, встряхни", TXT_MIN, INK_2, Align::Center);
   }
   void onGesture(App& a, const GestureEvent& e) override {
     App::MouseState& m = a.mouseState;
     switch (e.g) {
-      case Gesture::Down:
-        rim_ = onRim(e.x, e.y);
-        downY_ = e.y;
-        lastDy_ = 0;
-        break;
+      case Gesture::Down: rim_ = onRim(e.x, e.y); break;
       case Gesture::Move:
-        if (rim_) m.wheel -= e.dy * 0.12f;
+        if (rim_) { m.wheel -= e.dy * 0.12f; scroll_ = clampf(scroll_ + e.dy / 120.f, -1, 1); }
         else { m.x += e.dx * 1.6f; m.y += e.dy * 1.6f; }
         break;
       case Gesture::Up:
+        rim_ = false;
         if (dragging_) { dragging_ = false; m.buttons &= ~1; m.buttonsChanged = true; }
         break;
       case Gesture::Tap: click(m, 1, &m.leftReleaseMs); a.sfx.play("system/click"); break;
@@ -903,10 +908,7 @@ class MouseScreen : public Screen {
         m.buttonsChanged = true;
         a.sfx.play("interactions/hold");
         break;
-      case Gesture::SwipeDown:
-        if (downY_ < 60) { m.buttons = 0; m.buttonsChanged = true; a.showScreen(ScreenId::Face); }
-        break;
-      default: break;
+      default: break;  // back is the top-edge swipe, handled for every screen
     }
   }
   bool onMotion(App& a, MotionEvent ev) override {
@@ -919,6 +921,7 @@ class MouseScreen : public Screen {
     }
     return ev == MotionEvent::Jerk || ev == MotionEvent::Lifted || ev == MotionEvent::FaceDown;
   }
+
  private:
   // Pixels per millisecond. A dead zone for a steady hand, then speed grows with the square for fine control near centre.
   static float curve(float t) {
@@ -929,19 +932,37 @@ class MouseScreen : public Screen {
     return t > 0 ? v : -v;
   }
   static bool onRim(int x, int y) {
-    float dx = (float)(x - kCx), dy = (float)(y - kCy);
+    float dx = (float)(x - CX), dy = (float)(y - CY);
     return dx > 40 && dx * dx + dy * dy > 175 * 175;
   }
   static void click(App::MouseState& m, uint8_t bit, float* release) { m.buttons |= bit; m.buttonsChanged = true; *release = 45; }
-  float zeroX_ = 0, zeroY_ = 0, avgX_ = 0, avgY_ = 0;
-  int downY_ = 0, lastDy_ = 0;
+  float zeroX_ = 0, zeroY_ = 0, avgX_ = 0, avgY_ = 0, enteredMs_ = 0, scroll_ = 0;
   bool tiltOn_ = true, rim_ = false, dragging_ = false;
+};
+
+// ---- 40. Bluetooth pairing: what to look for on the phone or the computer ---------------------------
+class BlePairingScreen : public Screen {
+ public:
+  void enter(App& a) override { a.react(Emotion::Curious, 1500); }
+  void draw(App& a, Canvas& c) override {
+    c.ring(CX, CY, 214, 4, TRACK);
+    float run = fmodf(a.nowMs() * 0.12f, 360.f), seg = 220 / 214.f * 57.29578f;
+    ui::drawArc(c, CX, CY, 214, 4, run - 90, seg, ACCENT);
+    a.face.drawMini(c, a.hal.bleConnected ? Emotion::Happy : Emotion::Curious, CX - 90, 96, 180, INK);
+    ui::textCentered(c, CX, 228, a.hal.bleConnected ? "Подключено" : "Найди меня", TXT_TITLE, INK);
+    ui::textCentered(c, CX, 266, "в настройках Bluetooth", TXT_MIN, INK_2);
+    char name[24];
+    snprintf(name, sizeof name, "Companion-%s", strlen(a.hal.mac) >= 17 ? a.hal.mac + 12 : "0");
+    for (char* p = name; *p; p++) if (*p == ':') memmove(p, p + 1, strlen(p));
+    ui::textCentered(c, CX, 312, name, TXT_UNB28, ACCENT);
+  }
 };
 
 Screen* partyScreen(ScreenId id) {
   static CoinScreen coin; static DiceScreen dice; static MagicBallScreen ball; static BalanceScreen balance;
   static DuelScreen duel; static ShakerScreen shaker; static SafeScreen safe; static WorkoutScreen workout;
   static MoleScreen mole; static ControllerScreen controller; static MouseScreen mouse; static BlackjackScreen blackjack;
+  static BlePairingScreen pairing;
   switch (id) {
     case ScreenId::Coin: return &coin;
     case ScreenId::Dice: return &dice;
@@ -954,6 +975,7 @@ Screen* partyScreen(ScreenId id) {
     case ScreenId::Mole: return &mole;
     case ScreenId::Mouse: return &mouse;
     case ScreenId::Blackjack: return &blackjack;
+    case ScreenId::BlePairing: return &pairing;
     default: return &controller;
   }
 }

@@ -338,7 +338,6 @@ Screen* screenInstance(ScreenId id) {
   if (Screen* s = playScreen(id)) return s;
   switch (id) {
     case ScreenId::Maze: case ScreenId::Orbit: case ScreenId::Snake: case ScreenId::Simon: return gameScreen(id);
-    case ScreenId::BlePairing: return partyScreen(ScreenId::Mouse);  // shared until the pairing screen of stage 8
     default: return partyScreen(id);
   }
 }

@@ -162,10 +162,11 @@ SCENES = [
     ("37_controller_durak", _steps(_cmd(type="controller", value="start", mode="cards", title="Козырь: пики", info="Отбивайтесь", target="Ks",
                                         labels="6s,6h,7d,8c,9s,10h,Jd,Qc,Ks,Ah,6d,7c,9h,10s", marks="01000000010000",
                                         hint="наклон выбор · тап отметить\n↑ бить · ↓ беру"), _tilt(0.35, 0))),
-    ("38_controller_poker", _steps(_cmd(type="controller", value="start", mode="cards", labels="As,10h", marks="", title="Фишки 190",
-                                        info="Префлоп · банк 30", hint="тап чек\n↑ поднять · ↓ сбросить"), lambda c: c.run(600))),
-    ("39_controller_race", _steps(_cmd(type="controller", value="start", mode="pad", title="Гонки", hint="наклон руль · держи экран тормоз"),
-                                  _tilt(0.4, 0.2))),
+    ("38_controller_poker", _steps(_cmd(type="controller", value="start", mode="cards", labels="As,10h", marks="", title="фишки 190 · банк 30",
+                                        info="Префлоп", hint="тап чек\n↑ поднять · ↓ сбросить", buttons="Пас,Чек,Рейз"),
+                                   lambda c: c.run(600))),
+    ("39_controller_race", _steps(_cmd(type="controller", value="start", mode="pad", title="Гонки", hint="км/ч · наклон — руль",
+                                       info="86", buttons="Держи — тормоз"), _tilt(0.34, 0.2))),
     ("40_ble_pairing", _steps(_cmd(type="controller", value="stop"), _screen("ble_pairing"))),
 ]
 
