@@ -131,7 +131,8 @@ class App {
 
   // Shared timer/stopwatch state survives leaving their screens.
   float timerLeftMs = 0, timerSetMs = 5 * 60000.f; bool timerRunning = false;
-  float swMs = 0; bool swRunning = false; float swLap = 0;
+  float swMs = 0; bool swRunning = false; float swLap = 0;  // swLap: the stopwatch time when the current lap began
+  int swLaps = 0;
 
   AnimationEngine anim;
   FaceEngine face;

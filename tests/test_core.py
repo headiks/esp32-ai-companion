@@ -846,15 +846,20 @@ def test_snake_screen_runs_and_dies_at_wall(c):
     assert c.state()["screen"] == "snake"
 
 
-def test_clock_digits_are_squares(c):
-    c.handle_command({"type": "set_time", "epoch": 1767225600 + 3600 * 12 + 34 * 60, "tz_minutes": 0})
+def test_clock_waits_for_time_then_shows_it():
+    """Design 1a: until the first sync the clock says the time is not set; then the digits are INK."""
+    INK_3 = 0x39C6
+    c = Companion(seed=3)
     c.handle_command({"type": "screen", "value": "digital_clock"})
-    c.run(800)
-    fb = c.render()
-    band = fb[233 - 48:233 + 54]
-    # Digits are solid white squares on black: no in-between antialiasing shades in that band.
-    colors = set(np.unique(band).tolist())
-    assert 0xFFFF in colors and len([v for v in colors if v not in (0, 0xFFFF)]) < 8
+    c.run(600)
+    band = c.render()[200:280]
+    assert (band == INK_3).sum() > 300, "--:-- in INK_3"
+    assert (band == INK).sum() < 50
+    c.handle_command({"type": "set_time", "epoch": 1767225600 + 3600 * 12 + 34 * 60, "tz_minutes": 0})
+    c.run(600)
+    band = c.render()[170:260]
+    assert (band == INK).sum() > 1500, "12:34 in INK"
+    c.close()
 
 
 def test_digit_change_ripples(c):

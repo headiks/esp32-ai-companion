@@ -76,6 +76,7 @@ class Canvas {
   static int lineHeight(FontSize f);
   // Distance from the top of the line to the middle of a digit or capital: centres text by what the eye sees.
   static int capMiddle(FontSize f);
+  static int capBottom(FontSize f);  // from the top of the line to the baseline of digits and capitals
   // Blacks out everything outside a circle: used for the iris screen transition and the bezel.
   void maskOutsideCircle(float cx, float cy, float r);
 

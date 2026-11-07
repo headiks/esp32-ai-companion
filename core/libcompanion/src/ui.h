@@ -62,6 +62,7 @@ void drawWeatherIcon(Canvas& c, Weather w, float cx, float cy, float size, float
 const char* weatherTitle(Weather w);
 
 Screen* systemScreen(ScreenId id);  // ui_system.cpp, nullptr for other screens
+Screen* timeScreen(ScreenId id);    // ui_time.cpp, likewise
 Screen* gameScreen(ScreenId id);
 Screen* partyScreen(ScreenId id);
 

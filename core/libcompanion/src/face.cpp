@@ -472,12 +472,6 @@ static void drawEyes(Canvas& c, const EyePose* pose, const float* offX, const fl
   }
 }
 
-// A plus made of two bars with rounded ends.
-static void plus(Canvas& c, float x, float y, float half, float thick, uint16_t col) {
-  c.line(x - half, y, x + half, y, thick, col);
-  c.line(x, y - half, x, y + half, thick, col);
-}
-
 // A drop: a circle with a triangle above it, 2 r high.
 static void drop(Canvas& c, float x, float y, float r, uint16_t col) {
   c.fillCircle(x, y, r, col);
@@ -495,7 +489,7 @@ static void drawOverlay(Canvas& c, const AnimationEngine& a, float ox, float oy)
     case Overlay::None: break;
     case Overlay::Sparkle: {
       const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
-      for (int i = 0; i < 3; i++) plus(c, X(px[i]), Y(py[i]), half[i] * (0.8f + 0.2f * sinf(ts * 3.1f + i * 2.1f)), 3.5f, INK);
+      for (int i = 0; i < 3; i++) ui::sparkle(c, X(px[i]), Y(py[i]), half[i] * (0.8f + 0.2f * sinf(ts * 3.1f + i * 2.1f)), 3.5f, INK);
       break;
     }
     case Overlay::Hearts:
@@ -539,7 +533,7 @@ static void drawOverlay(Canvas& c, const AnimationEngine& a, float ox, float oy)
       break;
     case Overlay::Frost: {
       const float px[5] = {96, 160, 233, 306, 370}, py[5] = {108, 84, 72, 84, 108};
-      for (int i = 0; i < 5; i++) plus(c, X(px[i]), Y(py[i]), 7 * (0.75f + 0.25f * sinf(ts * 2.3f + i)), 3, ACCENT);
+      for (int i = 0; i < 5; i++) ui::sparkle(c, X(px[i]), Y(py[i]), 7 * (0.75f + 0.25f * sinf(ts * 2.3f + i)), 3, ACCENT);
       break;
     }
     case Overlay::Sweat: {
@@ -582,14 +576,6 @@ void FaceEngine::drawMini(Canvas& c, Emotion e, float left, float top, float wid
   drawEyes(c, pose, zero, zero, d.pupil, left, top, width / 354.f, color);
 }
 
-// A cloud of the spec at scale s: three circles on a rounded base.
-static void cloud(Canvas& c, float x, float y, float s, uint16_t col) {
-  c.fillCircle(x - 28 * s, y + 4 * s, 22 * s, col);
-  c.fillCircle(x, y - 10 * s, 30 * s, col);
-  c.fillCircle(x + 30 * s, y + 6 * s, 20 * s, col);
-  c.roundRect(x - 50 * s, y + 4 * s, 100 * s, 22 * s, 11 * s, col);
-}
-
 static float hash01(int i, float k) {
   float v = sinf(i * 12.9898f + k * 78.233f) * 43758.5453f;
   return v - floorf(v);
@@ -619,11 +605,10 @@ void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool over, bool fl
   if (clouds) {
     uint16_t col = w == Weather::Storm ? sky::STORM_CLOUD : sky::CLOUD;
     const float cx[3] = {96, 240, 384}, cy[3] = {92, 64, 100}, cs[3] = {1.25f, 1.1f, 1.2f};
-    for (int i = 0; i < 3; i++) cloud(c, cx[i] + 6 * sinf(t * 0.0003f + i * 2.1f), cy[i], cs[i], col);
+    for (int i = 0; i < 3; i++) ui::cloud(c, cx[i] + 6 * sinf(t * 0.0003f + i * 2.1f), cy[i], cs[i], col);
   }
   if (w == Weather::Storm) {
-    const float bx[4] = {246, 226, 242, 222}, by[4] = {58, 98, 98, 142};
-    for (int i = 0; i < 3; i++) c.line(bx[i], by[i], bx[i + 1], by[i + 1], flash ? 8 : 5, ACCENT_2);
+    ui::bolt(c, 234, 58, 1, flash ? 8 : 5, ACCENT_2);
   }
   if (w == Weather::Snow) {
     for (int i = 0; i < 40; i++) {
@@ -642,7 +627,7 @@ void FaceEngine::drawWeather(Canvas& c, Weather w, float tMs, bool over, bool fl
   }
   if (w == Weather::Clear) {
     const float px[3] = {112, 233, 356}, py[3] = {96, 72, 96}, half[3] = {9, 12, 8};
-    for (int i = 0; i < 3; i++) plus(c, px[i], py[i], half[i] * (0.8f + 0.2f * sinf(t * 0.0031f + i * 2.1f)), 3.5f, INK);
+    for (int i = 0; i < 3; i++) ui::sparkle(c, px[i], py[i], half[i] * (0.8f + 0.2f * sinf(t * 0.0031f + i * 2.1f)), 3.5f, INK);
   }
 }
 

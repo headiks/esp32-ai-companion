@@ -130,8 +130,9 @@ SCENES = [
     ("08_info", _screen("info")),
     ("09_digital_clock", _steps(_cmd(type="weather", value="rain", temp=12), _screen("digital_clock"))),
     ("10_analog_clock", _screen("analog_clock")),
-    ("11_stopwatch", _screen("stopwatch")),
-    ("12_timer", _screen("timer")),
+    # The design's moment: 42.7 s, the second lap 19.3 s old.
+    ("11_stopwatch", _steps(_screen("stopwatch", 300), _tap(284, 358), lambda c: c.run(23400), _tap(180, 358), lambda c: c.run(19300))),
+    ("12_timer", _steps(_screen("timer", 300), _tap(233, 340), lambda c: c.run(48000))),  # 5 min, 4:12 left
     ("14_pet", _screen("pet")),
     ("15_pet_game", _screen("pet_game", 1500)),
     ("16_games", _screen("games")),

@@ -390,167 +390,6 @@ class PetScreen : public Screen {
   float flashMs_ = 0;
 };
 
-// ---- clocks ----------------------------------------------------------------------------------
-static const char* const kWeekdays[7] = {"ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"};
-static const char* const kMonths[12] = {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"};
-
-class AnalogClockScreen : public Screen {
- public:
-  void draw(App& a, Canvas& c) override {
-    DateTime d = a.clock.now();
-    float secF = d.second + a.clock.secondFraction();
-    drawRimSquares(c, secF / 60, kAccent);
-    for (int i = 0; i < 12; i++) {
-      float ang = i * 30 * 0.0174533f, s = sinf(ang), co = -cosf(ang);
-      float r0 = kCx - 44, r1 = kCx - 26;
-      c.line(kCx + s * r0, kCy + co * r0, kCx + s * r1, kCy + co * r1, i % 3 == 0 ? 5 : 2.5f, i % 3 == 0 ? kWhite : kGray);
-    }
-    char date[32];
-    snprintf(date, sizeof(date), "%s %d", kWeekdays[d.weekday], d.day);
-    c.text(kCx, kCy + 84, date, FontSize::S, kGray, Align::Center);
-    float mF = d.minute + secF / 60, hF = (d.hour % 12) + mF / 60;
-    auto hand = [&](float deg, float len, float tail, float w, uint16_t col) {
-      float rad = deg * 0.0174533f, s = sinf(rad), co = -cosf(rad);
-      c.line(kCx - s * tail, kCy - co * tail, kCx + s * len, kCy + co * len, w, col);
-    };
-    hand(hF * 30, 104, 0, 7, kWhite);
-    hand(mF * 6, 164, 0, 4, kWhite);
-    c.fillCircle(kCx, kCy, 7, kWhite);
-    c.fillCircle(kCx, kCy, 3, kAccent);
-  }
-};
-
-class DigitalClockScreen : public Screen {
- public:
-  void tick(App& a, float dt) override {
-    DateTime d = a.clock.now();
-    char t[12];
-    snprintf(t, sizeof(t), "%02d:%02d", d.hour, d.minute);
-    time_.set(t);
-    time_.tick(dt);
-  }
-  void draw(App& a, Canvas& c) override {
-    DateTime d = a.clock.now();
-    drawRimSquares(c, (d.second + 1) / 60.f, kAccent);
-    time_.draw(c, kCx, kCy - 48, 12, 2, kWhite);
-    char date[40];
-    snprintf(date, sizeof(date), "%s  %d %s", kWeekdays[d.weekday], d.day, kMonths[d.month - 1]);
-    c.text(kCx, kCy + 66, date, FontSize::S, kGray, Align::Center);
-    if (a.weather.known) {
-      char w[16];
-      snprintf(w, sizeof(w), "%d°", (int)roundf(a.weather.tempC));
-      drawWeatherIcon(c, a.weather.cond, kCx - 24, kCy - 96, 17, a.nowMs());
-      c.text(kCx + 6, kCy - 110, w, FontSize::M, kWhite);
-    } else if (!a.clock.isSet()) {
-      c.text(kCx, kCy + 94, "время не задано", FontSize::S, kDim, Align::Center);
-    }
-  }
- private:
-  DotText time_;
-};
-
-class WeatherScreen : public Screen {
- public:
-  void tick(App& a, float dt) override {
-    char t[12];
-    snprintf(t, sizeof(t), a.weather.known ? "%d" : "--", (int)roundf(a.weather.tempC));
-    temp_.set(t);
-    temp_.tick(dt);
-  }
-  void draw(App& a, Canvas& c) override {
-    Weather w = a.weather.known ? a.weather.cond : Weather::Clouds;
-    drawWeatherIcon(c, w, kCx, 130, 66, a.nowMs());
-    temp_.draw(c, kCx, 214, 8, 2, kWhite);
-    if (a.weather.known) c.text(kCx, 300, weatherTitle(w), FontSize::M, kSoft, Align::Center);
-    else c.textWrapped(kCx, 296, 300, "Нет данных: нужен Wi-Fi с координатами или приложение", FontSize::S, kGray, Align::Center, 3);
-    miniFace(c, a, kCx, 392, 119);
-  }
- private:
-  DotText temp_;
-};
-
-// ---- timer / stopwatch -----------------------------------------------------------------------
-class TimerScreen : public Screen {
- public:
-  void tick(App& a, float dt) override {
-    char t[16];
-    formatTime(t, sizeof(t), (a.timerRunning || a.timerLeftMs > 0 ? a.timerLeftMs : a.timerSetMs) + 999, false);
-    time_.set(t);
-    time_.tick(dt);
-  }
-  void draw(App& a, Canvas& c) override {
-    float ms = a.timerRunning || a.timerLeftMs > 0 ? a.timerLeftMs : a.timerSetMs;
-    drawRimSquares(c, a.timerSetMs > 0 ? clampf(ms / a.timerSetMs, 0, 1) : 0, kAccent);
-    drawTitle(c, "");
-    time_.draw(c, kCx, kCy - 104, 11, 2, kWhite);
-    drawButton(c, kMinus, "-1");
-    drawButton(c, kPlus, "+1");
-    drawButton(c, kGo, a.timerRunning ? "Пауза" : "Старт", true);
-    drawButton(c, kReset, "Сброс");
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap) return;
-    if (kMinus.hit(e.x, e.y) && !a.timerRunning) {
-      a.timerSetMs = a.timerSetMs > 60000 ? a.timerSetMs - 60000 : 60000;
-      a.timerLeftMs = 0; a.sfx.play("system/click");
-    } else if (kPlus.hit(e.x, e.y) && !a.timerRunning) {
-      a.timerSetMs = a.timerSetMs < 99 * 60000 ? a.timerSetMs + 60000 : a.timerSetMs;
-      a.timerLeftMs = 0; a.sfx.play("system/click");
-    } else if (kGo.hit(e.x, e.y)) {
-      if (!a.timerRunning && a.timerLeftMs <= 0) a.timerLeftMs = a.timerSetMs;
-      a.timerRunning = !a.timerRunning;
-      a.sfx.play("system/click");
-    } else if (kReset.hit(e.x, e.y)) {
-      a.timerRunning = false; a.timerLeftMs = 0; a.sfx.play("system/click");
-    }
-  }
- private:
-  DotText time_;
-  static constexpr Button kMinus{kCx - 112, kCy + 40, 36}, kPlus{kCx + 112, kCy + 40, 36};
-  static constexpr Button kGo{kCx - 52, kCy + 128, 46}, kReset{kCx + 52, kCy + 128, 46};
-};
-constexpr Button TimerScreen::kMinus, TimerScreen::kPlus, TimerScreen::kGo, TimerScreen::kReset;
-
-class StopwatchScreen : public Screen {
- public:
-  void tick(App& a, float dt) override {
-    char t[16];
-    formatTime(t, sizeof(t), a.swMs, false);
-    time_.set(t);
-    time_.tick(dt);
-    char l[8];
-    snprintf(l, sizeof(l), ".%d", ((int)a.swMs / 100) % 10);
-    tenths_.set(l);
-    tenths_.tick(dt * 4);
-  }
-  void draw(App& a, Canvas& c) override {
-    drawRimSquares(c, fmodf(a.swMs / 1000.f, 60.f) / 60, kAccent);
-    time_.draw(c, kCx, kCy - 106, 11, 2, kWhite);
-    tenths_.draw(c, kCx, kCy - 8, 5, 1, kAccent);
-    if (a.swLap > 0) {
-      char t[16], lap[24];
-      formatTime(t, sizeof(t), a.swLap, true);
-      snprintf(lap, sizeof(lap), "Круг %s", t);
-      c.text(kCx, kCy + 44, lap, FontSize::S, kGray, Align::Center);
-    }
-    drawButton(c, kGo, a.swRunning ? "Стоп" : "Старт", true);
-    drawButton(c, kLap, a.swRunning ? "Круг" : "Сброс");
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap) return;
-    if (kGo.hit(e.x, e.y)) { a.swRunning = !a.swRunning; a.sfx.play("system/click"); }
-    else if (kLap.hit(e.x, e.y)) {
-      if (a.swRunning) a.swLap = a.swMs;
-      else { a.swMs = 0; a.swLap = 0; }
-      a.sfx.play("system/click");
-    }
-  }
- private:
-  DotText time_, tenths_;
-  static constexpr Button kGo{kCx - 56, kCy + 124, 48}, kLap{kCx + 56, kCy + 124, 48};
-};
-constexpr Button StopwatchScreen::kGo, StopwatchScreen::kLap;
-
 // ---- games -----------------------------------------------------------------------------------
 struct GameItem { const char* title; ScreenId id; };
 static const GameItem kGames[] = {{"Лабиринт", ScreenId::Maze}, {"Орбита", ScreenId::Orbit}, {"Двадцать одно", ScreenId::Blackjack}, {"Монетка", ScreenId::Coin}, {"Кубики", ScreenId::Dice},
@@ -904,21 +743,16 @@ class PetGameScreen : public Screen {
 
 Screen* screenInstance(ScreenId id) {
   if (Screen* sys = systemScreen(id)) return sys;
-  static PetScreen pet; static AnalogClockScreen analog; static DigitalClockScreen digital; static TimerScreen timer; static StopwatchScreen sw;
-  static GamesScreen games; static TicTacToeScreen ttt; static ReactionScreen react; static GuessScreen guess; static PetGameScreen pg;
-  static WeatherScreen weather;
+  if (Screen* t = timeScreen(id)) return t;
+  static PetScreen pet; static GamesScreen games; static TicTacToeScreen ttt; static ReactionScreen react; static GuessScreen guess;
+  static PetGameScreen pg;
   switch (id) {
     case ScreenId::Pet: return &pet;
-    case ScreenId::AnalogClock: return &analog;
-    case ScreenId::DigitalClock: return &digital;
-    case ScreenId::Timer: return &timer;
-    case ScreenId::Stopwatch: return &sw;
     case ScreenId::Games: return &games;
     case ScreenId::TicTacToe: return &ttt;
     case ScreenId::Reaction: return &react;
     case ScreenId::Guess: return &guess;
     case ScreenId::PetGame: return &pg;
-    case ScreenId::Weather: return &weather;
     case ScreenId::Maze: case ScreenId::Orbit: case ScreenId::Snake: case ScreenId::Simon: return gameScreen(id);
     case ScreenId::BlePairing: return partyScreen(ScreenId::Mouse);  // shared until the pairing screen of stage 8
     default: return partyScreen(id);

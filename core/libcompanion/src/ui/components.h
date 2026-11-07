@@ -44,6 +44,11 @@ void heart(Canvas& c, float x, float y, float r, uint16_t color);
 // label "As", "10h"; empty or faceDown draws the back. Inactive cards keep a dim outline.
 void card(Canvas& c, float x, float y, float w, float h, const char* label, bool faceUp = true, bool active = true, float stroke = 2);
 
+// Weather pieces shared by the face and the weather screen.
+void cloud(Canvas& c, float x, float y, float s, uint16_t color);   // three circles on a rounded base
+void bolt(Canvas& c, float x, float y, float s, float thick, uint16_t color);  // zigzag lightning, top at (x, y)
+void sparkle(Canvas& c, float x, float y, float half, float thick, uint16_t color);  // a plus with round ends
+
 // Caption and value on one line, a 6 px bar under them.
 void statBar(Canvas& c, float x, float y, float w, const char* label, int value, uint16_t fill = theme::INK);
 

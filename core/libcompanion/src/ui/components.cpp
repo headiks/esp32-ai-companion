@@ -120,6 +120,25 @@ void card(Canvas& c, float x, float y, float w, float h, const char* label, bool
   drawSuit(c, suit, x + w / 2, y + h * 0.7f, w * 0.3f, ink);
 }
 
+// ---- weather pieces -------------------------------------------------------------------------------
+
+void cloud(Canvas& c, float x, float y, float s, uint16_t color) {
+  c.fillCircle(x - 28 * s, y + 4 * s, 22 * s, color);
+  c.fillCircle(x, y - 10 * s, 30 * s, color);
+  c.fillCircle(x + 30 * s, y + 6 * s, 20 * s, color);
+  c.roundRect(x - 50 * s, y + 4 * s, 100 * s, 22 * s, 11 * s, color);
+}
+
+void bolt(Canvas& c, float x, float y, float s, float thick, uint16_t color) {
+  const float bx[4] = {12, -8, 8, -12}, by[4] = {0, 40, 40, 84};
+  for (int i = 0; i < 3; i++) c.line(x + bx[i] * s, y + by[i] * s, x + bx[i + 1] * s, y + by[i + 1] * s, thick, color);
+}
+
+void sparkle(Canvas& c, float x, float y, float half, float thick, uint16_t color) {
+  c.line(x - half, y, x + half, y, thick, color);
+  c.line(x, y - half, x, y + half, thick, color);
+}
+
 // ---- bars -----------------------------------------------------------------------------------------
 
 void statBar(Canvas& c, float x, float y, float w, const char* label, int value, uint16_t fill) {

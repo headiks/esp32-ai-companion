@@ -470,8 +470,10 @@ void App::tickBehaviour(float dt) {
       timerLeftMs = 0; timerRunning = false;
       power.activity();
       if (pet.asleep()) wakeNow();
+      // The spec: the whole face celebrates, with the alarm sound, instead of a toast.
+      showScreen(ScreenId::Face);
       react(Emotion::Excited, 2500, EmotionPriority::Strong);
-      toast("Таймер", "Время вышло!", "system/timer_done");
+      sfx.play("system/timer_done");
     }
   }
   if (swRunning) swMs += simDt;

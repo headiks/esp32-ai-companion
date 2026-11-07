@@ -402,6 +402,13 @@ int Canvas::capMiddle(FontSize f) {
   return g && g->h ? g->yoff + g->h / 2 : fi.lineH / 2;
 }
 
+int Canvas::capBottom(FontSize f) {
+  const FontInfo& fi = fontOf(f);
+  const Glyph* g = findGlyph(fi, '0');
+  if (!g || !g->h) g = findGlyph(fi, 0x41D);
+  return g && g->h ? g->yoff + g->h : fi.lineH;
+}
+
 int Canvas::textWrapped(int x, int y, int maxW, const char* s, FontSize f, uint16_t c, Align a, int maxLines, int lineH, bool ellipsis) {
   const FontInfo& fi = fontOf(f);
   if (lineH <= 0) lineH = fi.lineH;
