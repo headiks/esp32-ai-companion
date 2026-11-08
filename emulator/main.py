@@ -81,6 +81,8 @@ class Emulator(QMainWindow):
         self.silent = silent
 
         self.touch_queue = []
+        self.touch_down = False
+        self.release_hold = 0.0
         self.screen = ScreenWidget(lambda down, x, y: self.touch_queue.append((down, x, y)), self.set_tilt)
         QApplication.instance().installEventFilter(self)  # arrow keys tilt the device from anywhere in the window
         self.panel = Panel(self)
@@ -132,9 +134,7 @@ class Emulator(QMainWindow):
         ax, ay, az, gx, gy, gz = self.imu.sample()
         self.companion.imu(ax, ay, az, gx, gy, gz, dt)
         self.companion.mic(self.micsim.samples(max(1, int(dt * 16))))
-        # One mouse event per frame: the core samples touch once per tick, a fast click would vanish between ticks.
-        if self.touch_queue:
-            self.companion.touch(*self.touch_queue.pop(0))
+        self._feed_touch(dt)
         self.companion.tick(dt)
         self.screen.show_frame(self.companion.render())
         self._run_scripts(dt)
@@ -165,6 +165,25 @@ class Emulator(QMainWindow):
             d = self.companion.diag()
             self.panel.update_state(st, d.get("mic_db", -90), self.out_level)
             self.out_level *= 0.7
+
+    def _feed_touch(self, dt):
+        """The core samples touch once per tick, like the panel. A mouse sends hundreds of moves per second:
+        moves since the last tick collapse into the newest position, or a drag would replay for seconds.
+        A press and a release are never skipped, and a release lasts 50 ms: the core bridges shorter
+        gaps as panel glitches, which would merge two quick clicks into one touch."""
+        if self.release_hold > 0:
+            self.release_hold -= dt
+            return
+        if not self.touch_queue:
+            return
+        down, x, y = self.touch_queue.pop(0)
+        if down and self.touch_down:
+            while self.touch_queue and self.touch_queue[0][0]:
+                down, x, y = self.touch_queue.pop(0)
+        self.companion.touch(down, x, y)
+        if self.touch_down and not down:
+            self.release_hold = 50
+        self.touch_down = down
 
     def _run_scripts(self, dt):
         if self.demo_queue:

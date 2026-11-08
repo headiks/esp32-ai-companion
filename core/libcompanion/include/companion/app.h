@@ -16,7 +16,7 @@ constexpr int kProtocolVersion = 1;
 
 enum class ScreenId : uint8_t {
   Face, Menu, Pet, AnalogClock, DigitalClock, Timer, Stopwatch, Notifications, Settings, Diagnostics, Games, Info,
-  TicTacToe, Reaction, Guess, PetGame, Maze, Orbit, Snake, Simon,
+  TicTacToe, Guess, PetGame, Maze, Orbit, Snake, Simon,
   Coin, Dice, MagicBall, Balance, Duel, Shaker, Safe, Workout, Mole, Blackjack, Weather, Controller, Mouse,
   Talk, SettingValue, ClockMenu, Remotes, BlePairing,  // design 1a
   Count
@@ -97,6 +97,10 @@ class App {
   void listen();   // voice dialog on the talk screen, needs settings.aiVoiceConsent
   enum class Talk : uint8_t { Off, Listening, Thinking, Answer, Unavailable };
   Talk talk = Talk::Off;
+  // The last AI answer for connected apps: the phone's chat shows what the device said. replyN counts answers.
+  char reply[200] = "";
+  int replyN = 0;
+  Emotion replyEmotion = Emotion::Neutral;
   float talkMs = 0;
   char talkText[200] = "";       // the answer, shown on the talk screen
   const char* talkProblem = "";  // why the voice cannot start

@@ -7,7 +7,7 @@ namespace cc {
 
 static const char* const kScreenNames[(int)ScreenId::Count] = {
     "face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications",
-    "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game",
+    "settings", "diagnostics", "games", "info", "tictactoe", "guess", "pet_game",
     "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "controller", "mouse",
     "talk", "setting_value", "clocks", "remotes", "ble_pairing"};
 

@@ -169,6 +169,7 @@ static void addFullState(App& a, JsonWriter& w) {
   w.add("sound", a.settings.soundOn);
   w.add("mic", a.settings.micOn);
   w.add("unread", a.notifications.unread());
+  if (a.replyN) { w.add("reply", a.reply); w.add("reply_n", a.replyN); w.add("reply_emotion", emotionName(a.replyEmotion)); }
   w.addU("time", a.clock.epoch());
   w.add("weather", a.weather.known ? weatherName(a.weather.cond) : "unknown");
   w.addf("temp", a.weather.tempC);

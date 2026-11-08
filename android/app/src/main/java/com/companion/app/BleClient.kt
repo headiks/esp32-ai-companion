@@ -46,6 +46,12 @@ class BleClient private constructor(private val context: Context) {
     /** Controller mode: device tilt in g and its gestures. */
     val tilt = MutableStateFlow(0f to 0f)
     val actions = MutableSharedFlow<InputAction>(extraBufferCapacity = 32)
+    /** The chat with the companion, kept while the app lives: what was said here and what the device answered. */
+    val chat = MutableStateFlow<List<ChatMsg>>(emptyList())
+    val waitingReply = MutableStateFlow(false)
+    val chatUnread = MutableStateFlow(0)
+    @Volatile var chatOpen = false
+    private var replyN = -1
 
     private val prefs = context.getSharedPreferences("companion", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
@@ -146,6 +152,7 @@ class BleClient private constructor(private val context: Context) {
         gatt?.close()
         gatt = null
         link.value = LinkState.Disconnected
+        waitingReply.value = false
     }
 
     private val callback = object : BluetoothGattCallback() {
@@ -219,11 +226,30 @@ class BleClient private constructor(private val context: Context) {
                     link.value = LinkState.Authenticated
                 }
                 state.update { it.merge(o) }
+                if (o.has("reply_n")) onReply(o.getInt("reply_n"), o.optString("reply"), o.optString("reply_emotion"))
                 if (!o.has("event")) addLog("← $line")
             } catch (e: JSONException) {
                 addLog("плохой JSON: $line")
             }
         }
+    }
+
+    /** Our message goes into the chat; its words go to the device, which answers on its screen and in the next state. */
+    fun say(msg: ChatMsg, words: String) {
+        chat.update { it + msg }
+        if (words.isBlank() || link.value != LinkState.Authenticated) return
+        waitingReply.value = true
+        send(Protocol.command("chat", "text" to words))
+    }
+
+    // An answer is new when reply_n moves. The first one seen after connecting is old news, unless we are waiting for it.
+    private fun onReply(n: Int, text: String, emotion: String) {
+        val fresh = n != replyN && (replyN >= 0 || waitingReply.value)
+        replyN = n
+        if (!fresh || text.isEmpty()) return
+        waitingReply.value = false
+        chat.update { it + ChatMsg(me = false, text = text, emotion = emotion) }
+        if (!chatOpen) chatUnread.update { it + 1 }
     }
 
     fun send(cmd: JSONObject) {

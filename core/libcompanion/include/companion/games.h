@@ -9,21 +9,28 @@ class MazeGame {
  public:
   static constexpr int kMax = 13;
   enum { N = 1, E = 2, S = 4, W = 8 };
-  void generate(int size, Rng& rng);
+  // A new perfect maze from a random start; the exit is the cell farthest from it.
+  // branchy 0..1: 0 grows long winding corridors, 1 many short dead ends that are harder to read.
+  void generate(int size, Rng& rng, float branchy = 0);
+  void setPace(float k) { pace_ = k; }        // over 1 the ball rolls faster
   void step(float ax, float ay, float dtMs);  // tilt in g, screen axes
   int size() const { return n_; }
   bool wall(int cx, int cy, int dir) const { return walls_[cy * n_ + cx] & dir; }
   float x() const { return x_; }
   float y() const { return y_; }
   bool won() const { return won_; }
+  int goalX() const { return goal_ % n_; }
+  int goalY() const { return goal_ / n_; }
+  int pathLength() const { return pathLen_; }  // cells from the start to the exit
   float speed() const { return sqrtf(vx_ * vx_ + vy_ * vy_); }
   // Next cell on the shortest way to the exit; used by the test autopilot.
   void nextCellToExit(int* cx, int* cy) const;
   static constexpr float kBall = 0.26f;
  private:
-  int n_ = 0;
+  int distances(int from, int* dist) const;  // breadth-first; returns the farthest cell
+  int n_ = 0, goal_ = 0, pathLen_ = 0;
   uint8_t walls_[kMax * kMax];
-  float x_ = 0.5f, y_ = 0.5f, vx_ = 0, vy_ = 0;
+  float x_ = 0.5f, y_ = 0.5f, vx_ = 0, vy_ = 0, pace_ = 1;
   bool won_ = false;
 };
 

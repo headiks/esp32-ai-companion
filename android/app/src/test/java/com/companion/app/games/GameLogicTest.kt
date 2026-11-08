@@ -70,6 +70,22 @@ class GameLogicTest {
         assertEquals(Street.Showdown, g.street)
     }
 
+    @Test fun holdemRemembersMovesAndWinners() {
+        val g = HoldemGame(3, Random(6))
+        val first = g.current
+        assertTrue(g.raise(first))
+        assertEquals("рейз", g.lastMove[first])
+        val second = g.current
+        assertTrue(g.fold(second))
+        assertEquals("пас", g.lastMove[second])
+        var guard = 0
+        while (g.street != Street.Showdown && guard++ < 50) g.call(g.current)
+        assertTrue(g.winners.isNotEmpty() && second !in g.winners)
+        assertFalse(g.message.contains("Игрок")) // seats are "Вы" and "Компьютер N", as on the table
+        g.newHand()
+        assertTrue(g.winners.isEmpty() && g.lastMove.all { it.isEmpty() })
+    }
+
     @Test fun holeCardsNeverChange() {
         val g = HoldemGame(2, Random(3))
         val mine = g.hole[0].toList()

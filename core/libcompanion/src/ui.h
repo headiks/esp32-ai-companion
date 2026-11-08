@@ -20,7 +20,7 @@ class Screen {
 // Each file of screens hands out its own; nullptr for screens it does not have.
 Screen* systemScreen(ScreenId id);  // ui_system.cpp: face, menus, talk, notifications, settings, about
 Screen* timeScreen(ScreenId id);    // ui_time.cpp: clocks, timer, stopwatch, weather
-Screen* playScreen(ScreenId id);    // ui_play.cpp: pet, games list, firefly, tic-tac-toe, reaction, guess
+Screen* playScreen(ScreenId id);    // ui_play.cpp: pet, games list, firefly, tic-tac-toe, guess
 Screen* gameScreen(ScreenId id);    // ui_games.cpp: maze, orbit, snake, Simon
 Screen* partyScreen(ScreenId id);   // ui_party.cpp: the rest of the games, remotes, Bluetooth pairing
 

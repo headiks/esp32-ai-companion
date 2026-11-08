@@ -121,16 +121,18 @@ def white_center(top, bottom):
     return ((box[0] + box[2]) / 2 / w) if box else None
 
 
-def color_center(rgb, tolerance=8):
-    """Centre of the pixels of exactly this colour on the game table, as fractions of the screen; (None, None) if absent."""
+def color_center(rgb, tolerance=8, bottom=None):
+    """Centre of the pixels of exactly this colour on the game table, as fractions of the screen; (None, None) if absent.
+    [bottom]: pixel row where the search stops, above the players' buttons that share the cars' colours."""
     from io import BytesIO
     from PIL import Image
     img = Image.open(BytesIO(adb("exec-out", "screencap", "-p", binary=True))).convert("RGB")
     w, h = img.size
     # The table only: the app's header and the standings have white and rose text of their own.
     top = int(h * 0.27)
-    px = img.crop((0, top, w, h - 100)).load()
-    found = [(x, y) for y in range(0, h - 100 - top, 3) for x in range(0, w, 3)
+    end = bottom or h - 100
+    px = img.crop((0, top, w, end)).load()
+    found = [(x, y) for y in range(0, end - top, 3) for x in range(0, w, 3)
              if all(abs(px[x, y][i] - rgb[i]) <= tolerance for i in range(3))]
     if not found:
         return None, None
@@ -138,7 +140,7 @@ def color_center(rgb, tolerance=8):
 
 
 def rank_cards_on_screen():
-    return [t for t in texts() if re.fullmatch(r"(10|[2-9JQKA])", t)]
+    return [t for t in texts() if re.fullmatch(r"(10|[2-9ВДКТ])", t)]
 
 
 def check(name, ok, detail=""):
@@ -212,6 +214,18 @@ def main():
     check("feeding from the phone changes the emulator", state()["hunger"] <= 46, f"hunger={state()['hunger']}")
     emu.companion.handle_command({"type": "screen", "value": "face"})
 
+    tap(r"^Чат$")
+    tap(r"^Компаньон$", 1.0)
+    tap(r"^Как дела\?$", 0.5)
+    answer, deadline = None, time.time() + 15
+    while time.time() < deadline and answer is None:
+        pump(0.5)
+        r = state().get("reply")
+        if r and find(re.escape(r)) is not None:
+            answer = r
+    check("the chat shows the device's answer", answer is not None, str(texts()[:20]))
+    shot("1b_chat")
+
     tap(r"^Игры$")
     shot("2_games")
     tap(r"^Дурак$")
@@ -219,13 +233,13 @@ def main():
     shot("3_durak_start")
     check("durak turns the emulator into a card controller", state()["screen"] == "controller")
     pump(1)
-    check("the phone does not show the player's hand in durak", find("на устройстве") is not None and len(rank_cards_on_screen()) <= 12, str(texts()[:16]))
+    check("the phone does not show the player's hand in durak", find("на компаньоне") is not None and len(rank_cards_on_screen()) <= 12, str(texts()[:16]))
 
     # Wait for the human's move, then choose by tilt and throw with a swipe, as with the real device.
     deadline = time.time() + 25
-    while time.time() < deadline and not visible("Ваш ход", "Отбивайтесь"):
+    while time.time() < deadline and not visible("Ваш ход", "Отбейтесь"):
         pump(0.5)
-    check("durak reaches the human's move", visible("Ваш ход", "Отбивайтесь"), str(texts()[:12]))
+    check("durak reaches the human's move", visible("Ваш ход", "Отбейтесь"), str(texts()[:12]))
     emu.set_tilt(0.5, 0)
     pump(1.0)
     emu.set_tilt(0, 0)
@@ -247,14 +261,14 @@ def main():
     check("racing starts the pad", state()["screen"] == "controller")
     check("three tracks to choose from", all(find(n) is not None for n in ("Овал", "Восьмёрка", "Серпантин")), str(texts()[:16]))
     shot("7_race_setup")
-    WHITE = (255, 255, 255)
+    PLAYER1 = (170, 179, 220)  # #AAB3DC, the first player's car
 
     def race_with_lean(lean):
         """Average height of the first player's car while it drives holding this lean: a held lean makes it circle."""
         emu.set_tilt(lean, 0)
         tap(r"^Играть$", 0.1)
-        pump(3.3)
-        at = [color_center(WHITE) for _ in range(5)]
+        pump(3.9)  # the countdown and "Старт!", which is in the same lavender, are over
+        at = [color_center(PLAYER1) for _ in range(5)]
         emu.set_tilt(0, 0)
         return at, sum(p[1] for p in at) / len(at)
 
@@ -276,13 +290,13 @@ def main():
     tap(r"^Восьмёрка$", 0.5)
     shot("9_race_two_setup")
     tap(r"^Играть$", 4.5)
-    pads = [n for n in nodes() if n.get("text") == "▶"]
+    pads = [n for n in nodes() if (n.get("content-desc") or "").startswith("вправо")]
     check("the second player has buttons, the first has the device", len(pads) == 1, str(texts()[:16]))
-    ROSE = (218, 176, 184)
-    before = color_center(ROSE)
+    ROSE = (232, 168, 182)  # #E8A8B6, the second player's car and buttons
     a, b, c, d = map(int, re.findall(r"\d+", pads[0].get("bounds")))
+    before = color_center(ROSE, bottom=b - 10)
     adb("shell", "input", "swipe", str((a + c) // 2), str((b + d) // 2), str((a + c) // 2), str((b + d) // 2), "1200")  # held, not tapped
-    after = color_center(ROSE)
+    after = color_center(ROSE, bottom=b - 10)
     check("the second player's car is on the track and moves", before[0] is not None and after[0] is not None and before != after, f"{before} -> {after}")
     shot("10_race_two")
     tap(r"^Назад$", 1)
@@ -312,13 +326,13 @@ def main():
     tap(r"^Играть$", 2.5)
     shot("9_poker_table")
     check("poker turns the emulator into a card controller", state()["screen"] == "controller")
-    check("the phone hides the two hole cards", visible("Ваши карты на устройстве") and len(rank_cards_on_screen()) == 0, str(texts()[:16]))
+    check("the phone hides the two hole cards", visible("Ваши карты на компаньоне") and len(rank_cards_on_screen()) == 0, str(texts()[:16]))
     shot("9b_poker_device")
     # Whose move it is decides what the first button says, so wait for the human's turn.
     deadline = time.time() + 15
-    while time.time() < deadline and not visible(r"^Чек$", r"^Поддержать \d+$"):
+    while time.time() < deadline and not visible(r"^Чек$", r"^Колл \d+$"):
         pump(0.5)
-    check("the moves are check or call, raise and fold, and nothing else", visible(r"^Чек$", r"^Поддержать \d+$") and visible(r"^Поднять$") and visible(r"^Сбросить$"), str(texts()[:24]))
+    check("the moves are check or call, raise and fold, and nothing else", visible(r"^Чек$", r"^Колл \d+$") and visible(r"^Рейз$") and visible(r"^Пас$"), str(texts()[:24]))
     # Check or call from the device until the hand is over; every street must add shared cards to the table.
     board_seen = set()
     for _ in range(40):

@@ -13,7 +13,7 @@ static void record(char* out, int cap, int best, const char* unit = "") {
   else out[0] = 0;
 }
 
-// ---- 19. maze: the board is a 300 px square, the ball rolls with the device ------------------------
+// ---- 19. maze: the board is a 300 px square, the ball rolls with the device; levels never end --------
 class MazeScreen : public Screen {
  public:
   void enter(App& a) override {
@@ -64,7 +64,7 @@ class MazeScreen : public Screen {
       }
     }
     float goalR = fminf(16, sc * 0.4f), ballR = fminf(17, sc * MazeGame::kBall);
-    c.ring(kX0 + (n - 0.5f) * sc, kY0 + (n - 0.5f) * sc, goalR, 5, ACCENT);
+    c.ring(kX0 + (m_.goalX() + 0.5f) * sc, kY0 + (m_.goalY() + 0.5f) * sc, goalR, 5, ACCENT);
     c.fillCircle(kX0 + m_.x() * sc, kY0 + m_.y() * sc, ballR, INK);
     miniFace(c, a, CX, 388 + 40 * 176 / 354.f, 80);
     if (m_.won()) ui::textCentered(c, CX, CY, "Выход!", TXT_MENU_SEL, ACCENT);
@@ -72,8 +72,13 @@ class MazeScreen : public Screen {
 
  private:
   static constexpr float kX0 = 83, kY0 = 83;
+  // Every level is a new maze from a new start. The board grows to 13x13; past that the levels go on,
+  // with more dead ends and a livelier ball each time.
   void start(App& a) {
-    m_.generate(clampi(5 + level_, 5, MazeGame::kMax), a.rng);
+    int beyond = 5 + level_ - MazeGame::kMax;
+    float hard = beyond > 0 ? (float)beyond : 0;
+    m_.generate(clampi(5 + level_, 5, MazeGame::kMax), a.rng, fminf(0.06f * hard, 0.6f));
+    m_.setPace(1 + fminf(0.03f * hard, 0.45f));
     winMs_ = 0;
     a.react(Emotion::Determined, 1500);
   }
@@ -83,97 +88,106 @@ class MazeScreen : public Screen {
   float winMs_ = 0, cooldown_ = 0;
 };
 
-// ---- 20. orbit: run around the orbit, a tap jumps over the blocks ---------------------------------
-// Design 1a turned the old rim pong into this runner: the screen it draws has a player on an orbit and
-// blocks to jump over, nothing to bat.
+// ---- 20. orbit: a paddle on the rim keeps the ball inside; tilt or a finger moves it -----------------
 class OrbitScreen : public Screen {
  public:
-  void enter(App& a) override { phase_ = Ready; a.react(Emotion::Curious, 1200); }
-  bool capturesSwipes() const override { return phase_ == Run; }
+  void enter(App& a) override { phase_ = Ready; steering_ = false; a.react(Emotion::Curious, 1200); }
+  // The finger that steered until the miss is still a steering finger: lifting it is not a swipe away.
+  bool capturesSwipes() const override { return phase_ == Run || steering_; }
   void tick(App& a, float dt) override {
     if (phase_ != Run) return;
     runMs_ += dt;
+    // The device's lean points where the paddle should be, unless a finger is steering.
+    float tilt = sqrtf(a.hal.ax * a.hal.ax + a.hal.ay * a.hal.ay);
+    if (!a.touch.isDown() && tilt > 0.12f) {
+      float target = atan2f(a.hal.ax, -a.hal.ay);
+      paddle_ += angleDiff(target, paddle_) * clampf(dt / 90.f, 0, 1);
+    }
     float h = dt * 0.001f;
-    float speed = 70 + score_ * 3.5f;  // degrees a second
-    if (speed > 170) speed = 170;
-    angle_ += speed * h;
-    if (jumpMs_ >= 0) { jumpMs_ += dt; if (jumpMs_ > kJumpMs) jumpMs_ = -1; }
-    a.anim.lookOffset(cosf(angle_ * 0.0174533f) * 30, sinf(angle_ * 0.0174533f) * 20, 150);
-    // Angles are not wrapped: the player only moves forward, a block is passed once the player is beyond it.
-    const float reach = (11 + 16) / kR * 57.29578f;  // half a block plus the player, as an angle
-    for (int i = 0; i < kBlocks; i++) {
-      float d = blocks_[i] - angle_;
-      if (fabsf(d) < reach && lift() < 16) { crash(a); return; }
-      if (d < -reach) {
-        score_++;
-        a.sfx.play("games/correct");
-        if (score_ % 5 == 0) a.react(Emotion::Excited, 900);
-        // The passed block goes ahead of the farthest one.
-        float far = angle_;
-        for (int k = 0; k < kBlocks; k++) far = fmaxf(far, blocks_[k]);
-        blocks_[i] = far + a.rng.rangef(80, 150);
-      }
+    bx_ += vx_ * h;
+    by_ += vy_ * h;
+    a.anim.lookOffset(bx_ * 0.2f, by_ * 0.16f, 150);
+    float d = sqrtf(bx_ * bx_ + by_ * by_);
+    if (d <= kBounceR) return;
+    float nx = bx_ / d, ny = by_ / d, off = angleDiff(atan2f(nx, -ny), paddle_);
+    if (fabsf(off) < halfWidth()) {
+      // Reflect about the rim normal; where the ball meets the paddle steers it, as in the old game.
+      float dot = vx_ * nx + vy_ * ny;
+      vx_ -= 2 * dot * nx;
+      vy_ -= 2 * dot * ny;
+      float sp = fminf(sqrtf(vx_ * vx_ + vy_ * vy_) * 1.03f, 460), dir = atan2f(vy_, vx_) + off * 0.9f;
+      vx_ = cosf(dir) * sp;
+      vy_ = sinf(dir) * sp;
+      bx_ = nx * (kBounceR - 1);
+      by_ = ny * (kBounceR - 1);
+      score_++;
+      a.sfx.play("games/bounce");
+      a.anim.kick(-0.14f);
+      if (score_ % 5 == 0) a.react(Emotion::Excited, 900);
+      else if (a.rng.range(0, 3) == 0) a.react(Emotion::Happy, 700);
+    } else {
+      phase_ = Over;
+      steering_ = a.touch.isDown();
+      newRecord_ = score_ > a.settings.orbitBest;
+      if (newRecord_) { a.settings.orbitBest = (uint16_t)score_; a.saveSettings(); }
+      a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::GameLose);
+      a.sfx.play(newRecord_ ? "games/win" : "games/lose");
+      a.react(newRecord_ ? Emotion::Proud : Emotion::Sad, 2000);
     }
   }
   void draw(App& a, Canvas& c) override {
     char b[24], rec[32];
     record(rec, sizeof rec, a.settings.orbitBest);
-    if (phase_ == Ready) { gameStart(c, a, "Орбита", "Прыгай через блоки на орбите", rec); return; }
+    if (phase_ == Ready) { gameStart(c, a, "Орбита", "Наклоняй, чтобы ракетка отбивала шарик", rec); return; }
     if (phase_ == Over) {
       snprintf(b, sizeof b, "%d", score_);
       gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Starstruck : Emotion::Sad);
       return;
     }
-    c.ring(CX, CY, kR, 4, TRACK);
-    for (int i = 0; i < kBlocks; i++) {
-      float half = 11 / kR * 57.29578f;
-      ui::drawArc(c, CX, CY, kR, 16, blocks_[i] - half, 2 * half, INK, false);
-    }
-    float r = kR + lift(), rad = angle_ * 0.0174533f;
-    c.fillCircle(CX + cosf(rad) * r, CY + sinf(rad) * r, 16, ACCENT);
-    miniFace(c, a, CX, 146 + 60 * 176 / 354.f, 120);
+    // Track and paddle live on the rim; the paddle narrows as the score grows.
+    c.ring(CX, CY, kPaddleR, 2, TRACK);
+    float deg = paddle_ * 57.29578f, hw = halfWidth() * 57.29578f;
+    c.arc(CX, CY, kPaddleR, kPaddleW, deg - hw, deg + hw, ACCENT, true);
+    miniFace(c, a, CX, CY - 40, 120);
     snprintf(b, sizeof b, "%d", score_);
-    ui::textCentered(c, CX, 232, b, NUM_L56, INK);
-    if (runMs_ < HINT_MS) c.text(CX, 292, "тап — прыжок", TXT_MIN, INK_2, Align::Center);
+    ui::textCentered(c, CX, CY + 46, b, NUM_L56, INK);
+    if (runMs_ < HINT_MS) c.text(CX, CY + 92, "наклон или палец — ракетка", TXT_MIN, INK_2, Align::Center);
+    c.fillCircle(CX + bx_, CY + by_, kBallR, INK);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap) return;
     if (phase_ == Run) {
-      if (jumpMs_ < 0) { jumpMs_ = 0; a.sfx.play("games/move"); }
+      if (e.g == Gesture::Move || e.g == Gesture::Down) paddle_ = atan2f((float)(e.x - CX), (float)(CY - e.y));
       return;
     }
+    if (steering_) {
+      if (e.g != Gesture::Down) return;
+      steering_ = false;
+    }
+    if (e.g != Gesture::Tap) return;
     if (phase_ == Over && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
     if ((phase_ == Ready && kStartButton.hit(e.x, e.y)) || (phase_ == Over && kAgainButton.hit(e.x, e.y))) start(a);
   }
 
  private:
-  static constexpr int kBlocks = 3;
-  static constexpr float kR = 160, kJumpMs = 620;
-  float lift() const { return jumpMs_ < 0 ? 0 : 40 * sinf(3.14159f * jumpMs_ / kJumpMs); }
+  static constexpr float kPaddleR = 208, kPaddleW = 12, kBallR = 10, kBounceR = kPaddleR - kPaddleW / 2 - kBallR;
+  static float angleDiff(float a, float b) { return fmodf(a - b + 9.42478f, 6.28319f) - 3.14159f; }
+  float halfWidth() const { return fmaxf(0.62f - score_ * 0.012f, 0.26f); }  // radians, never below playable
   void start(App& a) {
     phase_ = Run;
     score_ = 0;
-    angle_ = -90;
-    jumpMs_ = -1;
     runMs_ = 0;
     newRecord_ = false;
-    for (int i = 0; i < kBlocks; i++) blocks_[i] = angle_ + 100 + i * 110 + a.rng.rangef(0, 30);
+    bx_ = by_ = 0;
+    float dir = a.rng.rangef(0, 6.28319f);
+    vx_ = cosf(dir) * 170;
+    vy_ = sinf(dir) * 170;
     a.sfx.play("games/go");
     a.react(Emotion::Focused, 1500);
   }
-  void crash(App& a) {
-    phase_ = Over;
-    newRecord_ = score_ > a.settings.orbitBest;
-    if (newRecord_) { a.settings.orbitBest = (uint16_t)score_; a.saveSettings(); }
-    a.pet.event(newRecord_ ? PetEvent::GameWin : PetEvent::GameLose);
-    a.sfx.play(newRecord_ ? "games/win" : "games/lose");
-    a.react(newRecord_ ? Emotion::Proud : Emotion::Sad, 2000);
-  }
   enum Phase { Ready, Run, Over } phase_ = Ready;
-  float angle_ = -90, jumpMs_ = -1, runMs_ = 0;
-  float blocks_[kBlocks] = {};  // absolute angles, ahead of the player
+  float paddle_ = 0, bx_ = 0, by_ = 0, vx_ = 0, vy_ = 0, runMs_ = 0;
   int score_ = 0;
-  bool newRecord_ = false;
+  bool newRecord_ = false, steering_ = false;
 };
 
 // ---- 21. snake: swipes turn it --------------------------------------------------------------------
@@ -212,10 +226,14 @@ class SnakeScreen : public Screen {
       gameResult(c, a, b, newRecord_ ? "новый рекорд" : rec, newRecord_ ? Emotion::Proud : Emotion::Dizzy);
       return;
     }
-    for (int y = 13; y < kScreenH; y += 22) {  // the dotted field, inside r200
-      if (!c.intersects(0, y - 2, kScreenW, 4)) continue;
-      for (int x = 13; x < kScreenW; x += 22)
-        if ((x - CX) * (x - CX) + (y - CY) * (y - CY) < 200 * 200) c.fillCircle((float)x, (float)y, 1.6f, SNAKE_GRID);
+    // The field: a dot in every cell and a clear frame. The snake dies on the frame, so it must read at once;
+    // the spec's dots over the whole screen hid where the field ends.
+    constexpr float kSide = SnakeGame::kSize * kCell;
+    c.roundRectOutline(kX0 - 6, kY0 - 6, kSide + 12, kSide + 12, 12, 2, INK_2);
+    for (int y = 0; y < SnakeGame::kSize; y++) {
+      float py = kY0 + y * kCell + kCell / 2.f;
+      if (!c.intersects(0, (int)py - 2, kScreenW, 4)) continue;
+      for (int x = 0; x < SnakeGame::kSize; x++) c.fillCircle(kX0 + x * kCell + kCell / 2.f, py, 1.6f, SNAKE_GRID);
     }
     c.fillCircle(kX0 + g_.foodX() * kCell + kCell / 2.f, kY0 + g_.foodY() * kCell + kCell / 2.f, 7, ACCENT);
     int n = g_.length();
@@ -235,7 +253,7 @@ class SnakeScreen : public Screen {
     }
     snprintf(b, sizeof b, "%d", g_.score());
     ui::textCentered(c, CX, 38 + 14, b, NUM_S30, INK);
-    if (runMs_ < HINT_MS) c.text(CX, 360, "свайп — поворот", TXT_MIN, INK_2, Align::Center);
+    if (runMs_ < HINT_MS) c.text(CX, 394, "свайп — поворот", TXT_MIN, INK_2, Align::Center);  // under the frame
   }
   void onGesture(App& a, const GestureEvent& e) override {
     if (phase_ != Run) {

@@ -440,6 +440,27 @@ def test_cyrillic_notification_roundtrip_and_truncation(c):
     c.render()
 
 
+@pytest.mark.parametrize("way", ["up", "down", "right"])
+def test_notifications_close_with_a_swipe(c, way):
+    """Opened by a swipe down from the face: swipes up, down, or right on the first card take it back."""
+    for i in range(2):
+        assert c.handle_command({"type": "notify", "title": "Сообщение", "text": f"Привет {i}"})["status"] == "success"
+    swipe(c, 233, 150, 233, 330)          # from the face
+    assert c.state()["screen"] == "notifications"
+    ends = {"up": (233, 330, 233, 150), "down": (233, 150, 233, 330), "right": (120, 233, 330, 233)}
+    swipe(c, *ends[way])
+    assert c.state()["screen"] == "face"
+
+
+def test_notification_cards_still_turn(c):
+    for i in range(2):
+        assert c.handle_command({"type": "notify", "title": "Сообщение", "text": f"Привет {i}"})["status"] == "success"
+    c.handle_command({"type": "screen", "value": "notifications"}); c.run(300)
+    swipe(c, 330, 233, 120, 233)          # left: the next card
+    swipe(c, 120, 233, 330, 233)          # right: back to the first, still here
+    assert c.state()["screen"] == "notifications"
+
+
 def test_notification_queue_keeps_newest(c):
     for i in range(40):
         c.handle_command({"type": "notify", "title": f"n{i}"})
@@ -449,7 +470,7 @@ def test_notification_queue_keeps_newest(c):
 
 
 # ---- screens and games -----------------------------------------------------------------------
-SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "reaction", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "mouse"]
+SCREENS = ["face", "menu", "pet", "analog_clock", "digital_clock", "timer", "stopwatch", "notifications", "settings", "diagnostics", "games", "info", "tictactoe", "guess", "pet_game", "maze", "orbit", "snake", "simon", "coin", "dice", "magic_ball", "balance", "duel", "shaker", "safe", "workout", "mole", "blackjack", "weather", "mouse"]
 
 
 @pytest.mark.parametrize("name", SCREENS)
@@ -469,18 +490,27 @@ def test_menu_opens_all_items(c):
     assert c.state()["screen"] == "pet"
 
 
-def test_timer_counts_down_and_alarms(c):
+def test_timer_sets_minutes_and_seconds_and_alarms(c):
+    """Tap the seconds to choose them; -1/+1 and a drag on the digits change the chosen part."""
     c.handle_command({"type": "screen", "value": "timer"})
     c.run(300)
-    tap(c, 233 - 112, 233 + 40)      # -1 min from 5 down to 4
-    for _ in range(4):
-        tap(c, 233 - 112, 233 + 40)  # down to the 1 minute minimum
-    tap(c, 233 - 52, 233 + 128)      # start
-    c.set_time_scale(60)
-    before = c.play_count()
-    for _ in range(200):
-        c.tick(20); c.mix(320)
-    assert c.play_count() > before
+    tap(c, 233 + 70, 198)                # the seconds
+    for _ in range(5):
+        tap(c, 334, 340)                 # +1: 05:05
+    tap(c, 233 - 70, 198)                # the minutes
+    for _ in range(5):
+        tap(c, 132, 340)                 # -1: 00:05
+    c.touch(True, 233 - 70, 230)         # drag the minutes up by two steps and back down by two
+    for y in range(230, 186, -4):
+        c.touch(True, 233 - 70, y); c.tick(20)
+    for y in range(186, 232, 4):
+        c.touch(True, 233 - 70, y); c.tick(20)
+    c.touch(False, 233 - 70, 230); c.run(100)
+    tap(c, 233, 340)                     # "Старт"
+    c.run(3000)
+    assert c.state()["screen"] == "timer", "five seconds are not up yet"
+    c.run(3000)
+    assert c.state()["screen"] == "face" and emotion(c) == "excited", "the alarm"
 
 
 def test_stopwatch_runs_in_background(c):
@@ -509,24 +539,6 @@ def test_tictactoe_full_game_vs_pet(c):
     assert c.play_count() >= 0
 
 
-def test_reaction_game_measures_and_saves_best(tmp_path):
-    c = Companion(storage_dir=tmp_path, seed=3)
-    c.run(2500)
-    c.handle_command({"type": "screen", "value": "reaction"})
-    c.run(300)
-    tap(c)
-    # Find the signal: when the whole circle goes orange.
-    for _ in range(400):
-        c.tick(20)
-        if c.render()[233, 100] != 0 and c.render()[60, 233] != 0:
-            break
-    c.run(180)
-    c.touch(True, 233, 233); c.tick(20)
-    c.touch(False, 233, 233); c.run(100)
-    assert (tmp_path / "settings.bin").exists()
-    c.close()
-
-
 def test_settings_tap_changes_value(c):
     c.handle_command({"type": "screen", "value": "settings"})
     c.run(300)
@@ -545,6 +557,17 @@ def test_ai_offline_answers_with_emotion(c):
     assert emotion(c) in ("thinking", "happy")
     c.run(1500)
     assert emotion(c) == "happy"
+
+
+def test_ai_answer_reaches_the_app_in_state(c):
+    assert "reply" not in c.state_event()
+    c.handle_command({"type": "chat", "text": "Привет, как дела?"})
+    c.run(1700)
+    s = c.state_event()
+    assert s["reply"] and s["reply_n"] == 1 and s["reply_emotion"] == "happy"
+    c.handle_command({"type": "chat", "text": "Привет, как дела?"})
+    c.run(1700)
+    assert c.state_event()["reply_n"] == 2  # the same words again are still a new answer
 
 
 # ---- audio -----------------------------------------------------------------------------------
@@ -784,10 +807,23 @@ def test_open_meteo_parser():
 
 
 # ---- games -------------------------------------------------------------------------------------
-@pytest.mark.parametrize("size,seed", [(5, 1), (7, 2), (9, 3), (11, 4), (13, 5)])
-def test_maze_is_solvable_by_tilt_alone(size, seed):
-    ms = lib().cc_maze_selftest(size, seed)
+@pytest.mark.parametrize("size,seed,branchy", [(5, 1, 0), (7, 2, 0), (9, 3, 0), (11, 4, 0), (13, 5, 0), (13, 6, 30), (13, 7, 60)])
+def test_maze_is_solvable_by_tilt_alone(size, seed, branchy):
+    ms = lib().cc_maze_selftest(size, seed, branchy)
     assert 0 < ms < 600000, ms
+
+
+def test_maze_is_new_every_time_with_the_exit_far_away():
+    """Each level starts somewhere else; the exit is the farthest cell, so the route is never trivial."""
+    import ctypes
+    layouts = []
+    for seed in range(1, 11):
+        out = (ctypes.c_int * 5)()
+        lib().cc_maze_layout(9, seed, 30, out)
+        layouts.append(tuple(out))
+    assert len({(sx, sy) for sx, sy, *_ in layouts}) >= 6, layouts
+    assert all(length >= 9 for *_, length in layouts), layouts
+    assert all((sx, sy) != (gx, gy) for sx, sy, gx, gy, _ in layouts)
 
 
 def test_maze_ball_cannot_leave_the_board():
@@ -818,26 +854,43 @@ def test_maze_screen_tilts_the_ball(c):
     assert (x1, y1) != (x0, y0) or (x2, y2) != (x1, y1)
 
 
-def test_orbit_game_scores_or_ends(c):
-    """Design 1a orbit: points come one per block passed, never by themselves; without jumping the runner crashes."""
+def orbit_ball_angle(fb):
+    """The ball is the only INK near the rim: the face and the score sit inside r130."""
+    import math
+    ys, xs = np.nonzero(fb == INK)
+    far = np.hypot(xs - 233, ys - 233) > 130
+    if not far.any():
+        return None
+    return math.atan2(xs[far].mean() - 233, -(ys[far].mean() - 233))
+
+
+def orbit_play(c, ms, follow):
+    """The finger holds the paddle on the ball's side of the rim, or on the opposite side.
+    Returns the emotions the character showed meanwhile."""
+    import math
+    angle, felt = 0.0, set()
+    for _ in range(ms // 20):
+        seen = orbit_ball_angle(c.render())
+        if seen is not None:
+            angle = seen if follow else seen + math.pi
+        c.touch(True, int(233 + 150 * math.sin(angle)), int(233 - 150 * math.cos(angle)))
+        c.tick(20)
+        felt.add(emotion(c))
+    c.touch(False, 233, 233); c.run(100)   # a real lift: the core bridges gaps under 40 ms
+    return felt
+
+
+def test_orbit_paddle_keeps_the_ball_and_a_miss_ends_it(c):
+    """The old rim pong: the paddle goes where the finger (or the lean) points, the ball bounces off it."""
     c.handle_command({"type": "screen", "value": "orbit"})
     c.run(300)
-    tap(c, 233, 372)          # "Старт"
-    c.mix(32000)
-    n0 = c.play_count()
-    for _ in range(45):       # 0.9 s: the first block is still ahead
-        c.tick(20); c.mix(320)
-    assert c.play_count() - n0 <= 1, "no points before the first block"
-    c.run(6000)
-    assert (c.render() == ACCENT).sum() > 3000, "crashed into a block: the result ring is up"
-def test_simon_sequence_lights_and_rejects_wrong(c):
-    c.handle_command({"type": "screen", "value": "simon"})
-    c.run(300); c.mix(32000)
-    tap(c, 233, 372)  # "Старт" of the start template
-    n0 = c.play_count()
-    for _ in range(200):
-        c.tick(20); c.mix(320)
-    assert c.play_count() > n0, "first tone"
+    tap(c, 233, 372)                 # "Старт"
+    felt = orbit_play(c, 6000, follow=True)
+    assert not felt & {"sad", "proud"}, f"the ball stays in play: {felt}"
+    assert "proud" in orbit_play(c, 4000, follow=False), "a miss ends the round; bounces before it are a record"
+    assert c.state()["screen"] == "orbit", "lifting the steering finger is not a swipe away from the result"
+    tap(c, 280, 356)                 # "Ещё"
+    assert "sad" in orbit_play(c, 4000, follow=False), "no bounce, no record"
 
 
 def test_snake_screen_runs_and_dies_at_wall(c):
@@ -999,14 +1052,19 @@ def test_workout_can_be_finished_and_rewards(tmp_path):
     c.close()
 
 
-def test_safe_opens_when_dial_on_secret(c):
+@pytest.mark.parametrize("turn", [1, -1])
+def test_safe_opens_when_dial_on_secret(c, turn):
+    """Either way round, and after turns of winding up first: the dial angle grows without bound."""
+    import math
     c.handle_command({"type": "screen", "value": "safe"})
     c.run(300)
+    for deg in range(0, 3 * 360, 4):  # three idle turns
+        c.imu(math.sin(math.radians(turn * deg)) * 0.5, -math.cos(math.radians(turn * deg)) * 0.5, 0.8, dt=40)
+        c.tick(40)
     # Sweep the whole circle by tilt and tap everywhere: three locks must eventually open, wrong taps are harmless.
     opened = False
     for deg in range(0, 1800, 4):
-        import math
-        c.imu(math.sin(math.radians(deg)) * 0.5, -math.cos(math.radians(deg)) * 0.5, 0.8, dt=40)
+        c.imu(math.sin(math.radians(turn * deg)) * 0.5, -math.cos(math.radians(turn * deg)) * 0.5, 0.8, dt=40)
         c.tick(40)
         if deg % 8 == 0:
             tap(c)

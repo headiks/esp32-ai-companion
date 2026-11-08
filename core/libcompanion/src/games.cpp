@@ -3,45 +3,72 @@
 
 namespace cc {
 
-void MazeGame::generate(int size, Rng& rng) {
+void MazeGame::generate(int size, Rng& rng, float branchy) {
   n_ = clampi(size, 3, kMax);
   memset(walls_, N | E | S | W, sizeof(walls_));
-  // Randomized depth-first search: a perfect maze, exactly one route between any two cells.
+  // Growing tree: carving on from the newest open cell gives depth-first corridors, from a random one
+  // gives Prim-like branching. Either way a perfect maze: exactly one route between any two cells.
   static const int dx[4] = {0, 1, 0, -1}, dy[4] = {-1, 0, 1, 0};
   static const uint8_t bit[4] = {N, E, S, W}, opp[4] = {S, W, N, E};
   bool seen[kMax * kMax] = {};
-  uint8_t stack[kMax * kMax];
-  int top = 0;
-  stack[top++] = 0;
-  seen[0] = true;
-  while (top) {
-    int cur = stack[top - 1], cx = cur % n_, cy = cur / n_;
+  uint8_t open[kMax * kMax];
+  int count = 0, start = rng.range(0, n_ * n_ - 1);
+  open[count++] = (uint8_t)start;
+  seen[start] = true;
+  while (count) {
+    int i = rng.unit() < branchy ? rng.range(0, count - 1) : count - 1;
+    int cur = open[i], cx = cur % n_, cy = cur / n_;
     int opts[4], k = 0;
     for (int d = 0; d < 4; d++) {
       int nx = cx + dx[d], ny = cy + dy[d];
       if (nx >= 0 && ny >= 0 && nx < n_ && ny < n_ && !seen[ny * n_ + nx]) opts[k++] = d;
     }
-    if (!k) { top--; continue; }
+    if (!k) { memmove(open + i, open + i + 1, (size_t)(count - i - 1)); count--; continue; }
     int d = opts[rng.range(0, k - 1)];
     int nxt = (cy + dy[d]) * n_ + cx + dx[d];
     walls_[cur] &= (uint8_t)~bit[d];
     walls_[nxt] &= (uint8_t)~opp[d];
     seen[nxt] = true;
-    stack[top++] = (uint8_t)nxt;
+    open[count++] = (uint8_t)nxt;
   }
-  x_ = y_ = 0.5f; vx_ = vy_ = 0; won_ = false;
+  int dist[kMax * kMax];
+  goal_ = distances(start, dist);
+  pathLen_ = dist[goal_];
+  x_ = start % n_ + 0.5f;
+  y_ = start / n_ + 0.5f;
+  vx_ = vy_ = 0;
+  won_ = false;
+}
+
+int MazeGame::distances(int from, int* dist) const {
+  static const int dx[4] = {0, 1, 0, -1}, dy[4] = {-1, 0, 1, 0};
+  static const int bit[4] = {N, E, S, W};
+  for (int i = 0; i < n_ * n_; i++) dist[i] = -1;
+  int q[kMax * kMax], head = 0, tail = 0;
+  dist[from] = 0;
+  q[tail++] = from;
+  while (head < tail) {
+    int c = q[head++], cx = c % n_, cy = c / n_;
+    for (int d = 0; d < 4; d++) {
+      if (walls_[c] & bit[d]) continue;
+      int nb = (cy + dy[d]) * n_ + cx + dx[d];
+      if (dist[nb] < 0) { dist[nb] = dist[c] + 1; q[tail++] = nb; }
+    }
+  }
+  return q[tail - 1];  // breadth-first: the last one reached is the farthest
 }
 
 void MazeGame::step(float ax, float ay, float dtMs) {
   if (won_ || !n_) return;
-  constexpr float kAccel = 15.f, kDrag = 1.6f, kMaxSpeed = 9.f, kBounce = 0.35f;
+  constexpr float kDrag = 1.6f, kBounce = 0.35f;
+  const float accel = 15.f * pace_, maxSpeed = 9.f * pace_;
   int steps = (int)(dtMs / 5) + 1;
   float h = dtMs * 0.001f / steps;
   for (int i = 0; i < steps; i++) {
-    vx_ += (ax * kAccel - vx_ * kDrag) * h;
-    vy_ += (ay * kAccel - vy_ * kDrag) * h;
-    vx_ = clampf(vx_, -kMaxSpeed, kMaxSpeed);
-    vy_ = clampf(vy_, -kMaxSpeed, kMaxSpeed);
+    vx_ += (ax * accel - vx_ * kDrag) * h;
+    vy_ += (ay * accel - vy_ * kDrag) * h;
+    vx_ = clampf(vx_, -maxSpeed, maxSpeed);
+    vy_ = clampf(vy_, -maxSpeed, maxSpeed);
     // Each axis resolves on its own against the walls of the cell the centre is in.
     x_ += vx_ * h;
     int cx = clampi((int)x_, 0, n_ - 1), cy = clampi((int)y_, 0, n_ - 1);
@@ -53,27 +80,16 @@ void MazeGame::step(float ax, float ay, float dtMs) {
     if (y_ + kBall > cy + 1 && wall(cx, cy, S)) { y_ = cy + 1 - kBall; vy_ *= -kBounce; }
     if (y_ - kBall < cy && wall(cx, cy, N)) { y_ = cy + kBall; vy_ *= -kBounce; }
   }
-  float ex = x_ - (n_ - 0.5f), ey = y_ - (n_ - 0.5f);
+  float ex = x_ - (goalX() + 0.5f), ey = y_ - (goalY() + 0.5f);
   if (ex * ex + ey * ey < 0.16f) won_ = true;
 }
 
 void MazeGame::nextCellToExit(int* outX, int* outY) const {
-  // Breadth-first from the exit: distances lead the way downhill from any cell.
-  int dist[kMax * kMax];
-  memset(dist, -1, sizeof(dist));
-  int q[kMax * kMax], head = 0, tail = 0, goal = n_ * n_ - 1;
-  dist[goal] = 0;
-  q[tail++] = goal;
+  // Distances from the exit lead the way downhill from any cell.
   static const int dx[4] = {0, 1, 0, -1}, dy[4] = {-1, 0, 1, 0};
   static const int bit[4] = {N, E, S, W};
-  while (head < tail) {
-    int c = q[head++], cx = c % n_, cy = c / n_;
-    for (int d = 0; d < 4; d++) {
-      if (walls_[c] & bit[d]) continue;
-      int nb = (cy + dy[d]) * n_ + cx + dx[d];
-      if (dist[nb] < 0) { dist[nb] = dist[c] + 1; q[tail++] = nb; }
-    }
-  }
+  int dist[kMax * kMax];
+  distances(goal_, dist);
   int cx = clampi((int)x_, 0, n_ - 1), cy = clampi((int)y_, 0, n_ - 1), c = cy * n_ + cx;
   *outX = cx; *outY = cy;
   for (int d = 0; d < 4; d++) {

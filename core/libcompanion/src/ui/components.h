@@ -77,6 +77,7 @@ class List {
 
  private:
   float pos_ = 0;        // row shown at the centre, animated
+  float vel_ = 0;        // rows per second, for the spring that brings pos_ to the selected row
   float drag_ = 0;       // pixels dragged since the finger went down
   int selected_ = 0;
   bool dragging_ = false;

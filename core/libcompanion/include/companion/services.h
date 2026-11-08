@@ -90,7 +90,7 @@ struct Settings {
   char aiUrl[96] = "";
   char pin[7] = "";              // BLE/Wi-Fi pairing PIN, generated at first boot
   int16_t tzMinutes = 180;
-  uint16_t reactionBest = 0;
+  uint16_t reactionBest = 0;     // the reaction game is gone; the field keeps saved settings loading
   uint16_t tttWins = 0, tttLosses = 0, tttDraws = 0;
   uint16_t mazeLevel = 0, orbitBest = 0, snakeBest = 0, simonBest = 0;
   uint16_t balanceBest = 0, duelBest = 0, shakerBest = 0, moleBest = 0, workouts = 0;

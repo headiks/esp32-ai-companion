@@ -10,6 +10,9 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
+/** Names at the table, the same in every card game: you, and the computers. */
+fun seatName(p: Int, players: Int) = when { p == 0 -> "Вы"; players == 2 -> "Компьютер"; else -> "Компьютер $p" }
+
 /** Rules and physics only, no Android: covered by plain unit tests. */
 data class Card(val rank: Int, val suit: Int) {
     /** Device label: rank then suit letter, such as "10h". */
@@ -99,6 +102,9 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     var street = Street.Showdown; private set
     var message = ""; private set
     var dealer = -1; private set
+    /** What each seat did last on this street: "чек", "колл", "рейз", "пас". */
+    val lastMove = Array(players) { "" }
+    var winners: List<Int> = emptyList(); private set
     var current = 0; private set
     private var deck = Deck(rng)
     private val needsAct = mutableSetOf<Int>()
@@ -140,6 +146,8 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
         deck = Deck(rng)
         board.clear()
         folded.fill(false)
+        lastMove.fill("")
+        winners = emptyList()
         streetBet.fill(0)
         total.fill(0)
         hole.forEach { it.clear() }
@@ -163,6 +171,7 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     /** Check when nothing is owed, otherwise call. */
     fun call(p: Int): Boolean {
         if (whoActs() != p) return false
+        lastMove[p] = if (toCall(p) > 0) "колл" else "чек"
         pay(p, toCall(p))
         needsAct.remove(p)
         advance()
@@ -171,6 +180,7 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
 
     fun raise(p: Int): Boolean {
         if (whoActs() != p || !canRaise) return false
+        lastMove[p] = "рейз"
         pay(p, toCall(p) + betSize)
         raises++
         needsAct.clear()
@@ -182,6 +192,7 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     fun fold(p: Int): Boolean {
         if (whoActs() != p) return false
         folded[p] = true
+        lastMove[p] = "пас"
         needsAct.remove(p)
         advance()
         return true
@@ -202,6 +213,7 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
 
     private fun nextStreet() {
         streetBet.fill(0)
+        for (i in lastMove.indices) if (!folded[i]) lastMove[i] = ""
         raises = 0
         when (street) {
             Street.Preflop -> { repeat(3) { board.add(deck.draw()) }; street = Street.Flop }
@@ -226,19 +238,20 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
         val won = distribute(total, scores)
         for (p in 0 until players) stacks[p] += won[p]
         street = Street.Showdown
-        val winners = (0 until players).filter { won[it] > total[it] || (won[it] > 0 && won[it] == total[it] && scores[it] != null) }
+        winners = (0 until players).filter { won[it] > total[it] || (won[it] > 0 && won[it] == total[it] && scores[it] != null) }
         val best = scores.filterNotNull().maxOrNull()!!
         message = when {
             0 in winners && winners.size == 1 -> "Вы выиграли: ${Poker.NAMES[Poker.categoryOf(best)]}"
             0 in winners -> "Банк поделён: ${Poker.NAMES[Poker.categoryOf(best)]}"
-            else -> "Игрок ${winners.firstOrNull()?.plus(1) ?: 2} выиграл: ${Poker.NAMES[Poker.categoryOf(best)]}"
+            else -> "${seatName(winners.firstOrNull() ?: 1)} выиграл: ${Poker.NAMES[Poker.categoryOf(best)]}"
         }
     }
 
     private fun award(left: List<Int>) {
         stacks[left[0]] += pot
         street = Street.Showdown
-        message = if (left[0] == 0) "Все сбросили карты, банк ваш" else "Игрок ${left[0] + 1} забирает банк"
+        winners = left
+        message = if (left[0] == 0) "Все сбросили карты, банк ваш" else "${seatName(left[0])} забирает банк"
     }
 
     /** One decision for the current player by simple rules, with chance so it cannot be read. */
@@ -267,6 +280,8 @@ class HoldemGame(val players: Int = 2, private val rng: Random = Random.Default,
     }
 
     fun aiAct(): Boolean = whoActs().let { it != null && it != 0 } && autoPlay()
+
+    fun seatName(p: Int) = seatName(p, players)
 
     companion object {
         /** Shares the pot in layers, so someone all-in for less can only win what everybody matched. */

@@ -13,7 +13,7 @@ STAT_RU = {"happiness": "Счастье", "energy": "Энергия", "curiosity
            "stress": "Стресс", "sleepiness": "Сонливость", "hunger": "Голод", "fun": "Веселье", "health": "Здоровье"}
 SCREENS = [("face", "Лицо"), ("menu", "Меню"), ("pet", "Питомец"), ("analog_clock", "Аналог. часы"), ("digital_clock", "Цифр. часы"), ("timer", "Таймер"),
            ("stopwatch", "Секундомер"), ("notifications", "Уведомления"), ("settings", "Настройки"), ("diagnostics", "Диагностика"), ("games", "Игры"), ("info", "Инфо"),
-           ("tictactoe", "Крестики-нолики"), ("reaction", "Реакция"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
+           ("tictactoe", "Крестики-нолики"), ("guess", "Угадай число"), ("pet_game", "Светлячок"),
            ("maze", "Лабиринт"), ("orbit", "Орбита"), ("snake", "Змейка"), ("simon", "Память"),
            ("coin", "Монетка"), ("dice", "Кубики"), ("magic_ball", "Шар"), ("balance", "Баланс"), ("duel", "Дуэль"), ("shaker", "Шейкер"), ("safe", "Сейф"),
            ("workout", "Тренировка"), ("mole", "Крот"), ("blackjack", "Двадцать одно"), ("weather", "Погода"), ("mouse", "Мышь"),

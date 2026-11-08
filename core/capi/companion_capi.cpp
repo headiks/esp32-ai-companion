@@ -136,10 +136,10 @@ CC_API void cc_set_debug_overlay(void* p, int on) { ((Host*)p)->app.debugOverlay
 // Farthest text pixel or button edge from the centre in the last cc_render, in px: design 1a keeps both inside r210.
 CC_API float cc_content_reach(void* p) { return sqrtf((float)((Host*)p)->canvas.contentReach2); }
 // Test autopilot: steers the real maze physics by tilt only. Returns milliseconds to the exit, -1 if it never gets there.
-CC_API int cc_maze_selftest(int size, uint32_t seed) {
+CC_API int cc_maze_selftest(int size, uint32_t seed, int branchyPct) {
   static MazeGame m;
   Rng rng(seed);
-  m.generate(size, rng);
+  m.generate(size, rng, branchyPct / 100.f);
   for (int ms = 0; ms < 600000; ms += 16) {
     int cx, cy;
     m.nextCellToExit(&cx, &cy);
@@ -154,6 +154,13 @@ CC_API int cc_maze_selftest(int size, uint32_t seed) {
     if (m.won()) return ms;
   }
   return -1;
+}
+// Start cell, exit cell and the route length of one generated maze: out = {sx, sy, gx, gy, length}.
+CC_API void cc_maze_layout(int size, uint32_t seed, int branchyPct, int* out) {
+  static MazeGame m;
+  Rng rng(seed);
+  m.generate(size, rng, branchyPct / 100.f);
+  out[0] = (int)m.x(); out[1] = (int)m.y(); out[2] = m.goalX(); out[3] = m.goalY(); out[4] = m.pathLength();
 }
 // Walks into a wall: the ball must stay inside its cell whatever the tilt.
 CC_API int cc_maze_wall_selftest(uint32_t seed) {

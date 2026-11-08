@@ -195,15 +195,25 @@ static bool numeric(const char* s) {
 void List::reset(int selected) {
   selected_ = selected;
   pos_ = (float)selected;
+  vel_ = 0;
   drag_ = 0;
   dragging_ = false;
 }
 
 void List::tick(float dtMs) {
-  if (dragging_) return;
-  pos_ += (selected_ - pos_) * (1 - expf(-dtMs / 70.f));  // ease-out to the row
-  if (fabsf(selected_ - pos_) < 0.002f) pos_ = (float)selected_;
+  if (dragging_) { vel_ = 0; return; }
+  // A critically damped spring: it sets off gently and settles on the row without overshoot, about 0.3 s.
+  constexpr float kW = 15;
+  int steps = (int)(dtMs / 8) + 1;
+  float h = dtMs * 0.001f / steps;
+  for (int i = 0; i < steps; i++) {
+    vel_ += (kW * kW * (selected_ - pos_) - 2 * kW * vel_) * h;
+    pos_ += vel_ * h;
+  }
+  if (fabsf(selected_ - pos_) < 0.002f && fabsf(vel_) < 0.02f) { pos_ = (float)selected_; vel_ = 0; }
 }
+
+static uint16_t dim(uint16_t color, float k) { return blend565(BG, color, (uint32_t)(255 * clampf(k, 0, 1))); }
 
 void List::draw(Canvas& c, App& a, int count, ListSource src, void* ctx) const {
   bool values = count > 0 && src(a, 0, ctx).value;
@@ -211,22 +221,29 @@ void List::draw(Canvas& c, App& a, int count, ListSource src, void* ctx) const {
   for (int i = (int)floorf(pos_) - 3; i <= (int)ceilf(pos_) + 3; i++) {
     if (i < 0 || i >= count) continue;
     float d = i - pos_, ad = fabsf(d), y = CY + d * step;
-    if (ad > 2.5f) continue;
+    if (ad > 2.6f) continue;
     ListItem it = src(a, i, ctx);
-    if (ad < 0.5f) {
-      if (it.value) {
-        textCentered(c, CX, y - 26, it.title, TXT_CAP, INK_2);
-        textCentered(c, CX, y + 16, it.value, numeric(it.value) ? NUM_M : TXT_MENU_SEL, INK);
+    // Nothing switches at once: the colour follows the distance from the centre, the size steps up through
+    // the in-between fonts as a row arrives, and the rows at the ends dissolve instead of popping out.
+    float k = ad < 1 ? ad : ad < 2 ? ad - 1 : 1;
+    uint16_t col = ad < 1 ? blend565(INK, INK_2, (uint32_t)(255 * k)) : blend565(INK_2, INK_3, (uint32_t)(255 * k));
+    col = dim(col, smooth01((2.6f - ad) / 0.8f));
+    if (it.value) {
+      // Two lines when selected, one otherwise: a quick fade around the middle, so the two never overlap.
+      if (ad < 0.5f) {
+        float f = smooth01((0.5f - ad) / 0.1f);
+        textCentered(c, CX, y - 26, it.title, TXT_CAP, dim(INK_2, f));
+        textCentered(c, CX, y + 16, it.value, numeric(it.value) ? NUM_M : TXT_MENU_SEL, dim(INK, f));
       } else {
-        textCentered(c, CX, y, it.title, TXT_MENU_SEL, INK);
-        if (it.section) c.fillCircle(CX - Canvas::textWidth(it.title, TXT_MENU_SEL) / 2.f - 20, y, 6, ACCENT);
+        char line[96];
+        snprintf(line, sizeof line, "%s %s", it.title, it.value);
+        textCentered(c, CX, y, line, ad < 1.5f ? TXT_28 : TXT_CAP, dim(col, smooth01((ad - 0.5f) / 0.1f)));
       }
       continue;
     }
-    char line[96];
-    snprintf(line, sizeof line, it.value ? "%s %s" : "%s", it.title, it.value);
-    bool near = ad < 1.5f;
-    textCentered(c, CX, y, line, near ? TXT_28 : TXT_CAP, near ? INK_2 : INK_3);
+    FontSize f = ad < 0.2f ? TXT_MENU_SEL : ad < 0.4f ? TXT_UNB34 : ad < 0.6f ? TXT_UNB28 : ad < 1.5f ? TXT_28 : TXT_CAP;
+    textCentered(c, CX, y, it.title, f, col);
+    if (it.section && ad < 0.6f) c.fillCircle(CX - Canvas::textWidth(it.title, f) / 2.f - 20, y, 6, dim(ACCENT, smooth01((0.6f - ad) / 0.4f)));
   }
   if (count > 5) scrollArc(c, count > 1 ? pos_ / (count - 1) : 0, 5.f / count);
 }

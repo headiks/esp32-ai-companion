@@ -411,7 +411,7 @@ class SafeScreen : public Screen {
         a.pet.event(PetEvent::GameWin);
         a.react(Emotion::Starstruck, 1800, EmotionPriority::Strong);  // stronger than the click's short surprise
         openMs_ = 2000;
-      } else { secret_ = a.rng.rangef(0, 360); a.react(Emotion::Sneaky, 900, EmotionPriority::Strong); }
+      } else { secret_ = secrets_[stage_]; a.react(Emotion::Sneaky, 900, EmotionPriority::Strong); }
     } else {
       a.sfx.play("games/wrong");
       a.react(Emotion::Suspicious, 800);
@@ -420,9 +420,25 @@ class SafeScreen : public Screen {
 
  private:
   bool opened() const { return stage_ >= 3; }
-  float near() const { return fabsf(fmodf(dial_ - secret_ + 540.f, 360.f) - 180.f); }
-  void start(App& a) { stage_ = 0; secret_ = a.rng.rangef(0, 360); openMs_ = 0; a.react(Emotion::Focused, 1200); }
-  float dial_ = 0, secret_ = 0, openMs_ = 0;
+  float near() const {  // degrees between the pointer and the secret, whichever way round
+    float d = fmodf(dial_ - secret_, 360.f);
+    if (d < 0) d += 360;
+    return d > 180 ? 360 - d : d;
+  }
+  void start(App& a) {
+    // Three clicks spread around the dial, about 120 degrees apart, turning one way or the other, and the
+    // first well away from where the dial rests: no lock opens next to the previous one.
+    float dir = a.rng.range(0, 1) ? 1.f : -1.f, at = dial_ + a.rng.rangef(90, 270);
+    for (int i = 0; i < 3; i++) {
+      float deg = fmodf(at + dir * (i * 120 + a.rng.rangef(-20, 20)), 360);
+      secrets_[i] = deg < 0 ? deg + 360 : deg;  // the dial itself turns without bound
+    }
+    stage_ = 0;
+    secret_ = secrets_[0];
+    openMs_ = 0;
+    a.react(Emotion::Focused, 1200);
+  }
+  float dial_ = 0, secret_ = 0, openMs_ = 0, secrets_[3] = {};
   int stage_ = 0, lastTick_ = 0;
 };
 

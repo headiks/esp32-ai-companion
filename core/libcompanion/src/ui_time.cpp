@@ -143,29 +143,59 @@ class StopwatchScreen : public Screen {
 // ---- 12. timer -------------------------------------------------------------------------------------
 class TimerScreen : public Screen {
  public:
+  void enter(App&) override { field_ = 0; dragging_ = false; }
   void draw(App& a, Canvas& c) override {
     bool counting = a.timerRunning || a.timerLeftMs > 0;
     float ms = counting ? a.timerLeftMs : a.timerSetMs;
     ui::progressRing(c, 214, 10, a.timerSetMs > 0 ? clampf(ms / a.timerSetMs, 0, 1) : 0);
     char b[32];
-    snprintf(b, sizeof b, "Таймер · %d мин", (int)(a.timerSetMs / 60000));
+    int setS = setSeconds(a);
+    if (setS % 60) snprintf(b, sizeof b, "Таймер · %d мин %d с", setS / 60, setS % 60);
+    else snprintf(b, sizeof b, "Таймер · %d мин", setS / 60);
     ui::textCentered(c, CX, 128, b, TXT_CAP, INK_2);
     mmss(b, sizeof b, ms + (counting ? 999 : 0));
-    ui::textCentered(c, CX, 198, b, NUM_96, INK);
+    // Minutes and seconds are set apart: the one the buttons change is bright and underlined.
+    Digits d = digits(b);
+    int top = kDigitsY - Canvas::capMiddle(NUM_96);
+    char part[4] = {b[0], b[1], 0};
+    c.text(d.x0, top, part, NUM_96, counting || field_ == 0 ? INK : INK_2);
+    c.text(d.x0 + d.wm, top, ":", NUM_96, counting ? INK : INK_2);
+    part[0] = b[3]; part[1] = b[4];
+    c.text(d.x0 + d.wm + d.wc, top, part, NUM_96, counting || field_ == 1 ? INK : INK_2);
+    if (!counting) {
+      float x = field_ ? d.x0 + d.wm + d.wc : d.x0, w = field_ ? d.ws : d.wm;
+      c.roundRect(x + 4, top + Canvas::capBottom(NUM_96) + 10, w - 8, 6, 3, ACCENT);
+    }
     minus_.draw(c, "−1", !a.timerRunning);
     go_.draw(c, a.timerRunning ? "Пауза" : "Старт");
     plus_.draw(c, "+1", !a.timerRunning);
   }
   void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap) return;
-    if (minus_.hit(e.x, e.y) && !a.timerRunning) {
-      a.timerSetMs = a.timerSetMs > 60000 ? a.timerSetMs - 60000 : 60000;
-      a.timerLeftMs = 0;
+    bool editable = !a.timerRunning && a.timerLeftMs <= 0;
+    bool onDigits = abs(e.y - kDigitsY) < 60 && abs(e.x - CX) < 170;
+    switch (e.g) {
+      case Gesture::Down: dragging_ = editable && onDigits; drag_ = 0; return;
+      case Gesture::Move:
+        // Dragging the digits rolls the chosen part like a wheel: up adds, down takes away.
+        if (!dragging_) return;
+        drag_ -= e.dy;
+        while (drag_ >= kDragStep) { drag_ -= kDragStep; change(a, 1); }
+        while (drag_ <= -kDragStep) { drag_ += kDragStep; change(a, -1); }
+        return;
+      case Gesture::Up: dragging_ = false; return;
+      case Gesture::Tap: break;
+      default: return;
+    }
+    if (editable && onDigits) {
+      char b[8];
+      mmss(b, sizeof b, a.timerSetMs);
+      Digits d = digits(b);
+      field_ = e.x >= d.x0 + d.wm + d.wc / 2 ? 1 : 0;
       a.sfx.play("system/click");
+    } else if (minus_.hit(e.x, e.y) && !a.timerRunning) {
+      change(a, -1);
     } else if (plus_.hit(e.x, e.y) && !a.timerRunning) {
-      a.timerSetMs = a.timerSetMs < 99 * 60000 ? a.timerSetMs + 60000 : a.timerSetMs;
-      a.timerLeftMs = 0;
-      a.sfx.play("system/click");
+      change(a, 1);
     } else if (go_.hit(e.x, e.y)) {
       if (!a.timerRunning && a.timerLeftMs <= 0) a.timerLeftMs = a.timerSetMs;
       a.timerRunning = !a.timerRunning;
@@ -174,9 +204,32 @@ class TimerScreen : public Screen {
   }
 
  private:
+  struct Digits { int x0, wm, wc, ws; };
+  static constexpr int kDigitsY = 198, kDragStep = 22;
+  static Digits digits(const char* mmssText) {
+    char part[4] = {mmssText[0], mmssText[1], 0};
+    int wm = Canvas::textWidth(part, NUM_96), wc = Canvas::textWidth(":", NUM_96);
+    part[0] = mmssText[3]; part[1] = mmssText[4];
+    int ws = Canvas::textWidth(part, NUM_96);
+    return Digits{CX - (wm + wc + ws) / 2, wm, wc, ws};
+  }
+  static int setSeconds(App& a) { return (int)(a.timerSetMs / 1000 + 0.5f); }
+  // Minutes 0..99; seconds go round 0..59 without touching the minutes. Never down to zero in total.
+  void change(App& a, int d) {
+    int t = setSeconds(a), m = t / 60, s = t % 60;
+    if (field_ == 0) m = clampi(m + d, 0, 99);
+    else s = (s + d + 60) % 60;
+    if (m * 60 + s == 0 || m * 60 + s == t) return;
+    a.timerSetMs = (m * 60 + s) * 1000.f;
+    a.timerLeftMs = 0;
+    a.sfx.play("system/click");
+  }
   ui::Button minus_ = ui::secondary(132, 340 - 36);
   ui::Button go_ = ui::primary(CX, 340 - 48, 96);
   ui::Button plus_ = ui::secondary(334, 340 - 36);
+  int field_ = 0;  // 0 minutes, 1 seconds
+  float drag_ = 0;
+  bool dragging_ = false;
 };
 
 // ---- weather ---------------------------------------------------------------------------------------

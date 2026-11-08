@@ -190,6 +190,13 @@ class NotificationsScreen : public Screen {
   bool capturesSwipes() const override { return true; }  // horizontal swipes turn the cards
   void onGesture(App& a, const GestureEvent& e) override {
     int n = a.notifications.count();
+    // The screen came down from the face: any vertical swipe sends it back, and so does a swipe right
+    // past the first card. The cards only use left and right.
+    if (e.g == Gesture::SwipeUp || e.g == Gesture::SwipeDown || (e.g == Gesture::SwipeRight && index_ == 0)) {
+      a.sfx.play("interactions/swipe");
+      a.goBack();
+      return;
+    }
     if (e.g == Gesture::SwipeLeft || e.g == Gesture::SwipeRight) {
       int next = clampi(index_ + (e.g == Gesture::SwipeLeft ? 1 : -1), 0, n ? n - 1 : 0);
       if (next != index_) { index_ = next; a.notifications.markRead(index_); a.sfx.play("interactions/swipe"); }

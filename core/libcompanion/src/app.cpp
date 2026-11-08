@@ -491,6 +491,9 @@ void App::tickBehaviour(float dt) {
   if (talk == Talk::Listening && (talkMs += dt) > 5200) { talk = Talk::Thinking; react(Emotion::Thinking, 9000, EmotionPriority::Strong); }
   AIReply r;
   if (aiThinkMs_ <= 0 && ai_->poll(&r)) {
+    snprintf(reply, sizeof reply, "%s", r.text);
+    replyN++;
+    replyEmotion = r.emotion;
     if (screenId_ == ScreenId::Talk && (talk == Talk::Listening || talk == Talk::Thinking)) {
       talk = Talk::Answer;
       snprintf(talkText, sizeof talkText, "%s", r.text);

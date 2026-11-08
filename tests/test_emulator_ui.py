@@ -371,3 +371,33 @@ def test_second_server_on_a_busy_port_refuses_instead_of_sharing():
             TcpServer(7897)
     finally:
         first.close()
+
+
+def drag(win, x0, y0, x1, y1, moves=100):
+    """A real mouse sends hundreds of moves a second: all of them arrive before the emulator's next tick."""
+    win.screen.on_touch(True, x0, y0)
+    for i in range(1, moves + 1):
+        win.screen.on_touch(True, x0 + (x1 - x0) * i // moves, y0 + (y1 - y0) * i // moves)
+    win.screen.on_touch(False, x1, y1)
+
+
+def test_mouse_drag_acts_at_once(emu):
+    """Moves between ticks collapse into one: a swipe must not replay frame by frame for seconds."""
+    emu.companion.handle_command({"type": "screen", "value": "menu"})
+    pump(300)
+    drag(emu, 233, 20, 233, 250)   # down from the top edge: back
+    pump(250)
+    assert state(emu)["screen"] == "face"
+    assert not emu.touch_queue
+
+
+def test_quick_double_click_is_two_taps(emu):
+    """Each release lasts long enough for the core to see it: two quick clicks are a double tap, not one touch."""
+    emu.companion.handle_command({"type": "screen", "value": "face"})
+    pump(600)
+    for _ in range(2):
+        emu.screen.on_touch(True, 233, 260)
+        emu.screen.on_touch(False, 233, 260)
+    pump(700)
+    assert state(emu)["screen"] == "face", "a double tap reacts on the face, a single tap would open the menu"
+    assert state(emu)["emotion"] in ("happy", "laughing", "surprised")

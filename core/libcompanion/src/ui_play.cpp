@@ -1,5 +1,5 @@
 // Design 1a: the pet (14), the firefly (15), the games list (16), the shared start and result templates
-// (17, 18), tic-tac-toe (23), reaction (24) and guess the number (25). Game rules are unchanged.
+// (17, 18), tic-tac-toe (23) and guess the number (25).
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -154,7 +154,7 @@ static const GameItem kGames[] = {{"Лабиринт", ScreenId::Maze}, {"Орб
                                   {"Кубики", ScreenId::Dice}, {"Шар судьбы", ScreenId::MagicBall}, {"Дуэль", ScreenId::Duel}, {"Тряска", ScreenId::Shaker},
                                   {"Сейф", ScreenId::Safe}, {"Баланс", ScreenId::Balance}, {"Тренировка", ScreenId::Workout}, {"Крот", ScreenId::Mole},
                                   {"Змейка", ScreenId::Snake}, {"Повтори", ScreenId::Simon}, {"Крестики-нолики", ScreenId::TicTacToe},
-                                  {"Реакция", ScreenId::Reaction}, {"Угадай число", ScreenId::Guess}, {"Светлячок", ScreenId::PetGame}};
+                                  {"Угадай число", ScreenId::Guess}, {"Светлячок", ScreenId::PetGame}};
 static constexpr int kGameCount = sizeof(kGames) / sizeof(kGames[0]);
 
 class GamesScreen : public Screen {
@@ -311,93 +311,22 @@ class TicTacToeScreen : public Screen {
   float think_ = 0, resetIn_ = 0;
 };
 
-// ---- 24. reaction ----------------------------------------------------------------------------------
-class ReactionScreen : public Screen {
- public:
-  void enter(App& a) override { state_ = Idle; a.react(Emotion::Attentive, 1000); }
-  void tick(App& a, float dt) override {
-    if (state_ == Waiting) {
-      waitMs_ -= dt;
-      if (waitMs_ <= 0) { state_ = Signal; elapsed_ = 0; a.sfx.play("games/go"); a.react(Emotion::Surprised, 500); }
-    } else if (state_ == Signal) {
-      elapsed_ += dt;
-      if (elapsed_ > 3000) { state_ = Missed; a.sfx.play("games/wrong"); a.react(Emotion::Bored, 1500); }
-    }
-  }
-  void draw(App& a, Canvas& c) override {
-    char b[48], rec[48] = "";
-    if (a.settings.reactionBest) snprintf(rec, sizeof rec, "рекорд %d мс", a.settings.reactionBest);
-    switch (state_) {
-      case Idle: gameStart(c, a, "Реакция", "Нажми, когда загорится кольцо", rec); return;
-      case Waiting:
-      case Signal: {
-        // The spec: never flood the screen white; only the ring lights up.
-        bool lit = state_ == Signal;
-        c.ring(CX, CY, 212, 16, lit ? ACCENT : TRACK_2);
-        a.face.drawMini(c, Emotion::Focused, CX - 100, 112, 200, INK);
-        ui::textCentered(c, CX, 250, lit ? "Жми!" : "Жди…", TXT_MENU_SEL, lit ? ACCENT : INK);
-        if (!lit) ui::textCentered(c, CX, 300, "кольцо загорится", TXT_MIN, INK_2);
-        return;
-      }
-      case Result:
-        snprintf(b, sizeof b, "%d", last_);
-        gameResult(c, a, b, record_ ? "мс · новый рекорд" : "мс", record_ ? Emotion::VeryHappy : last_ < 350 ? Emotion::Happy : Emotion::Neutral);
-        return;
-      case Early: gameResult(c, a, "Рано!", "жди, пока загорится", Emotion::Annoyed); return;
-      case Missed: gameResult(c, a, "Проспал", "кольцо горело 3 с", Emotion::Sad); return;
-    }
-  }
-  void onGesture(App& a, const GestureEvent& e) override {
-    if (e.g != Gesture::Tap && e.g != Gesture::Down) return;
-    if (e.g == Gesture::Down) {
-      // Measure on the press itself: waiting for release would add finger-lift time.
-      if (state_ == Signal) {
-        last_ = (int)elapsed_;
-        state_ = Result;
-        ignoreTap_ = true;
-        a.sfx.play("games/correct");
-        record_ = !a.settings.reactionBest || last_ < a.settings.reactionBest;
-        if (record_) { a.settings.reactionBest = (uint16_t)last_; a.saveSettings(); }
-        a.pet.event(PetEvent::Play);
-        a.react(record_ ? Emotion::VeryHappy : (last_ < 350 ? Emotion::Happy : Emotion::Neutral), 1800);
-      } else if (state_ == Waiting) {
-        state_ = Early;
-        ignoreTap_ = true;
-        a.sfx.play("games/wrong");
-        a.react(Emotion::Annoyed, 1500);
-      }
-      return;
-    }
-    if (ignoreTap_) { ignoreTap_ = false; return; }
-    if (state_ == Waiting || state_ == Signal) return;
-    bool finished = state_ != Idle;
-    if (finished && kExitButton.hit(e.x, e.y)) { a.goBack(); return; }
-    if ((!finished && kStartButton.hit(e.x, e.y)) || (finished && kAgainButton.hit(e.x, e.y))) {
-      state_ = Waiting;
-      waitMs_ = a.rng.rangef(1500, 4500);
-      a.react(Emotion::Attentive, 2000);
-    }
-  }
-  bool capturesSwipes() const override { return state_ == Waiting || state_ == Signal; }
-
- private:
-  enum State { Idle, Waiting, Signal, Result, Early, Missed } state_ = Idle;
-  float waitMs_ = 0, elapsed_ = 0;
-  int last_ = 0;
-  bool ignoreTap_ = false, record_ = false;
-};
-
 // ---- 25. guess the number --------------------------------------------------------------------------
 class GuessScreen : public Screen {
  public:
   void enter(App& a) override { restart(a); }
   void draw(App& a, Canvas& c) override {
+    // The top half of the rim is the scale 1..100: what is still possible is lit, the dot is the guess.
+    ui::drawArc(c, CX, CY, kArcR, 8, 180, 180, TRACK);
+    ui::drawArc(c, CX, CY, kArcR, 8, angleOf(lo_), angleOf(hi_) - angleOf(lo_), won_ ? INK : ACCENT);
+    float g = angleOf(guess_) * 0.0174533f;
+    c.fillCircle(CX + cosf(g) * kArcR, CY + sinf(g) * kArcR, 9, INK);
     miniFace(c, a, CX, 58 + 50 * 176 / 354.f, 100);
     char b[48];
     snprintf(b, sizeof b, "%d", guess_);
     ui::textCentered(c, CX, 176, b, NUM_96, won_ ? ACCENT : INK);
     ui::textCentered(c, CX, 246, hint_, TXT_BODY, ACCENT);
-    snprintf(b, sizeof b, "от 1 до 100 · попытка %d", tries_ + (won_ ? 0 : 1));
+    snprintf(b, sizeof b, "от %d до %d · попытка %d", lo_, hi_, tries_ + (won_ ? 0 : 1));
     ui::textCentered(c, CX, 284, b, TXT_MIN, INK_2);
     m10_.draw(c, "−10", !won_);
     p10_.draw(c, "+10", !won_);
@@ -419,6 +348,9 @@ class GuessScreen : public Screen {
       a.pet.event(PetEvent::GameWin);
       a.react(Emotion::VeryHappy, 2500);
     } else {
+      // Every answer narrows what is left; the arc shows it.
+      if (guess_ < secret_) lo_ = guess_ + 1 > lo_ ? guess_ + 1 : lo_;
+      else hi_ = guess_ - 1 < hi_ ? guess_ - 1 : hi_;
       snprintf(hint_, sizeof(hint_), "%s", guess_ < secret_ ? "Больше!" : "Меньше!");
       a.sfx.play("games/wrong");
       a.react(abs(guess_ - secret_) <= 5 ? Emotion::Excited : Emotion::Thinking, 1500);
@@ -427,14 +359,16 @@ class GuessScreen : public Screen {
 
  private:
   void restart(App& a) {
-    secret_ = a.rng.range(1, 100); guess_ = 50; tries_ = 0; won_ = false;
+    secret_ = a.rng.range(1, 100); guess_ = 50; tries_ = 0; won_ = false; lo_ = 1; hi_ = 100;
     hint_[0] = 0;
     a.react(Emotion::Skeptical, 1500);
     a.sfx.play("games/go");
   }
   const ui::Button m10_ = ui::secondary(84, 140), p10_ = ui::secondary(382, 140);
   const ui::Button m1_ = ui::secondary(146, 320), ok_ = ui::primary(CX, 320), p1_ = ui::secondary(320, 320);
-  int secret_ = 1, guess_ = 50, tries_ = 0;
+  static constexpr float kArcR = 214;
+  static float angleOf(int v) { return 180 + (v - 1) * 180 / 99.f; }  // 1 on the left, 100 on the right
+  int secret_ = 1, guess_ = 50, tries_ = 0, lo_ = 1, hi_ = 100;
   bool won_ = false;
   char hint_[48] = "";
 };
@@ -444,14 +378,12 @@ Screen* playScreen(ScreenId id) {
   static PetGameScreen firefly;
   static GamesScreen games;
   static TicTacToeScreen ttt;
-  static ReactionScreen reaction;
   static GuessScreen guess;
   switch (id) {
     case ScreenId::Pet: return &pet;
     case ScreenId::PetGame: return &firefly;
     case ScreenId::Games: return &games;
     case ScreenId::TicTacToe: return &ttt;
-    case ScreenId::Reaction: return &reaction;
     case ScreenId::Guess: return &guess;
     default: return nullptr;
   }
